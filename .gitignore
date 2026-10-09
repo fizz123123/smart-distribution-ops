@@ -1,2 +1,11 @@
+# macOS
 .DS_Store
 
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# Local environment files
+.env
+.env.*
+!.env.example
