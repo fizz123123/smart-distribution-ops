@@ -136,7 +136,7 @@ LINE_AI_SO_DRAFT_CREATE
 | --- | --- | --- | --- |
 | AUTH-01 | 登入 | 全體內部使用者 | 取得 JWT 與目前使用者權限 |
 | HOME-01 | 我的工作台 | 全體內部使用者 | 彙整目前使用者的待核准、待處理及近期操作；儀表板的「我的待辦」入口連至此畫面 |
-| ADM-01 | 使用者與角色 | APP_ADMIN、MANAGER | APP_ADMIN 管理一般使用者；MANAGER 僅處理 APP_ADMIN 本人帳號的授權異動 |
+| ADM-01 | 使用者與角色 | APP_ADMIN | 管理一般使用者；APP_ADMIN 為初始化建立的固定專用角色，不在畫面提供指派、移除或額外授權操作 |
 | ADM-02 | LINE 綁定 | SALES、APP_ADMIN | 本人取得驗證碼；管理員查看、停用或解除綁定 |
 | MDM-01 | 客戶 | SALES、SALES_MANAGER、FINANCE_MANAGER | 客戶建檔、核准、啟停與付款條件 |
 | MDM-02 | 公司料號 | SALES、SALES_MANAGER、PURCHASING_MANAGER | 業務維護商品規格、基準單位與偏好供應商；採購主管維護安全庫存 |
@@ -166,16 +166,19 @@ HOME-01 是個人作業入口，不另建立「待辦中心」。畫面可組合
 
 | 畫面／操作 | Method | Path | 權限 | 說明 |
 | --- | --- | --- | --- | --- |
-| 登入 | `POST` | `/auth/login` | 公開 | 驗證帳號密碼並回傳 JWT |
+| 登入 | `POST` | `/auth/login` | 公開 | 驗證登入 Email 與密碼並回傳 JWT；請求即使附帶過期或無效的既有 token，也不影響重新登入 |
 | 目前使用者 | `GET` | `/users/me` | 已登入 | 回傳使用者、角色、細部權限及資料範圍 |
-| 使用者清單 | `GET` | `/users` | `USER_MANAGE` | 查詢其他使用者 |
-| 建立／修改使用者 | `POST/PATCH` | `/users`、`/users/{id}` | `USER_MANAGE` | 不得修改自己的授權 |
-| 指派角色 | `PUT` | `/users/{id}/roles` | `USER_ROLE_MANAGE` | 完整取代該使用者角色集合；不得操作自己 |
-| 個別額外授權 | `PUT` | `/users/{id}/permission-grants` | `USER_PERMISSION_MANAGE` | 只提供額外授權，不提供 `DENY` |
+| 使用者清單／詳情 | `GET` | `/users`、`/users/{id}` | `USER_MANAGE` | 查詢其他一般使用者及目前版本 |
+| 建立／修改使用者 | `POST/PATCH` | `/users`、`/users/{id}` | `USER_MANAGE` | Email 為登入識別且正規化後須唯一；不得修改自己的授權 |
+| 可指派角色與權限 | `GET` | `/users/authorization-options` | `USER_MANAGE` | 回傳角色與個別權限勾選清單；排除 `APP_ADMIN` 及三項帳號管理權限 |
+| 指派角色 | `PUT` | `/users/{id}/roles` | `USER_ROLE_MANAGE` | 完整取代一般使用者角色集合且至少保留一個角色；異動原因必填；不得操作自己，也不得指派或異動 `APP_ADMIN` |
+| 個別額外授權 | `PUT` | `/users/{id}/permission-grants` | `USER_PERMISSION_MANAGE` | 完整取代一般使用者個別業務權限；異動原因必填；不提供 `DENY`，不得授予三項帳號管理權限，且不得以 `APP_ADMIN` 為目標 |
 | 我的待核准 | `GET` | `/approval-requests/my-pending` | 依核准權限 | 後端排除建立者及本輪送審者本人 |
 | 核准詳情 | `GET` | `/approval-requests/{id}` | 依核准權限 | 回傳目標摘要、建立者、送審者、警示與歷次意見 |
 | 核准 | `POST` | `/approval-requests/{id}/approve` | 依目標核准權限 | 執行目標資料核准及後續效果 |
-| 退回 | `POST` | `/approval-requests/{id}/return` | 依目標核准權限 | `reason` 必填 |
+| 退回 | `POST` | `/approval-requests/{id}/return` | 依目標核准權限 | `targetVersion` 與 `comment` 必填；版本不一致時回傳 `409 VERSION_CONFLICT` |
+
+使用者詳情及授權異動回應包含 `authorizationUpdatedAt` 與最新 `version`。角色或個別授權異動會更新前者並自然遞增版本號；前端送出異動時須帶入目前版本，版本落後時回傳 `409 VERSION_CONFLICT`。
 
 核准命令範例：
 
@@ -211,6 +214,8 @@ HOME-01 是個人作業入口，不另建立「待辦中心」。畫面可組合
 
 停用或重新啟用必須帶入 `reason` 與 `version`。初次核准由共用核准 API 處理，啟停不另建核准申請。
 
+客戶與供應商編號由系統產生，建立 request 不帶編號；公司料號由使用者輸入。已啟用主檔只能修改非識別資料，嘗試修改識別資料時回傳 `409 MASTER_DATA_IDENTITY_LOCKED`。
+
 ### 5.2 公司料號、客戶料號、價格與供應商
 
 | 資源 | 查詢 | 建立／修改 | 送審 | 狀態操作 |
@@ -231,11 +236,37 @@ HOME-01 是個人作業入口，不另建立「待辦中心」。畫面可組合
 }
 ```
 
-`POST /customer-prices` 成功後直接建立 `PENDING_REVIEW` 價格及對應核准申請；價格沒有另外的草稿與送審 API。
+`POST /customer-prices` 成功後直接建立 `PENDING_REVIEW` 價格及對應核准申請；價格沒有另外的草稿與送審 API。同一客戶料號與計價單位已有待覆核價格時，回傳 `409 CUSTOMER_PRICE_PENDING_EXISTS`。價格覆核的「退回」即為拒絕，價格轉為 `REJECTED` 後不可重新送審，須另建新版本。
 
 公司料號詳情需同時呈現基準單位、安全庫存、偏好供應商、允許交易單位及換算倍率。安全庫存以基準單位輸入，更新 request 必須包含 `safetyStockBaseQty`、`reason` 與 `version`，並保存修改前後值、操作者與時間。重新啟用主檔時，後端重新檢查唯一性及必要關聯。
 
 SO 核准時，若引用價格已轉為 `REPLACED`，後端仍依送審快照完成核准；若已轉為 `REVOKED`，回傳 `SO_PRICE_REVOKED`，不得建立預留或自動改變 SO 狀態。主管須另行執行退回操作並填寫意見。
+
+### 5.3 主檔細部權限與預設角色
+
+| 權限 | 預設角色 |
+| --- | --- |
+| `CUSTOMER_VIEW` | SALES、SALES_MANAGER、FINANCE_MANAGER、MANAGER |
+| `CUSTOMER_CREATE`、`CUSTOMER_UPDATE`、`CUSTOMER_SUBMIT` | SALES |
+| `CUSTOMER_APPROVE` | SALES_MANAGER、MANAGER（替代核准） |
+| `CUSTOMER_STATUS_MANAGE` | SALES_MANAGER |
+| `CUSTOMER_PAYMENT_TERM_MANAGE` | FINANCE_MANAGER |
+| `SUPPLIER_VIEW` | PURCHASING、PURCHASING_MANAGER、MANAGER |
+| `SUPPLIER_CREATE`、`SUPPLIER_UPDATE`、`SUPPLIER_SUBMIT` | PURCHASING |
+| `SUPPLIER_APPROVE` | PURCHASING_MANAGER、MANAGER（替代核准） |
+| `SUPPLIER_STATUS_MANAGE` | PURCHASING_MANAGER |
+| `COMPANY_ITEM_VIEW` | SALES、SALES_MANAGER、PURCHASING、PURCHASING_MANAGER、MANAGER |
+| `COMPANY_ITEM_CREATE`、`COMPANY_ITEM_UPDATE`、`COMPANY_ITEM_SUBMIT` | SALES |
+| `COMPANY_ITEM_APPROVE`、`COMPANY_ITEM_STATUS_MANAGE` | SALES_MANAGER |
+| `INVENTORY_POLICY_MANAGE` | PURCHASING_MANAGER |
+| `CUSTOMER_ITEM_MAPPING_VIEW` | SALES、SALES_MANAGER、MANAGER |
+| `CUSTOMER_ITEM_MAPPING_CREATE`、`CUSTOMER_ITEM_MAPPING_UPDATE`、`CUSTOMER_ITEM_MAPPING_SUBMIT` | SALES |
+| `CUSTOMER_ITEM_MAPPING_APPROVE`、`CUSTOMER_ITEM_MAPPING_STATUS_MANAGE` | SALES_MANAGER |
+| `CUSTOMER_PRICE_VIEW` | SALES、SALES_MANAGER、MANAGER |
+| `CUSTOMER_PRICE_CREATE` | SALES |
+| `CUSTOMER_PRICE_APPROVE`、`CUSTOMER_PRICE_REVOKE` | SALES_MANAGER |
+
+單位換算的新增與修改沿用 `COMPANY_ITEM_UPDATE`。核准服務依核准申請的目標類型對應上表的 `XXX_APPROVE` 權限；其他模組的權限於實作時補入本文件。
 
 ## 6. SO 與餘量取消契約
 
@@ -677,7 +708,7 @@ POST /integrations/line/webhook
 
 - JWT access token 與 refresh token 的有效時間及撤銷方式。
 - 查詢 API 的實際索引、最大分頁筆數及模糊搜尋策略。
-- 權限代碼的完整 seed 清單及各角色預設對應。
+- 權限代碼的完整 seed 清單及各角色預設對應（帳號權限見 D-036，主檔權限見第 5.3 節，其餘模組實作時補齊）。
 - API 文件以 SpringDoc OpenAPI 產生的 schema 與範例。
 - LINE 確認 token 與 webhook event ID 的保存期限，以及收款 `clientRequestId` 的重送回應策略。
 
