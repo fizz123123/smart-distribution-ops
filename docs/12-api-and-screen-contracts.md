@@ -35,7 +35,7 @@
 | 金額 | TWD；交易資料保存未稅金額，應收及收款使用含稅總額 |
 | 數量 | request 同時傳交易數量與單位；後端依主檔換算並回傳基準數量 |
 | 分頁 | `page` 從 0 開始，搭配 `size`、`sort` |
-| 版本控制 | 可修改資源回傳 `version`；命令須帶入目前版本以進行樂觀鎖檢查 |
+| 版本控制 | 可修改資源回傳 `version`；命令須帶入目前版本以進行樂觀鎖檢查。核准與退回例外，見第 4 節 |
 | 重複操作防護 | 一般命令使用狀態轉換、資源版本及唯一限制；LINE webhook 使用 event ID；建立收款另帶唯一 `clientRequestId` |
 
 ### 2.2 權限與資料範圍
@@ -175,8 +175,8 @@ HOME-01 是個人作業入口，不另建立「待辦中心」。畫面可組合
 | 個別額外授權 | `PUT` | `/users/{id}/permission-grants` | `USER_PERMISSION_MANAGE` | 完整取代一般使用者個別業務權限；異動原因必填；不提供 `DENY`，不得授予三項帳號管理權限，且不得以 `APP_ADMIN` 為目標 |
 | 我的待核准 | `GET` | `/approval-requests/my-pending` | 依核准權限 | 後端排除建立者及本輪送審者本人 |
 | 核准詳情 | `GET` | `/approval-requests/{id}` | 依核准權限 | 回傳目標摘要、建立者、送審者、警示與歷次意見 |
-| 核准 | `POST` | `/approval-requests/{id}/approve` | 依目標核准權限 | 執行目標資料核准及後續效果 |
-| 退回 | `POST` | `/approval-requests/{id}/return` | 依目標核准權限 | `targetVersion` 與 `comment` 必填；版本不一致時回傳 `409 VERSION_CONFLICT` |
+| 核准 | `POST` | `/approval-requests/{id}/approve` | 依目標核准權限 | 執行目標資料核准及後續效果；`comment` 選填 |
+| 退回 | `POST` | `/approval-requests/{id}/return` | 依目標核准權限 | `comment` 必填 |
 
 使用者詳情及授權異動回應包含 `authorizationUpdatedAt` 與最新 `version`。角色或個別授權異動會更新前者並自然遞增版本號；前端送出異動時須帶入目前版本，版本落後時回傳 `409 VERSION_CONFLICT`。
 
@@ -184,10 +184,11 @@ HOME-01 是個人作業入口，不另建立「待辦中心」。畫面可組合
 
 ```json
 {
-  "targetVersion": 3,
   "comment": "資料確認無誤"
 }
 ```
+
+目標在待核准期間不得修改，核准與退回因此不帶目標版本。申請已被處理時回傳 `409 APPROVAL_ALREADY_PROCESSED`；兩人同時處理同一申請時，後完成者回傳 `409 VERSION_CONFLICT`。
 
 ## 5. 主檔管理契約
 
