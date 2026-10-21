@@ -2,8 +2,6 @@ package com.smartdistribution.approval;
 
 import com.jayway.jsonpath.JsonPath;
 import com.smartdistribution.approval.entity.ApprovalTargetType;
-import com.smartdistribution.approval.handler.ApprovalHandler;
-import com.smartdistribution.approval.handler.ApprovalTarget;
 import com.smartdistribution.approval.service.ApprovalService;
 import com.smartdistribution.identity.entity.AppUser;
 import com.smartdistribution.identity.entity.Role;
@@ -11,6 +9,9 @@ import com.smartdistribution.identity.entity.UserRole;
 import com.smartdistribution.identity.repository.AppUserRepository;
 import com.smartdistribution.identity.repository.RoleRepository;
 import com.smartdistribution.identity.repository.UserRoleRepository;
+import com.smartdistribution.masterdata.common.MasterDataStatus;
+import com.smartdistribution.masterdata.supplier.entity.Supplier;
+import com.smartdistribution.masterdata.supplier.repository.SupplierRepository;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import org.junit.jupiter.api.AfterEach;
@@ -18,10 +19,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -42,12 +40,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import(ApprovalApiIntegrationTest.ApprovalTestConfiguration.class)
 class ApprovalApiIntegrationTest {
 
     private static final String TEST_EMAIL_SUFFIX = "@approval.integration.test";
     private static final String PASSWORD = "Test1234";
-    private static final Long TARGET_ID = 9001L;
+    private static final String SUPPLIER_NAME_PREFIX = "整合測試供應商-核准-";
 
     @Autowired
     private MockMvc mockMvc;
@@ -71,13 +68,35 @@ class ApprovalApiIntegrationTest {
     private ApprovalService approvalService;
 
     @Autowired
-    private TestSupplierApprovalHandler approvalHandler;
+    private SupplierRepository supplierRepository;
 
     @BeforeEach
     @AfterEach
     void cleanTestData() {
-        jdbcTemplate.update("DELETE FROM approval_action");
-        jdbcTemplate.update("DELETE FROM approval_request");
+        // 只清除測試供應商的核准紀錄，不影響本機開發時建立的資料
+        List<Long> supplierIds = jdbcTemplate.queryForList(
+                "SELECT id FROM supplier WHERE name LIKE ?",
+                Long.class,
+                SUPPLIER_NAME_PREFIX + "%"
+        );
+
+        for (Long supplierId : supplierIds) {
+            jdbcTemplate.update(
+                    """
+                    DELETE FROM approval_action
+                    WHERE approval_request_id IN (
+                        SELECT id FROM approval_request
+                        WHERE target_type = 'SUPPLIER' AND target_id = ?
+                    )
+                    """,
+                    supplierId
+            );
+            jdbcTemplate.update(
+                    "DELETE FROM approval_request WHERE target_type = 'SUPPLIER' AND target_id = ?",
+                    supplierId
+            );
+            jdbcTemplate.update("DELETE FROM supplier WHERE id = ?", supplierId);
+        }
 
         List<Long> userIds = jdbcTemplate.queryForList(
                 "SELECT id FROM app_user WHERE email LIKE ?",
@@ -100,11 +119,11 @@ class ApprovalApiIntegrationTest {
         AppUser creator = createUser("creator", "PURCHASING");
         AppUser submitter = creator;
         AppUser approver = createUser("approver", "PURCHASING_MANAGER");
-        approvalHandler.reset(creator.getId());
+        Supplier supplier = createPendingSupplier(creator.getId());
 
         Long approvalRequestId = submitAndGetRequestId(
                 ApprovalTargetType.SUPPLIER,
-                TARGET_ID,
+                supplier.getId(),
                 submitter.getId()
         );
 
@@ -125,18 +144,18 @@ class ApprovalApiIntegrationTest {
                 .andExpect(jsonPath("$.actions[1].actionType").value("APPROVE"))
                 .andExpect(jsonPath("$.actions[1].actor.id").value(approver.getId()));
 
-        assertThat(approvalHandler.getStatus()).isEqualTo("APPROVED");
+        assertThat(supplierStatus(supplier)).isEqualTo(MasterDataStatus.ACTIVE);
     }
 
     @Test
     void creatorOrSubmitterCannotApproveOwnRequest() throws Exception {
         AppUser approver = createUser("self", "PURCHASING_MANAGER");
         AppUser submitter = createUser("other-submitter", "PURCHASING");
-        approvalHandler.reset(approver.getId());
+        Supplier supplier = createPendingSupplier(approver.getId());
 
         Long approvalRequestId = submitAndGetRequestId(
                 ApprovalTargetType.SUPPLIER,
-                TARGET_ID,
+                supplier.getId(),
                 submitter.getId()
         );
 
@@ -153,10 +172,10 @@ class ApprovalApiIntegrationTest {
                 .andExpect(jsonPath("$.code")
                         .value("APPROVAL_SELF_APPROVAL_FORBIDDEN"));
 
-        approvalHandler.reset(submitter.getId());
+        Supplier secondSupplier = createPendingSupplier(submitter.getId());
         Long submittedByApproverId = submitAndGetRequestId(
                 ApprovalTargetType.SUPPLIER,
-                TARGET_ID + 1,
+                secondSupplier.getId(),
                 approver.getId()
         );
 
@@ -179,11 +198,11 @@ class ApprovalApiIntegrationTest {
         AppUser creator = createUser("manager-target-creator", "PURCHASING");
         AppUser submitter = createUser("manager-target-submitter", "PURCHASING");
         AppUser manager = createUser("manager-approver", "MANAGER");
-        approvalHandler.reset(creator.getId());
+        Supplier supplier = createPendingSupplier(creator.getId());
 
         Long approvalRequestId = submitAndGetRequestId(
                 ApprovalTargetType.SUPPLIER,
-                TARGET_ID,
+                supplier.getId(),
                 submitter.getId()
         );
 
@@ -216,12 +235,12 @@ class ApprovalApiIntegrationTest {
         AppUser creator = createUser("round-creator", "PURCHASING");
         AppUser submitter = createUser("round-submitter", "PURCHASING");
         AppUser approver = createUser("round-approver", "PURCHASING_MANAGER");
-        approvalHandler.reset(creator.getId());
+        Supplier supplier = createPendingSupplier(creator.getId());
         String token = login(approver.getEmail());
 
         Long firstRoundId = submitAndGetRequestId(
                 ApprovalTargetType.SUPPLIER,
-                TARGET_ID,
+                supplier.getId(),
                 submitter.getId()
         );
 
@@ -237,10 +256,10 @@ class ApprovalApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.request.status").value("RETURNED"));
 
-        approvalHandler.prepareResubmission();
+        prepareResubmission(supplier);
         Long secondRoundId = submitAndGetRequestId(
                 ApprovalTargetType.SUPPLIER,
-                TARGET_ID,
+                supplier.getId(),
                 submitter.getId()
         );
 
@@ -262,12 +281,12 @@ class ApprovalApiIntegrationTest {
         AppUser creator = createUser("repeat-creator", "PURCHASING");
         AppUser submitter = createUser("repeat-submitter", "PURCHASING");
         AppUser approver = createUser("repeat-approver", "PURCHASING_MANAGER");
-        approvalHandler.reset(creator.getId());
+        Supplier supplier = createPendingSupplier(creator.getId());
         String token = login(approver.getEmail());
 
         Long approvalRequestId = submitAndGetRequestId(
                 ApprovalTargetType.SUPPLIER,
-                TARGET_ID,
+                supplier.getId(),
                 submitter.getId()
         );
 
@@ -293,7 +312,7 @@ class ApprovalApiIntegrationTest {
                 .andExpect(jsonPath("$.code")
                         .value("APPROVAL_ALREADY_PROCESSED"));
 
-        assertThat(approvalHandler.getStatus()).isEqualTo("APPROVED");
+        assertThat(supplierStatus(supplier)).isEqualTo(MasterDataStatus.ACTIVE);
     }
 
     @Test
@@ -302,11 +321,11 @@ class ApprovalApiIntegrationTest {
         AppUser submitter = createUser("pending-submitter", "PURCHASING");
         AppUser approver = createUser("pending-approver", "PURCHASING_MANAGER");
         AppUser warehouse = createUser("pending-warehouse", "WAREHOUSE");
-        approvalHandler.reset(creator.getId());
+        Supplier supplier = createPendingSupplier(creator.getId());
 
         Long approvalRequestId = submitAndGetRequestId(
                 ApprovalTargetType.SUPPLIER,
-                TARGET_ID,
+                supplier.getId(),
                 submitter.getId()
         );
 
@@ -344,11 +363,11 @@ class ApprovalApiIntegrationTest {
         AppUser creator = createUser("comment-creator", "PURCHASING");
         AppUser submitter = createUser("comment-submitter", "PURCHASING");
         AppUser approver = createUser("comment-approver", "PURCHASING_MANAGER");
-        approvalHandler.reset(creator.getId());
+        Supplier supplier = createPendingSupplier(creator.getId());
 
         Long approvalRequestId = submitAndGetRequestId(
                 ApprovalTargetType.SUPPLIER,
-                TARGET_ID,
+                supplier.getId(),
                 submitter.getId()
         );
 
@@ -368,17 +387,17 @@ class ApprovalApiIntegrationTest {
     @Test
     void targetCannotHaveTwoPendingApprovalRequests() {
         AppUser submitter = createUser("duplicate-pending", "PURCHASING");
-        approvalHandler.reset(submitter.getId());
+        Supplier supplier = createPendingSupplier(submitter.getId());
 
         approvalService.submit(
                 ApprovalTargetType.SUPPLIER,
-                TARGET_ID,
+                supplier.getId(),
                 submitter.getId()
         );
 
         assertThatThrownBy(() -> approvalService.submit(
                 ApprovalTargetType.SUPPLIER,
-                TARGET_ID,
+                supplier.getId(),
                 submitter.getId()
         ))
                 .isInstanceOf(BusinessException.class)
@@ -441,55 +460,31 @@ class ApprovalApiIntegrationTest {
         return "Bearer " + token;
     }
 
-    @TestConfiguration(proxyBeanMethods = false)
-    static class ApprovalTestConfiguration {
+    private Supplier createPendingSupplier(Long createdBy) {
+        Supplier supplier = supplierRepository.saveAndFlush(new Supplier(
+                SUPPLIER_NAME_PREFIX + UUID.randomUUID(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                createdBy
+        ));
+        supplier.assignCode();
+        supplier.submit();
 
-        @Bean
-        TestSupplierApprovalHandler testSupplierApprovalHandler() {
-            return new TestSupplierApprovalHandler();
-        }
+        return supplierRepository.saveAndFlush(supplier);
     }
 
-    static class TestSupplierApprovalHandler implements ApprovalHandler {
+    private void prepareResubmission(Supplier supplier) {
+        Supplier returned = supplierRepository.findById(supplier.getId()).orElseThrow();
+        returned.submit();
+        supplierRepository.saveAndFlush(returned);
+    }
 
-        private Long createdBy;
-        private String status;
-
-        void reset(Long createdBy) {
-            this.createdBy = createdBy;
-            this.status = "PENDING";
-        }
-
-        void prepareResubmission() {
-            this.status = "PENDING";
-        }
-
-        String getStatus() {
-            return status;
-        }
-
-        @Override
-        public ApprovalTargetType targetType() {
-            return ApprovalTargetType.SUPPLIER;
-        }
-
-        @Override
-        public ApprovalTarget loadTarget(Long targetId) {
-            return new ApprovalTarget(
-                    createdBy,
-                    "測試供應商",
-                    List.of()
-            );
-        }
-
-        @Override
-        public void onApproved(Long targetId, Long approverId) {
-            this.status = "APPROVED";
-        }
-
-        @Override
-        public void onReturned(Long targetId, Long approverId) {
-            this.status = "RETURNED";
-        }
+    private MasterDataStatus supplierStatus(Supplier supplier) {
+        return supplierRepository.findById(supplier.getId())
+                .orElseThrow()
+                .getStatus();
     }
 }
