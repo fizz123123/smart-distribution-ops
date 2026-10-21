@@ -7,7 +7,7 @@ public interface AuditService {
     void record(
             Long actorId,
             AuditActionType actionType,
-            Long targetUserId,
+            Long targetId,
             String summary,
             String beforeData,
             String afterData,

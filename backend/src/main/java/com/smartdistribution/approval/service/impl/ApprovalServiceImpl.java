@@ -62,7 +62,12 @@ public class ApprovalServiceImpl implements ApprovalService {
         this.handlers = new EnumMap<>(ApprovalTargetType.class);
 
         for (ApprovalHandler handler : approvalHandlers) {
-            handlers.put(handler.targetType(), handler);
+            // 同一類型有兩個 handler 時，put 會默默覆蓋其中一個，所以在啟動時就失敗
+            if (handlers.put(handler.targetType(), handler) != null) {
+                throw new IllegalStateException(
+                        "Duplicate approval handler for " + handler.targetType()
+                );
+            }
         }
     }
 
