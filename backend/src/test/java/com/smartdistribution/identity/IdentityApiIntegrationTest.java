@@ -283,7 +283,12 @@ class IdentityApiIntegrationTest {
         );
 
         assertThat(managerPermissions).containsExactlyInAnyOrder(
+                "CUSTOMER_VIEW",
                 "CUSTOMER_APPROVE",
+                "COMPANY_ITEM_VIEW",
+                "CUSTOMER_ITEM_MAPPING_VIEW",
+                "CUSTOMER_PRICE_VIEW",
+                "SUPPLIER_VIEW",
                 "SUPPLIER_APPROVE"
         );
 

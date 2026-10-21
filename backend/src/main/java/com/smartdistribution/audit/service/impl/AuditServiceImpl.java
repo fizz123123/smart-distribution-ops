@@ -2,7 +2,6 @@ package com.smartdistribution.audit.service.impl;
 
 import com.smartdistribution.audit.entity.AuditActionType;
 import com.smartdistribution.audit.entity.AuditLog;
-import com.smartdistribution.audit.entity.AuditTargetType;
 import com.smartdistribution.audit.repository.AuditLogRepository;
 import com.smartdistribution.audit.service.AuditService;
 import lombok.RequiredArgsConstructor;
@@ -20,21 +19,23 @@ public class AuditServiceImpl implements AuditService {
     public void record(
             Long actorId,
             AuditActionType actionType,
-            Long targetUserId,
+            Long targetId,
             String summary,
             String beforeData,
             String afterData,
             String reason
     ) {
-        auditLogRepository.save(new AuditLog(
-                actorId,
-                actionType,
-                AuditTargetType.USER,
-                targetUserId,
-                summary,
-                beforeData,
-                afterData,
-                reason
-        ));
+        auditLogRepository.save(
+                new AuditLog(
+                        actorId,
+                        actionType,
+                        actionType.getTargetType(),
+                        targetId,
+                        summary,
+                        beforeData,
+                        afterData,
+                        reason
+                )
+        );
     }
 }

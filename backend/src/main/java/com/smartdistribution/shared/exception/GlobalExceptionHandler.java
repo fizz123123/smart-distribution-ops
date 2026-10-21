@@ -3,6 +3,7 @@ package com.smartdistribution.shared.exception;
 import com.smartdistribution.shared.web.filter.RequestIdFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -168,6 +169,23 @@ public class GlobalExceptionHandler {
             HttpServletRequest request
     ) {
         ErrorCode errorCode = ErrorCode.VERSION_CONFLICT;
+
+        return buildResponse(
+                errorCode,
+                errorCode.getDefaultMessage(),
+                List.of(),
+                request
+        );
+    }
+
+    // 資料庫約束是最後防線：應用程式已先檢查常見情況，這裡處理同時操作等漏網的衝突
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiErrorResponse> handleDataIntegrityViolationException(
+            DataIntegrityViolationException exception,
+            HttpServletRequest request
+    ) {
+        log.warn("Data integrity violation", exception);
+        ErrorCode errorCode = ErrorCode.DATA_CONFLICT;
 
         return buildResponse(
                 errorCode,

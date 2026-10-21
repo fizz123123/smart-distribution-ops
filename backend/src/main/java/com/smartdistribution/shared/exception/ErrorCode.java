@@ -82,10 +82,84 @@ public enum ErrorCode {
             "建立者或送審者不得核准自己的申請。"
     ),
 
+    // Master data
+    SUPPLIER_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "找不到指定的供應商。"
+    ),
+    CUSTOMER_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "找不到指定的客戶。"
+    ),
+    COMPANY_ITEM_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "找不到指定的公司料號。"
+    ),
+    COMPANY_ITEM_CODE_ALREADY_EXISTS(
+            HttpStatus.CONFLICT,
+            "公司料號已存在。"
+    ),
+    COMPANY_ITEM_PREFERRED_SUPPLIER_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "偏好供應商不存在或尚未啟用。"
+    ),
+    COMPANY_ITEM_UNIT_CONVERSION_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "單位換算不可包含庫存基準單位，也不可重複設定同一單位。"
+    ),
+    CUSTOMER_ITEM_MAPPING_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "找不到指定的客戶料號對應。"
+    ),
+    CUSTOMER_ITEM_MAPPING_ALREADY_EXISTS(
+            HttpStatus.CONFLICT,
+            "此客戶已有相同客戶料號的對應。"
+    ),
+    CUSTOMER_ITEM_MAPPING_REFERENCE_INACTIVE(
+            HttpStatus.CONFLICT,
+            "客戶或公司料號不存在或尚未啟用。"
+    ),
+    CUSTOMER_PRICE_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "找不到指定的客戶價格。"
+    ),
+    CUSTOMER_PRICE_PENDING_EXISTS(
+            HttpStatus.CONFLICT,
+            "此客戶料號與計價單位已有待覆核的價格，請先完成覆核或拒絕。"
+    ),
+    CUSTOMER_PRICE_MAPPING_INACTIVE(
+            HttpStatus.CONFLICT,
+            "客戶料號對應、客戶或公司料號尚未啟用或已停用。"
+    ),
+    CUSTOMER_PRICE_UNIT_INVALID(
+            HttpStatus.CONFLICT,
+            "計價單位必須是料號的庫存基準單位或已設定換算的單位。"
+    ),
+    COMPANY_ITEM_UNIT_CONVERSIONS_EXIST(
+            HttpStatus.CONFLICT,
+            "已設定其他單位換算，請先清除換算再修改庫存基準單位。"
+    ),
+    MASTER_DATA_TAX_ID_ALREADY_EXISTS(
+            HttpStatus.CONFLICT,
+            "統一編號已被其他資料使用。"
+    ),
+    MASTER_DATA_IDENTITY_LOCKED(
+            HttpStatus.CONFLICT,
+            "已啟用的資料不可修改名稱或統一編號。"
+    ),
+    MASTER_DATA_STATUS_CONFLICT(
+            HttpStatus.CONFLICT,
+            "目前狀態不允許此操作，請重新載入。"
+    ),
+
     // Concurrency control
     VERSION_CONFLICT(
             HttpStatus.CONFLICT,
             "資料已被其他使用者修改，請重新載入後再操作。"
+    ),
+    DATA_CONFLICT(
+            HttpStatus.CONFLICT,
+            "資料與現有資料重複或衝突，請重新載入後再操作。"
     ),
 
     // Request validation and parsing

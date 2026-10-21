@@ -50,11 +50,36 @@ public class IdentityDataInitializer implements ApplicationRunner {
             new PermissionSeed("USER_ROLE", "MANAGE"),
             new PermissionSeed("USER_PERMISSION", "MANAGE"),
             new PermissionSeed("SO", "CREATE"),
+            new PermissionSeed("CUSTOMER", "VIEW"),
+            new PermissionSeed("CUSTOMER", "CREATE"),
+            new PermissionSeed("CUSTOMER", "UPDATE"),
+            new PermissionSeed("CUSTOMER", "SUBMIT"),
             new PermissionSeed("CUSTOMER", "APPROVE"),
+            new PermissionSeed("CUSTOMER", "STATUS_MANAGE"),
+            new PermissionSeed("CUSTOMER", "PAYMENT_TERM_MANAGE"),
+            new PermissionSeed("SUPPLIER", "VIEW"),
+            new PermissionSeed("SUPPLIER", "CREATE"),
+            new PermissionSeed("SUPPLIER", "UPDATE"),
+            new PermissionSeed("SUPPLIER", "SUBMIT"),
             new PermissionSeed("SUPPLIER", "APPROVE"),
+            new PermissionSeed("SUPPLIER", "STATUS_MANAGE"),
+            new PermissionSeed("COMPANY_ITEM", "VIEW"),
+            new PermissionSeed("COMPANY_ITEM", "CREATE"),
+            new PermissionSeed("COMPANY_ITEM", "UPDATE"),
+            new PermissionSeed("COMPANY_ITEM", "SUBMIT"),
             new PermissionSeed("COMPANY_ITEM", "APPROVE"),
+            new PermissionSeed("COMPANY_ITEM", "STATUS_MANAGE"),
+            new PermissionSeed("INVENTORY_POLICY", "MANAGE"),
+            new PermissionSeed("CUSTOMER_ITEM_MAPPING", "VIEW"),
+            new PermissionSeed("CUSTOMER_ITEM_MAPPING", "CREATE"),
+            new PermissionSeed("CUSTOMER_ITEM_MAPPING", "UPDATE"),
+            new PermissionSeed("CUSTOMER_ITEM_MAPPING", "SUBMIT"),
             new PermissionSeed("CUSTOMER_ITEM_MAPPING", "APPROVE"),
-            new PermissionSeed("CUSTOMER_PRICE", "APPROVE")
+            new PermissionSeed("CUSTOMER_ITEM_MAPPING", "STATUS_MANAGE"),
+            new PermissionSeed("CUSTOMER_PRICE", "VIEW"),
+            new PermissionSeed("CUSTOMER_PRICE", "CREATE"),
+            new PermissionSeed("CUSTOMER_PRICE", "APPROVE"),
+            new PermissionSeed("CUSTOMER_PRICE", "REVOKE")
     );
 
     private static final List<String> APP_ADMIN_PERMISSIONS = List.of(
@@ -63,19 +88,66 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "USER_PERMISSION_MANAGE"
     );
 
-    private static final List<String> SALES_MANAGER_APPROVAL_PERMISSIONS = List.of(
+    private static final List<String> SALES_PERMISSIONS = List.of(
+            "CUSTOMER_VIEW",
+            "CUSTOMER_CREATE",
+            "CUSTOMER_UPDATE",
+            "CUSTOMER_SUBMIT",
+            "COMPANY_ITEM_VIEW",
+            "COMPANY_ITEM_CREATE",
+            "COMPANY_ITEM_UPDATE",
+            "COMPANY_ITEM_SUBMIT",
+            "CUSTOMER_ITEM_MAPPING_VIEW",
+            "CUSTOMER_ITEM_MAPPING_CREATE",
+            "CUSTOMER_ITEM_MAPPING_UPDATE",
+            "CUSTOMER_ITEM_MAPPING_SUBMIT",
+            "CUSTOMER_PRICE_VIEW",
+            "CUSTOMER_PRICE_CREATE"
+    );
+
+    private static final List<String> SALES_MANAGER_PERMISSIONS = List.of(
+            "CUSTOMER_VIEW",
             "CUSTOMER_APPROVE",
+            "CUSTOMER_STATUS_MANAGE",
+            "COMPANY_ITEM_VIEW",
+            "COMPANY_ITEM_STATUS_MANAGE",
             "COMPANY_ITEM_APPROVE",
+            "CUSTOMER_ITEM_MAPPING_VIEW",
             "CUSTOMER_ITEM_MAPPING_APPROVE",
-            "CUSTOMER_PRICE_APPROVE"
+            "CUSTOMER_ITEM_MAPPING_STATUS_MANAGE",
+            "CUSTOMER_PRICE_VIEW",
+            "CUSTOMER_PRICE_APPROVE",
+            "CUSTOMER_PRICE_REVOKE"
     );
 
-    private static final List<String> PURCHASING_MANAGER_APPROVAL_PERMISSIONS = List.of(
-            "SUPPLIER_APPROVE"
+    private static final List<String> PURCHASING_PERMISSIONS = List.of(
+            "SUPPLIER_VIEW",
+            "SUPPLIER_CREATE",
+            "SUPPLIER_UPDATE",
+            "SUPPLIER_SUBMIT",
+            "COMPANY_ITEM_VIEW"
     );
 
-    private static final List<String> MANAGER_APPROVAL_PERMISSIONS = List.of(
+    private static final List<String> PURCHASING_MANAGER_PERMISSIONS = List.of(
+            "SUPPLIER_VIEW",
+            "SUPPLIER_APPROVE",
+            "SUPPLIER_STATUS_MANAGE",
+            "COMPANY_ITEM_VIEW",
+            "INVENTORY_POLICY_MANAGE"
+    );
+
+    private static final List<String> FINANCE_MANAGER_PERMISSIONS = List.of(
+            "CUSTOMER_VIEW",
+            "CUSTOMER_PAYMENT_TERM_MANAGE"
+    );
+
+    private static final List<String> MANAGER_PERMISSIONS = List.of(
+            "CUSTOMER_VIEW",
+            "COMPANY_ITEM_VIEW",
+            "CUSTOMER_ITEM_MAPPING_VIEW",
+            "CUSTOMER_PRICE_VIEW",
             "CUSTOMER_APPROVE",
+            "SUPPLIER_VIEW",
             "SUPPLIER_APPROVE"
     );
 
@@ -100,21 +172,39 @@ public class IdentityDataInitializer implements ApplicationRunner {
         );
 
         assignPermissions(
+                rolesByCode.get("SALES"),
+                permissionsByCode,
+                SALES_PERMISSIONS
+        );
+
+        assignPermissions(
                 rolesByCode.get("SALES_MANAGER"),
                 permissionsByCode,
-                SALES_MANAGER_APPROVAL_PERMISSIONS
+                SALES_MANAGER_PERMISSIONS
+        );
+
+        assignPermissions(
+                rolesByCode.get("PURCHASING"),
+                permissionsByCode,
+                PURCHASING_PERMISSIONS
         );
 
         assignPermissions(
                 rolesByCode.get("PURCHASING_MANAGER"),
                 permissionsByCode,
-                PURCHASING_MANAGER_APPROVAL_PERMISSIONS
+                PURCHASING_MANAGER_PERMISSIONS
+        );
+
+        assignPermissions(
+                rolesByCode.get("FINANCE_MANAGER"),
+                permissionsByCode,
+                FINANCE_MANAGER_PERMISSIONS
         );
 
         assignPermissions(
                 rolesByCode.get("MANAGER"),
                 permissionsByCode,
-                MANAGER_APPROVAL_PERMISSIONS
+                MANAGER_PERMISSIONS
         );
 
         removePermissions(
