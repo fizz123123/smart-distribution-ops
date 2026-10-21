@@ -217,6 +217,8 @@ HOME-01 是個人作業入口，不另建立「待辦中心」。畫面可組合
 
 客戶與供應商編號由系統產生，建立 request 不帶編號；公司料號由使用者輸入。已啟用主檔只能修改非識別資料，嘗試修改識別資料時回傳 `409 MASTER_DATA_IDENTITY_LOCKED`。
 
+主檔的 `PATCH` 須送出全部可編輯欄位與 `version`；可為空的欄位以 `null` 表示清空，不採「未傳即不修改」的部分更新。待核准期間的主檔不得修改，回傳 `409 MASTER_DATA_STATUS_CONFLICT`。
+
 ### 5.2 公司料號、客戶料號、價格與供應商
 
 | 資源 | 查詢 | 建立／修改 | 送審 | 狀態操作 |
@@ -225,19 +227,21 @@ HOME-01 是個人作業入口，不另建立「待辦中心」。畫面可組合
 | 客戶料號對應 | `/customer-item-mappings` | `POST /customer-item-mappings`、`PATCH /customer-item-mappings/{id}` | `POST /customer-item-mappings/{id}/submit` | `POST /customer-item-mappings/{id}/activate`、`POST /customer-item-mappings/{id}/deactivate` |
 | 客戶價格 | `/customer-prices` | `POST /customer-prices` | 建立後送覆核 | `POST /customer-prices/{id}/revoke` |
 | 供應商 | `/suppliers` | `POST /suppliers`、`PATCH /suppliers/{id}` | `POST /suppliers/{id}/submit` | `POST /suppliers/{id}/activate`、`POST /suppliers/{id}/deactivate` |
+| 單位換算 | 併入公司料號詳情 | `PUT /company-items/{id}/unit-conversions`：整份取代基準單位以外的換算 | 不另送審 | 沿用 `COMPANY_ITEM_UPDATE`；待核准與停用期間不得修改 |
+| 單位清單 | `GET /units` | 不提供維護 API | — | 任何已登入使用者可查詢 |
 | 安全庫存政策 | `/company-items/{id}/inventory-policy` | `PUT /company-items/{id}/inventory-policy` | 不另送審 | 修改權限為 `INVENTORY_POLICY_MANAGE`，僅授予採購主管或具相應細部權限者 |
 
 價格建立 request：
 
 ```json
 {
-  "customerItemMappingId": "01J...",
-  "pricingUnitCode": "PCS",
+  "customerItemMappingId": 15,
+  "pricingUnit": "PCS",
   "unitPriceExcludingTax": 125.00
 }
 ```
 
-`POST /customer-prices` 成功後直接建立 `PENDING_REVIEW` 價格及對應核准申請；價格沒有另外的草稿與送審 API。同一客戶料號與計價單位已有待覆核價格時，回傳 `409 CUSTOMER_PRICE_PENDING_EXISTS`。價格覆核的「退回」即為拒絕，價格轉為 `REJECTED` 後不可重新送審，須另建新版本。
+`POST /customer-prices` 成功後直接建立 `PENDING_REVIEW` 價格及對應核准申請；價格沒有另外的草稿與送審 API。同一客戶料號與計價單位已有待覆核價格時，回傳 `409 CUSTOMER_PRICE_PENDING_EXISTS`。價格覆核的「退回」即為拒絕，價格轉為 `REJECTED` 後不可重新送審，須另建新版本。計價單位須為該料號的庫存基準單位或已設定換算的單位，否則回傳 `409 CUSTOMER_PRICE_UNIT_INVALID`。撤銷 request 須包含 `reason` 與 `version`。
 
 公司料號詳情需同時呈現基準單位、安全庫存、偏好供應商、允許交易單位及換算倍率。安全庫存以基準單位輸入，更新 request 必須包含 `safetyStockBaseQty`、`reason` 與 `version`，並保存修改前後值、操作者與時間。重新啟用主檔時，後端重新檢查唯一性及必要關聯。
 
@@ -461,7 +465,7 @@ WH-03 只顯示倉管履約所需資料，不提供非必要的客戶價格、PO
 
 - DO 編號、來源 SO 編號、客戶、交貨資料與預計出貨日。
 - 預計出貨量、實際出貨量與可過帳數量。
-- 品項、規格、儲位備註及交易／基準單位。
+- 公司料號、品名、儲位備註及交易／基準單位。
 - 正式 PDF 狀態、實際出貨日及過帳紀錄。
 
 ### 8.2 API 對照
