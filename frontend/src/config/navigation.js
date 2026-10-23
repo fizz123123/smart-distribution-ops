@@ -6,7 +6,16 @@
  * children：有子選單的模組，例如 { label, icon, children: [{ label, to, screen, permission }] }
  * 路由的 meta.navigation 使用這裡的項目，選單與路由守衛才會依同一份權限判斷。
  */
-export const navigation = [{ label: '工作台', icon: 'home', to: '/', screen: 'HOME-01' }]
+export const navigation = [
+  { label: '工作台', icon: 'home', to: '/', screen: 'HOME-01' },
+  {
+    label: '使用者與權限',
+    icon: 'gear',
+    to: '/admin/users',
+    screen: 'ADM-01',
+    permission: 'USER_MANAGE',
+  },
+]
 
 export function canAccess(item, authStore) {
   if (item.approval) {

@@ -1,0 +1,115 @@
+/*
+ * Element Plus 主題對應：把 Element Plus 的 CSS 變數接到我們的設計 token（tokens.css）。
+ * 規則：這裡只能引用 tokens.css 的變數，不寫死新的顏色；要改顏色請改 tokens.css。
+ *
+ * 用 html:root（比 :root 多一層權重），因為 Element Plus 按需引入的樣式
+ * 也會在 :root 定義同名變數，而且可能比這個檔案晚載入。
+ */
+html:root {
+  /* 主色：Navy */
+  --el-color-primary: var(--accent-strong);
+  --el-color-primary-dark-2: #092a59;
+  --el-color-primary-light-3: #546f97;
+  --el-color-primary-light-5: #8599b6;
+  --el-color-primary-light-7: #b6c2d4;
+  --el-color-primary-light-8: #ced6e2;
+  --el-color-primary-light-9: #e7ebf0;
+
+  /* 功能色 */
+  --el-color-success: var(--success);
+  --el-color-success-light-9: var(--success-soft);
+  --el-color-warning: var(--warning);
+  --el-color-warning-light-9: var(--warning-soft);
+  --el-color-danger: var(--danger);
+  --el-color-danger-light-9: var(--danger-soft);
+  --el-color-error: var(--danger);
+  --el-color-error-light-9: var(--danger-soft);
+  --el-color-info: var(--ink-3);
+
+  /* 文字：小字也要符合 4.5:1，所以次要文字最淡只到 --ink-3 */
+  --el-text-color-primary: var(--ink);
+  --el-text-color-regular: var(--ink-2);
+  --el-text-color-secondary: var(--ink-3);
+  --el-text-color-placeholder: var(--ink-3);
+  --el-text-color-disabled: var(--ink-muted);
+
+  /* 線條：淡色細線 */
+  --el-border-color: var(--control-line);
+  --el-border-color-light: var(--line);
+  --el-border-color-lighter: var(--line-soft);
+  --el-border-color-extra-light: var(--line-faint);
+  --el-border-color-hover: var(--accent);
+
+  /* 表面 */
+  --el-bg-color: #fff;
+  --el-bg-color-overlay: #fff;
+  --el-fill-color-blank: #fff;
+  --el-fill-color-light: var(--subtle);
+  --el-fill-color-lighter: var(--subtle);
+  --el-mask-color: rgba(15, 42, 61, 0.28);
+
+  /* 圓角、字型、陰影 */
+  --el-border-radius-base: var(--r-md);
+  --el-border-radius-small: var(--r-sm);
+  --el-border-radius-round: 999px;
+  --el-font-family: var(--font-sans);
+  --el-font-size-base: 14px;
+  --el-box-shadow-light: var(--shadow-card);
+  --el-box-shadow: var(--shadow-pop);
+
+  /* 元件高度：跟我們的按鈕一致 */
+  --el-component-size: 36px;
+}
+
+/* 對話框：沿用卡片的圓角與陰影，標題用 Navy 粗體 */
+.el-dialog {
+  --el-dialog-border-radius: var(--r-xl);
+  --el-dialog-padding-primary: 22px;
+  box-shadow: var(--shadow-pop);
+}
+
+.el-dialog__title {
+  font-weight: 700;
+  color: var(--accent-strong);
+}
+
+.el-overlay {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* 輸入框：淡色細框，聚焦時 Peacock */
+.el-input__wrapper,
+.el-textarea__inner {
+  box-shadow: 0 0 0 1px var(--control-line) inset;
+}
+
+.el-input__wrapper.is-focus,
+.el-textarea__inner:focus {
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+/* 表單標籤 */
+.el-form-item__label {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* 主要按鈕：跟 .btn-primary 一致 */
+.el-button {
+  font-weight: 600;
+}
+
+.el-button--primary {
+  --el-button-bg-color: var(--accent-strong);
+  --el-button-border-color: var(--accent-strong);
+  --el-button-hover-bg-color: var(--brand-navy-2);
+  --el-button-hover-border-color: var(--brand-navy-2);
+}
+
+/* 「⋯」選單裡的危險操作（例如停用）用紅字，滑過時也維持紅色 */
+.el-dropdown-menu__item.danger,
+.el-dropdown-menu__item.danger:not(.is-disabled):hover,
+.el-dropdown-menu__item.danger:not(.is-disabled):focus {
+  color: var(--danger);
+}

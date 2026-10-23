@@ -1,0 +1,84 @@
+/*
+ * 設計 token：顏色、字型、圓角、陰影。
+ * 來源：design/工作台-定稿.html（cyber8）。
+ * 小字（12px 以下）只能用 --ink、--ink-2、--ink-3、--accent、--accent-strong，其他品牌色對比不足。
+ */
+:root {
+  /* 品牌色 */
+  --brand-navy: #0b346e;
+  --brand-navy-2: #0e4a84;
+  --brand-peacock: #006284;
+  --brand-ocean: #1e88a8;
+  --brand-cyan: #33a6b8;
+  --brand-teal: #69b0ac;
+  --brand-spring: #86c166;
+  --brand-sage: #b5caa0;
+  --brand-sand: #d9cd90;
+  --brand-slate: #2b5f75;
+
+  /* 文字 */
+  --ink: #0f2a3d;
+  --ink-2: #2b5f75;
+  --ink-3: #4e6878;
+  --ink-muted: #a7aeb8;
+
+  /* 重點色 */
+  --accent: var(--brand-peacock);
+  --accent-strong: var(--brand-navy);
+  --accent-soft: #e3f0f5;
+
+  /* 功能色（品牌色系沒有警示色，另外補充） */
+  --danger: #b42318;
+  --danger-soft: #fdecea;
+  --warning: #b54708;
+  --warning-strong: #c4560c;
+  --warning-soft: #fff4e0;
+  --success: #067647;
+  --success-soft: #e5f1dc;
+  --success-line: #86c166;
+  --info: var(--brand-peacock);
+  --info-soft: #e3f0f5;
+  --due: #9a6b12;
+
+  /* 線條 */
+  --line: rgba(43, 95, 117, 0.14);
+  --line-soft: rgba(43, 95, 117, 0.1);
+  --line-faint: rgba(43, 95, 117, 0.06);
+  --control-line: rgba(43, 95, 117, 0.22);
+
+  /* 表面 */
+  --page-bg: #e9f2f2;
+  --glass: rgba(255, 255, 255, 0.62);
+  --glass-edge: rgba(255, 255, 255, 0.8);
+  --card: rgba(255, 255, 255, 0.93);
+  --card-edge: rgba(255, 255, 255, 0.9);
+  --subtle: #f6fafa;
+  --cell: rgba(255, 255, 255, 0.7);
+
+  /* 陰影 */
+  --shadow-glass: 0 8px 28px rgba(15, 42, 61, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --shadow-card: 0 1px 2px rgba(15, 42, 61, 0.04), 0 8px 24px rgba(15, 42, 61, 0.06);
+  --shadow-pop: 0 16px 40px rgba(15, 42, 61, 0.18), 0 0 0 1px rgba(43, 95, 117, 0.08);
+  --shadow-active: 0 8px 18px rgba(11, 52, 110, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+
+  /* 圓角 */
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+
+  /* 字型 */
+  --font-sans: 'PingFang TC', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+  --font-mono: 'SF Mono', Menlo, 'Roboto Mono', Consolas, monospace;
+  --font-display: 'Helvetica Neue', 'Arial Narrow', Arial, sans-serif;
+
+  /* 版面 */
+  --gap: 14px;
+  --side-w: 220px;
+  --side-w-collapsed: 72px;
+  --rail-w: 340px;
+  --bar-h: 56px;
+  /* 右上角工具（搜尋、重新整理、通知、頭像）的寬度；頁面標題右邊要讓出這段空間 */
+  --tools-w: 240px;
+}

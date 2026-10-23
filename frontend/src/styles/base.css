@@ -1,0 +1,387 @@
+@import './tokens.css';
+@import './element-theme.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  background-color: var(--page-bg);
+  background-image:
+    linear-gradient(rgba(0, 98, 132, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 98, 132, 0.035) 1px, transparent 1px);
+  background-size: 32px 32px;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 共用表面 */
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-glass);
+}
+
+.card {
+  background: var(--card);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--card-edge);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.card-head h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.card-head h3 .icon {
+  color: var(--accent);
+}
+
+/* 單號、文字層級 */
+.doc-id {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--accent-strong);
+}
+
+.sub {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* 篩選膠囊 */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  padding: 3px 9px;
+  border: 1px solid rgba(43, 95, 117, 0.18);
+  border-radius: var(--r-sm);
+  background: var(--subtle);
+  color: var(--accent-strong);
+  white-space: nowrap;
+}
+
+button.chip:hover {
+  border-color: var(--accent);
+}
+
+.chip[aria-pressed='true'],
+.chip.is-on {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: #fff;
+}
+
+/* 單據類型小標 */
+.type-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--r-xs);
+  background: var(--subtle);
+  color: var(--accent-strong);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+/* 按鈕 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 104px;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--r-md);
+  border: 1px solid var(--control-line);
+  background: var(--subtle);
+  color: var(--accent-strong);
+  white-space: nowrap;
+}
+
+.btn:hover {
+  border-color: var(--accent);
+}
+
+.btn .arrow {
+  font-family: var(--font-mono);
+  color: var(--accent);
+}
+
+.btn-primary {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: var(--brand-navy-2);
+}
+
+.btn-primary .arrow {
+  color: var(--brand-spring);
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--accent);
+}
+
+.icon-btn:hover {
+  background: rgba(0, 98, 132, 0.08);
+}
+
+/* 表格 */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  color: var(--ink-3);
+  text-align: left;
+  padding: 8px 14px;
+  background: rgba(246, 250, 250, 0.95);
+  border-bottom: 1px solid var(--line-soft);
+  white-space: nowrap;
+}
+
+.table td {
+  /* 稍微緊湊：兩行內容的列約 52px，一個畫面能多看幾筆 */
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line-faint);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.table tbody tr:hover td {
+  background: rgba(230, 241, 243, 0.45);
+}
+
+.table tr.is-overdue td:first-child {
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+
+.table .num {
+  font-family: var(--font-mono);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.table .date {
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.table .date .sub {
+  display: block;
+  font-family: var(--font-sans);
+}
+
+.text-right,
+.table .text-right {
+  /* 表格標題預設靠左；數字欄與操作欄要讓標題跟內容一起靠右 */
+  text-align: right;
+}
+
+/* 卡片內的清單列（待核准、待修正這類） */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.row-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line-faint);
+}
+
+.row-item:last-child {
+  border-bottom: 0;
+}
+
+.row-item .grow {
+  min-width: 0;
+}
+
+.row-empty {
+  padding: 24px 16px;
+  font-size: 13px;
+  color: var(--ink-3);
+  text-align: center;
+}
+
+/* 卡片內的表格捲動、空狀態、表格下方說明、文字連結 */
+.table-wrap {
+  overflow-x: auto;
+}
+
+.state {
+  padding: 36px 14px;
+  text-align: center;
+  color: var(--ink-3);
+}
+
+.state.error {
+  color: var(--danger);
+}
+
+.foot {
+  padding: 12px 20px;
+}
+
+.link {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+/* 低份量的文字按鈕：少用、需要確認的操作（例如停用） */
+.btn-quiet {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+
+.btn-quiet:hover {
+  background: rgba(43, 95, 117, 0.08);
+  color: var(--ink);
+}
+
+/* 編號就是進入詳情的連結 */
+.doc-link {
+  display: inline-block;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: rgba(11, 52, 110, 0.25);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.doc-link:hover {
+  text-decoration-color: currentColor;
+}
