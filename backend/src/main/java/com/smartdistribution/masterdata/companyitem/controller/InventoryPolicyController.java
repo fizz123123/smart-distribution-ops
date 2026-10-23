@@ -1,8 +1,8 @@
-package com.smartdistribution.inventory.controller;
+package com.smartdistribution.masterdata.companyitem.controller;
 
-import com.smartdistribution.inventory.dto.request.UpdateInventoryPolicyRequest;
-import com.smartdistribution.inventory.dto.response.InventoryPolicyResponse;
-import com.smartdistribution.inventory.service.InventoryService;
+import com.smartdistribution.masterdata.companyitem.dto.request.UpdateInventoryPolicyRequest;
+import com.smartdistribution.masterdata.companyitem.dto.response.InventoryPolicyResponse;
+import com.smartdistribution.masterdata.companyitem.service.InventoryPolicyService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -13,21 +13,18 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * 路徑掛在公司料號底下（12 號文件），但資料屬於庫存模組，所以 controller 放在這裡。
- */
 @RestController
 @RequestMapping("/api/v1/company-items/{companyItemId}/inventory-policy")
 @RequiredArgsConstructor
 public class InventoryPolicyController {
 
-    private final InventoryService inventoryService;
+    private final InventoryPolicyService inventoryPolicyService;
 
     @GetMapping
     public ResponseEntity<InventoryPolicyResponse> findInventoryPolicy(
             @PathVariable Long companyItemId
     ) {
-        InventoryPolicyResponse response = inventoryService.findInventoryPolicy(companyItemId);
+        InventoryPolicyResponse response = inventoryPolicyService.findInventoryPolicy(companyItemId);
 
         return ResponseEntity.ok(response);
     }
@@ -38,7 +35,7 @@ public class InventoryPolicyController {
             @Valid @RequestBody UpdateInventoryPolicyRequest request
     ) {
         InventoryPolicyResponse response =
-                inventoryService.updateInventoryPolicy(companyItemId, request);
+                inventoryPolicyService.updateInventoryPolicy(companyItemId, request);
 
         return ResponseEntity.ok(response);
     }

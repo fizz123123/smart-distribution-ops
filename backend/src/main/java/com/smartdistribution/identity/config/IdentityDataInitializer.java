@@ -79,7 +79,11 @@ public class IdentityDataInitializer implements ApplicationRunner {
             new PermissionSeed("CUSTOMER_PRICE", "VIEW"),
             new PermissionSeed("CUSTOMER_PRICE", "CREATE"),
             new PermissionSeed("CUSTOMER_PRICE", "APPROVE"),
-            new PermissionSeed("CUSTOMER_PRICE", "REVOKE")
+            new PermissionSeed("CUSTOMER_PRICE", "REVOKE"),
+            new PermissionSeed("INVENTORY", "VIEW"),
+            new PermissionSeed("INVENTORY_TRANSACTION", "VIEW"),
+            new PermissionSeed("INVENTORY_RESERVATION", "VIEW"),
+            new PermissionSeed("INVENTORY_ADJUSTMENT", "POST")
     );
 
     private static final List<String> APP_ADMIN_PERMISSIONS = List.of(
@@ -102,7 +106,8 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "CUSTOMER_ITEM_MAPPING_UPDATE",
             "CUSTOMER_ITEM_MAPPING_SUBMIT",
             "CUSTOMER_PRICE_VIEW",
-            "CUSTOMER_PRICE_CREATE"
+            "CUSTOMER_PRICE_CREATE",
+            "INVENTORY_VIEW"
     );
 
     private static final List<String> SALES_MANAGER_PERMISSIONS = List.of(
@@ -117,7 +122,9 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "CUSTOMER_ITEM_MAPPING_STATUS_MANAGE",
             "CUSTOMER_PRICE_VIEW",
             "CUSTOMER_PRICE_APPROVE",
-            "CUSTOMER_PRICE_REVOKE"
+            "CUSTOMER_PRICE_REVOKE",
+            "INVENTORY_VIEW",
+            "INVENTORY_RESERVATION_VIEW"
     );
 
     private static final List<String> PURCHASING_PERMISSIONS = List.of(
@@ -125,7 +132,9 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "SUPPLIER_CREATE",
             "SUPPLIER_UPDATE",
             "SUPPLIER_SUBMIT",
-            "COMPANY_ITEM_VIEW"
+            "COMPANY_ITEM_VIEW",
+            "INVENTORY_VIEW",
+            "INVENTORY_RESERVATION_VIEW"
     );
 
     private static final List<String> PURCHASING_MANAGER_PERMISSIONS = List.of(
@@ -133,7 +142,22 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "SUPPLIER_APPROVE",
             "SUPPLIER_STATUS_MANAGE",
             "COMPANY_ITEM_VIEW",
-            "INVENTORY_POLICY_MANAGE"
+            "INVENTORY_POLICY_MANAGE",
+            "INVENTORY_VIEW",
+            "INVENTORY_RESERVATION_VIEW"
+    );
+
+    private static final List<String> WAREHOUSE_PERMISSIONS = List.of(
+            "INVENTORY_VIEW",
+            "INVENTORY_TRANSACTION_VIEW",
+            "INVENTORY_RESERVATION_VIEW"
+    );
+
+    private static final List<String> WAREHOUSE_MANAGER_PERMISSIONS = List.of(
+            "INVENTORY_VIEW",
+            "INVENTORY_TRANSACTION_VIEW",
+            "INVENTORY_RESERVATION_VIEW",
+            "INVENTORY_ADJUSTMENT_POST"
     );
 
     private static final List<String> FINANCE_MANAGER_PERMISSIONS = List.of(
@@ -148,7 +172,10 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "CUSTOMER_PRICE_VIEW",
             "CUSTOMER_APPROVE",
             "SUPPLIER_VIEW",
-            "SUPPLIER_APPROVE"
+            "SUPPLIER_APPROVE",
+            "INVENTORY_VIEW",
+            "INVENTORY_TRANSACTION_VIEW",
+            "INVENTORY_RESERVATION_VIEW"
     );
 
     private final RoleRepository roleRepository;
@@ -193,6 +220,18 @@ public class IdentityDataInitializer implements ApplicationRunner {
                 rolesByCode.get("PURCHASING_MANAGER"),
                 permissionsByCode,
                 PURCHASING_MANAGER_PERMISSIONS
+        );
+
+        assignPermissions(
+                rolesByCode.get("WAREHOUSE"),
+                permissionsByCode,
+                WAREHOUSE_PERMISSIONS
+        );
+
+        assignPermissions(
+                rolesByCode.get("WAREHOUSE_MANAGER"),
+                permissionsByCode,
+                WAREHOUSE_MANAGER_PERMISSIONS
         );
 
         assignPermissions(

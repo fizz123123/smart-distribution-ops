@@ -152,6 +152,32 @@ public enum ErrorCode {
             "目前狀態不允許此操作，請重新載入。"
     ),
 
+    // Inventory
+    INVENTORY_ADJUSTMENT_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "找不到指定的庫存調整。"
+    ),
+    INVENTORY_ADJUSTMENT_LINES_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "調整明細不正確：同一料號只能出現一次，數量不可為 0 且須符合單位的小數位。"
+    ),
+    INVENTORY_OPENING_BALANCE_NOT_ALLOWED(
+            HttpStatus.CONFLICT,
+            "期初庫存只能為正數，且只能在料號尚無任何庫存異動或預留時建立一次。"
+    ),
+    INVENTORY_INSUFFICIENT(
+            HttpStatus.CONFLICT,
+            "調整後可出貨實體數量會小於 0。"
+    ),
+    INVENTORY_RESERVATION_WOULD_BE_BREACHED(
+            HttpStatus.CONFLICT,
+            "調減後可出貨實體數量會低於已預留數量。"
+    ),
+    INVENTORY_ADJUSTMENT_NOT_REVERSIBLE(
+            HttpStatus.CONFLICT,
+            "此調整已更正過，或本身就是更正紀錄，不能再更正。"
+    ),
+
     // Concurrency control
     VERSION_CONFLICT(
             HttpStatus.CONFLICT,

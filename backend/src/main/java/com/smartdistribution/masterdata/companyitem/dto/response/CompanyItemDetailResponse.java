@@ -1,7 +1,6 @@
 package com.smartdistribution.masterdata.companyitem.dto.response;
 
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
-import com.smartdistribution.inventory.dto.response.InventoryPolicyResponse;
 import com.smartdistribution.masterdata.common.MasterDataStatus;
 
 import java.time.Instant;

@@ -1,4 +1,4 @@
-package com.smartdistribution.inventory.dto.response;
+package com.smartdistribution.masterdata.companyitem.dto.response;
 
 import java.math.BigDecimal;
 import java.time.Instant;

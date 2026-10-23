@@ -289,7 +289,10 @@ class IdentityApiIntegrationTest {
                 "CUSTOMER_ITEM_MAPPING_VIEW",
                 "CUSTOMER_PRICE_VIEW",
                 "SUPPLIER_VIEW",
-                "SUPPLIER_APPROVE"
+                "SUPPLIER_APPROVE",
+                "INVENTORY_VIEW",
+                "INVENTORY_TRANSACTION_VIEW",
+                "INVENTORY_RESERVATION_VIEW"
         );
 
         mockMvc.perform(get("/api/v1/users")

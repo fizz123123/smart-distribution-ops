@@ -1,11 +1,12 @@
 package com.smartdistribution.masterdata.companyitem.mapper;
 
-import com.smartdistribution.inventory.dto.response.InventoryPolicyResponse;
 import com.smartdistribution.masterdata.companyitem.dto.response.CompanyItemDetailResponse;
 import com.smartdistribution.masterdata.companyitem.dto.response.CompanyItemSummaryResponse;
+import com.smartdistribution.masterdata.companyitem.dto.response.InventoryPolicyResponse;
 import com.smartdistribution.masterdata.companyitem.dto.response.PreferredSupplierResponse;
 import com.smartdistribution.masterdata.companyitem.dto.response.UnitConversionResponse;
 import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
+import com.smartdistribution.masterdata.companyitem.entity.InventoryPolicy;
 import com.smartdistribution.masterdata.companyitem.entity.ItemUnitConversion;
 import com.smartdistribution.masterdata.supplier.entity.Supplier;
 import org.springframework.stereotype.Component;
@@ -33,7 +34,7 @@ public class CompanyItemMapper {
             CompanyItem item,
             Supplier preferredSupplier,
             List<ItemUnitConversion> conversions,
-            InventoryPolicyResponse inventoryPolicy
+            InventoryPolicy inventoryPolicy
     ) {
         return new CompanyItemDetailResponse(
                 item.getId(),
@@ -47,7 +48,16 @@ public class CompanyItemMapper {
                 item.getUpdatedAt(),
                 item.getVersion(),
                 toUnitConversions(item, conversions),
-                inventoryPolicy
+                toInventoryPolicyResponse(inventoryPolicy)
+        );
+    }
+
+    public InventoryPolicyResponse toInventoryPolicyResponse(InventoryPolicy policy) {
+        return new InventoryPolicyResponse(
+                policy.getCompanyItem().getId(),
+                policy.getSafetyStockBaseQty(),
+                policy.getUpdatedAt(),
+                policy.getVersion()
         );
     }
 

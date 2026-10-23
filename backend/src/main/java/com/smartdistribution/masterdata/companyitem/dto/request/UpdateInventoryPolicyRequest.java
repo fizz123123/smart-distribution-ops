@@ -1,4 +1,4 @@
-package com.smartdistribution.inventory.dto.request;
+package com.smartdistribution.masterdata.companyitem.dto.request;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;

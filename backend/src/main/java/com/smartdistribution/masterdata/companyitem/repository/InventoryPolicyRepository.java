@@ -1,6 +1,6 @@
-package com.smartdistribution.inventory.repository;
+package com.smartdistribution.masterdata.companyitem.repository;
 
-import com.smartdistribution.inventory.entity.InventoryPolicy;
+import com.smartdistribution.masterdata.companyitem.entity.InventoryPolicy;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
