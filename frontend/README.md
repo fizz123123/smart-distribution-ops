@@ -16,7 +16,7 @@ cp .env.example .env.local   # 需要時修改 API 位址
 npm run dev
 ```
 
-開啟 <http://localhost:5173>。本機後端會自動建立管理員帳號 `admin@smartdistribution.local`／`Admin1234`，登入頁完成後可以先用它登入，再建立其他角色的測試帳號。
+開啟 <http://localhost:5173>。本機後端會自動建立管理員帳號 `admin@smartdistribution.local`／`Admin1234`，可以先用它登入，到「使用者與權限」建立其他角色的測試帳號。
 
 > 開發伺服器固定使用 5173 port，因為後端 CORS 預設只允許 `http://localhost:5173`。要改 port 時，後端的 `CORS_ALLOWED_ORIGINS` 也要一起改。
 
@@ -34,31 +34,34 @@ npm run dev
 
 ```text
 src/
-├─ main.js         建立 Vue app、載入 Pinia 與 Element Plus，還原登入狀態後掛上路由
+├─ main.js         建立 Vue app、載入 Pinia、Element Plus 與全站樣式，還原登入狀態後掛上路由
+├─ App.vue         根元件，只顯示路由畫面
 ├─ api/            呼叫後端 API；每個模組一個檔案，例如 users.js、customers.js
 │  ├─ http.js      共用 axios 實例：帶 JWT、處理 401、失敗時丟出 ApiError
-│  ├─ errors.js    ApiError：{ status, code, message, fieldErrors, traceId }
-│  └─ auth.js      登入與目前使用者
-├─ stores/
-│  └─ auth.js      目前使用者、權限、登入與登出
-├─ router/         路由、登入與權限守衛、分頁標題；目前尚未登錄任何畫面
+│  └─ errors.js    ApiError：{ status, code, message, fieldErrors, traceId }
+├─ stores/         Pinia store
+│  ├─ auth.js      目前使用者、權限、登入與登出
+│  └─ app.js       頂部列的重新整理與資料更新時間
+├─ router/         路由、登入與權限守衛、分頁標題
 ├─ config/
-│  └─ navigation.js  側邊選單與畫面權限（畫面編號對應 docs/12 第 3 節）
-└─ utils/
-   └─ format.js    時間與數字的顯示格式
+│  ├─ navigation.js  側邊選單與畫面權限（畫面編號對應 docs/12 第 3 節）
+│  ├─ status.js      狀態代碼 → 中文與色調，StatusTag 使用
+│  └─ identity.js    角色、權限的中文名稱與使用者清單設定
+├─ layouts/        登入後的版面：側邊選單、右上角工具、帳號選單、全站搜尋
+├─ components/     共用元件：AppIcon、ListPage、StatusTag、ReasonDialog…
+│  └─ users/       使用者與權限專用的對話框
+├─ composables/    可重用的邏輯：useAsync（載入資料）、useSidebar、useLogin
+├─ views/          畫面；依模組分資料夾，例如 views/users/
+├─ styles/         設計 token（tokens.css）、Element Plus 主題（element-theme.css）、全站樣式（base.css）
+└─ utils/          時間與數字格式、清單篩選、提示訊息（notify）
 ```
 
-目前只有共用的 JavaScript，還沒有畫面元件（`.vue`）與樣式。預計的位置：
+### 樣式
 
-```text
-src/
-├─ App.vue         根元件；建立後把 main.js 的 createApp 改成 createApp(App)
-├─ styles/         設計 token、Element Plus 主題、全站樣式
-├─ components/     共用元件
-├─ composables/    可重用的邏輯
-├─ layouts/        登入後的版面（選單、頂部列）
-└─ views/          畫面；依模組分資料夾，例如 views/users/
-```
+- 顏色、圓角、陰影、字型都定義在 `styles/tokens.css`，元件只使用這些變數，不寫死顏色。
+- Element Plus 的顏色由 `styles/element-theme.css` 對應到 token；要改主題色請改 `tokens.css`。
+- `base.css` 提供共用的 class，例如 `.card`、`.card-head`、`.btn`、`.btn-primary`、`.table`、`.chip`、`.doc-id`、`.sr-only`。
+- 清單頁優先使用 `ListPage`：傳入 config（標題、篩選、欄位）與 load 函式即可，寫法參考 `views/users/UserListView.vue` 與 `config/identity.js` 的 `usersList`。
 
 ## 開發約定
 
@@ -71,15 +74,17 @@ src/
 5. **錯誤訊息用後端的 `message`**：API 失敗時丟出 `ApiError`，直接顯示 `error.message`；欄位錯誤在 `error.fieldErrors`。不要只顯示「操作失敗」。
 6. **金額與數量不在前端計算**：小計、稅額、換算後數量都由後端計算回傳，前端只用 `utils/format.js` 顯示。
 7. **時間以台北時間顯示**：後端回傳 UTC 時間，用 `formatDateTime()`、`formatDate()` 轉換；`YYYY-MM-DD` 的日期欄位不做時區轉換。
+8. **提示訊息用 `notify`**：`notify.success('已建立')`、`notify.error(error.message)`，不要直接呼叫 ElMessage。
 
 ## 新增一個畫面
 
 1. 在 `src/api/` 新增該模組的 API 檔案。
-2. 在 `src/views/<模組>/` 新增畫面。
+2. 在 `src/views/<模組>/` 新增畫面；該模組專用的對話框放 `src/components/<模組>/`。
 3. 在 `src/config/navigation.js` 加入選單項目（`screen`、`icon`、`permission`）。
-4. 在 `src/router/index.js` 的 `routes` 登錄路由（寫法見檔案開頭的範例）。
-
-> 目前 `routes` 是空的，開啟網站會是空白頁，瀏覽器 console 會出現找不到路由的警告；登錄登入頁與版面之後就會正常。
+4. 在 `src/router/index.js` 的 `AppLayout` 子路由登錄路由：
+   - 需要權限的畫面設定 `meta: { navigation: findNavigationItem('MDM-01') }`，路由守衛會依選單項目的權限擋下沒有權限的人
+   - 不需登入、也不套用版面的畫面放在最外層，設定 `meta: { public: true }`
+   - `meta.title` 是瀏覽器分頁標題
 
 ## 環境變數
 

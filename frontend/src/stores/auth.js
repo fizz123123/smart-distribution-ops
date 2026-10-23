@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 
 import * as authApi from '@/api/auth'
 import { clearToken, getToken, onUnauthorized, setToken } from '@/api/http'
+import { ROLE_LABELS } from '@/config/identity'
 
 /**
  * 目前使用者與權限。前端只用權限決定顯示什麼，最後是否允許仍由後端判斷（13 號）。
@@ -13,6 +14,11 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isLoggedIn = computed(() => user.value !== null)
   const permissions = computed(() => new Set(user.value?.permissions ?? []))
+
+  // 帳號選單顯示用，例如「業務・業務主管」
+  const roleLabel = computed(() =>
+    (user.value?.roles ?? []).map((role) => ROLE_LABELS[role] ?? role).join('・'),
+  )
 
   function hasPermission(permissionCode) {
     return permissions.value.has(permissionCode)
@@ -58,5 +64,5 @@ export const useAuthStore = defineStore('auth', () => {
     window.location.assign(`/login?redirect=${redirect}`)
   })
 
-  return { user, isLoggedIn, hasPermission, canApprove, login, logout, restore }
+  return { user, isLoggedIn, roleLabel, hasPermission, canApprove, login, logout, restore }
 })
