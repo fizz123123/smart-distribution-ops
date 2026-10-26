@@ -1,6 +1,5 @@
 package com.smartdistribution.identity.mapper;
 
-import com.smartdistribution.identity.dto.response.PermissionGrantResponse;
 import com.smartdistribution.identity.dto.response.PermissionResponse;
 import com.smartdistribution.identity.dto.response.RoleResponse;
 import com.smartdistribution.identity.dto.response.UserDetailResponse;
@@ -46,7 +45,7 @@ public class UserMapper {
                 .toList();
 
         var permissionGrantResponses = permissionGrants.stream()
-                .map(grant -> toPermissionGrantResponse(grant, evaluatedAt))
+                .map(grant -> toPermissionGrant(grant, evaluatedAt))
                 .sorted(Comparator.comparing(response ->
                         response.permission().permissionCode()
                 )).toList();
@@ -88,11 +87,11 @@ public class UserMapper {
         );
     }
 
-    private PermissionGrantResponse toPermissionGrantResponse(
+    private UserDetailResponse.PermissionGrant toPermissionGrant(
             UserPermissionGrant grant,
             Instant evaluatedAt
     ) {
-        return new PermissionGrantResponse(
+        return new UserDetailResponse.PermissionGrant(
                 toPermissionResponse(grant.getPermission()),
                 grant.getReason(),
                 grant.getValidFrom(),

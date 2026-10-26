@@ -1,6 +1,6 @@
 package com.smartdistribution.approval.mapper;
 
-import com.smartdistribution.approval.dto.response.ApprovalActionResponse;
+import com.smartdistribution.approval.dto.response.ApprovalDetailResponse;
 import com.smartdistribution.approval.dto.response.ApprovalSummaryResponse;
 import com.smartdistribution.approval.dto.response.ApprovalUserResponse;
 import com.smartdistribution.approval.entity.ApprovalAction;
@@ -29,11 +29,11 @@ public class ApprovalMapper {
         );
     }
 
-    public ApprovalActionResponse toAction(
+    public ApprovalDetailResponse.Action toAction(
             ApprovalAction action,
             Map<Long, String> userNames
     ) {
-        return new ApprovalActionResponse(
+        return new ApprovalDetailResponse.Action(
                 action.getId(),
                 action.getActionType(),
                 toUser(action.getActorId(), userNames),

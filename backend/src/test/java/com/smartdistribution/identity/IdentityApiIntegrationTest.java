@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -289,7 +290,12 @@ class IdentityApiIntegrationTest {
                 "CUSTOMER_ITEM_MAPPING_VIEW",
                 "CUSTOMER_PRICE_VIEW",
                 "SUPPLIER_VIEW",
-                "SUPPLIER_APPROVE"
+                "SUPPLIER_APPROVE",
+                "INVENTORY_VIEW",
+                "INVENTORY_TRANSACTION_VIEW",
+                "INVENTORY_RESERVATION_VIEW",
+                "SO_VIEW",
+                "SO_APPROVE"
         );
 
         mockMvc.perform(get("/api/v1/users")
@@ -437,7 +443,7 @@ class IdentityApiIntegrationTest {
                                         {
                                           "grants": [
                                             {
-                                              "permissionCode": "SO_CREATE",
+                                              "permissionCode": "SUPPLIER_VIEW",
                                               "reason": "IT-temporary-grant",
                                               "validFrom": "2026-01-01T00:00:00Z",
                                               "validTo": null
@@ -449,9 +455,10 @@ class IdentityApiIntegrationTest {
                                         """.formatted(user.version())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.permissionGrants[0].permission.permissionCode")
-                        .value("SO_CREATE"))
-                .andExpect(jsonPath("$.effectivePermissions[0].permissionCode")
-                        .value("SO_CREATE"))
+                        .value("SUPPLIER_VIEW"))
+                // 業務角色沒有 SUPPLIER_VIEW，出現在有效權限中代表個別授權有生效
+                .andExpect(jsonPath("$.effectivePermissions[*].permissionCode")
+                        .value(hasItem("SUPPLIER_VIEW")))
                 .andExpect(jsonPath("$.authorizationUpdatedAt").isNotEmpty())
                 .andReturn();
 

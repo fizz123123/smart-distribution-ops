@@ -1,11 +1,10 @@
 package com.smartdistribution.masterdata.companyitem.mapper;
 
-import com.smartdistribution.inventory.dto.response.InventoryPolicyResponse;
 import com.smartdistribution.masterdata.companyitem.dto.response.CompanyItemDetailResponse;
 import com.smartdistribution.masterdata.companyitem.dto.response.CompanyItemSummaryResponse;
-import com.smartdistribution.masterdata.companyitem.dto.response.PreferredSupplierResponse;
-import com.smartdistribution.masterdata.companyitem.dto.response.UnitConversionResponse;
+import com.smartdistribution.masterdata.companyitem.dto.response.InventoryPolicyResponse;
 import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
+import com.smartdistribution.masterdata.companyitem.entity.InventoryPolicy;
 import com.smartdistribution.masterdata.companyitem.entity.ItemUnitConversion;
 import com.smartdistribution.masterdata.supplier.entity.Supplier;
 import org.springframework.stereotype.Component;
@@ -33,7 +32,7 @@ public class CompanyItemMapper {
             CompanyItem item,
             Supplier preferredSupplier,
             List<ItemUnitConversion> conversions,
-            InventoryPolicyResponse inventoryPolicy
+            InventoryPolicy inventoryPolicy
     ) {
         return new CompanyItemDetailResponse(
                 item.getId(),
@@ -47,16 +46,25 @@ public class CompanyItemMapper {
                 item.getUpdatedAt(),
                 item.getVersion(),
                 toUnitConversions(item, conversions),
-                inventoryPolicy
+                toInventoryPolicyResponse(inventoryPolicy)
         );
     }
 
-    private PreferredSupplierResponse toPreferredSupplier(Supplier supplier) {
+    public InventoryPolicyResponse toInventoryPolicyResponse(InventoryPolicy policy) {
+        return new InventoryPolicyResponse(
+                policy.getCompanyItem().getId(),
+                policy.getSafetyStockBaseQty(),
+                policy.getUpdatedAt(),
+                policy.getVersion()
+        );
+    }
+
+    private CompanyItemDetailResponse.PreferredSupplier toPreferredSupplier(Supplier supplier) {
         if (supplier == null) {
             return null;
         }
 
-        return new PreferredSupplierResponse(
+        return new CompanyItemDetailResponse.PreferredSupplier(
                 supplier.getId(),
                 supplier.getSupplierCode(),
                 supplier.getName(),
@@ -65,15 +73,15 @@ public class CompanyItemMapper {
     }
 
     //基準單位不另存換算列，回應時補在最前面，倍率固定為 1
-    private List<UnitConversionResponse> toUnitConversions(
+    private List<CompanyItemDetailResponse.UnitConversion> toUnitConversions(
             CompanyItem item,
             List<ItemUnitConversion> conversions
     ) {
-        List<UnitConversionResponse> responses = new ArrayList<>();
-        responses.add(new UnitConversionResponse(item.getBaseUnit(), BigDecimal.ONE, true));
+        List<CompanyItemDetailResponse.UnitConversion> responses = new ArrayList<>();
+        responses.add(new CompanyItemDetailResponse.UnitConversion(item.getBaseUnit(), BigDecimal.ONE, true));
 
         for (ItemUnitConversion conversion : conversions) {
-            responses.add(new UnitConversionResponse(
+            responses.add(new CompanyItemDetailResponse.UnitConversion(
                     conversion.getUnit(),
                     conversion.getFactor(),
                     false

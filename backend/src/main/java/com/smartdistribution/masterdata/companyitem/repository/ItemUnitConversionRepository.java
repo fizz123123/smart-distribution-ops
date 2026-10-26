@@ -5,6 +5,7 @@ import com.smartdistribution.masterdata.companyitem.entity.ItemUnitConversion;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface ItemUnitConversionRepository extends JpaRepository<ItemUnitConversion, Long> {
 
@@ -13,4 +14,6 @@ public interface ItemUnitConversionRepository extends JpaRepository<ItemUnitConv
     boolean existsByCompanyItemId(Long companyItemId);
 
     boolean existsByCompanyItemIdAndUnit(Long companyItemId, UnitOfMeasure unit);
+
+    Optional<ItemUnitConversion> findByCompanyItemIdAndUnit(Long companyItemId, UnitOfMeasure unit);
 }

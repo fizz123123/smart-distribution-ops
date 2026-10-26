@@ -35,7 +35,7 @@ public class SupplierApprovalHandler implements ApprovalHandler {
     }
 
     @Override
-    public void onApproved(Long targetId, Long approverId) {
+    public void onApproved(Long targetId, Long approverId, Long approvalRequestId) {
         findSupplier(targetId).approve();
     }
 

@@ -4,7 +4,6 @@ import com.smartdistribution.approval.entity.ApprovalTargetType;
 import com.smartdistribution.approval.service.ApprovalService;
 import com.smartdistribution.audit.entity.AuditActionType;
 import com.smartdistribution.audit.service.AuditService;
-import com.smartdistribution.inventory.dto.response.InventoryPolicyResponse;
 import com.smartdistribution.inventory.service.InventoryService;
 import com.smartdistribution.masterdata.common.MasterDataStatus;
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
@@ -17,9 +16,11 @@ import com.smartdistribution.masterdata.companyitem.dto.request.UpdateCompanyIte
 import com.smartdistribution.masterdata.companyitem.dto.response.CompanyItemDetailResponse;
 import com.smartdistribution.masterdata.companyitem.dto.response.CompanyItemSummaryResponse;
 import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
+import com.smartdistribution.masterdata.companyitem.entity.InventoryPolicy;
 import com.smartdistribution.masterdata.companyitem.entity.ItemUnitConversion;
 import com.smartdistribution.masterdata.companyitem.mapper.CompanyItemMapper;
 import com.smartdistribution.masterdata.companyitem.repository.CompanyItemRepository;
+import com.smartdistribution.masterdata.companyitem.repository.InventoryPolicyRepository;
 import com.smartdistribution.masterdata.companyitem.repository.ItemUnitConversionRepository;
 import com.smartdistribution.masterdata.companyitem.service.CompanyItemService;
 import com.smartdistribution.masterdata.supplier.entity.Supplier;
@@ -49,6 +50,7 @@ public class CompanyItemServiceImpl implements CompanyItemService {
 
     private final CompanyItemRepository companyItemRepository;
     private final ItemUnitConversionRepository itemUnitConversionRepository;
+    private final InventoryPolicyRepository inventoryPolicyRepository;
     private final SupplierRepository supplierRepository;
     private final InventoryService inventoryService;
     private final ApprovalService approvalService;
@@ -100,7 +102,8 @@ public class CompanyItemServiceImpl implements CompanyItemService {
         );
         companyItemRepository.saveAndFlush(item);
 
-        //料號建立時同步建立安全庫存政策與庫存餘額列
+        //料號建立時同步建立安全庫存政策，並請庫存模組建立庫存餘額列
+        inventoryPolicyRepository.save(new InventoryPolicy(item));
         inventoryService.initializeForCompanyItem(item.getId());
 
         return toDetail(item);
@@ -315,7 +318,8 @@ public class CompanyItemServiceImpl implements CompanyItemService {
 
         List<ItemUnitConversion> conversions =
                 itemUnitConversionRepository.findAllByCompanyItemIdOrderByUnitAsc(item.getId());
-        InventoryPolicyResponse inventoryPolicy = inventoryService.findInventoryPolicy(item.getId());
+        InventoryPolicy inventoryPolicy = inventoryPolicyRepository.findByCompanyItemId(item.getId())
+                .orElseThrow(() -> new IllegalStateException("公司料號缺少安全庫存政策：" + item.getId()));
 
         return companyItemMapper.toDetail(item, preferredSupplier, conversions, inventoryPolicy);
     }

@@ -39,7 +39,7 @@ public class CustomerItemMappingApprovalHandler implements ApprovalHandler {
 
     //待核准期間客戶或公司料號可能被停用，核准時重新確認；拋出例外會讓整筆核准回滾
     @Override
-    public void onApproved(Long targetId, Long approverId) {
+    public void onApproved(Long targetId, Long approverId, Long approvalRequestId) {
         CustomerItemMapping mapping = findMapping(targetId);
 
         if (!mapping.hasActiveReferences()) {

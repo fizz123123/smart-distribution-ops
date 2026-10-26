@@ -2,7 +2,7 @@
 
 > 文件版本：v1.0  
 > 建立日期：2026-10-05  
-> 最後更新：  
+> 最後更新：2026-10-27  
 > 文件定位：依功能模組、角色權限、領域規則、資料模型及狀態轉換，定義前端畫面與後端 API 的責任邊界、主要操作、輸入輸出及錯誤處理。
 
 ---
@@ -28,6 +28,7 @@
 | 項目 | 約定 |
 | --- | --- |
 | API Base Path | `/api/v1` |
+| 識別碼 | 資源 ID 為資料庫產生的數字；業務編號（例如 `SO-000001`）另以欄位提供（D-055） |
 | 傳輸格式 | JSON；正式 PDF 下載端點回傳 `302 Redirect` 至短效 S3 Presigned URL |
 | 驗證 | Web 使用 JWT Bearer Token；LINE webhook 使用 LINE 簽章驗證 |
 | 日期 | `YYYY-MM-DD`，例如 `2026-10-05` |
@@ -41,7 +42,7 @@
 ### 2.2 權限與資料範圍
 
 - 前端依權限隱藏或停用操作，但後端仍須在每次請求重新驗證。
-- 取得角色不代表可以查看所有資料；業務預設只看自己負責的 SO，主管依部門或全公司範圍查看。
+- 取得角色不代表可以查看所有資料；分析資料依 [角色與權限規格](04-roles-and-permissions.md) 的查看範圍限制。SO 清單與詳情屬於作業資料，具 `SO_VIEW` 即可查看全部（D-051）。
 - APP_ADMIN 不因管理帳號而取得客戶價格、PO 採購單價、交易核准或營運分析權限。
 - 任何核准 API 都要檢查核准者不是目標建立者，也不是該輪送審者。
 - LINE AI 使用綁定後的系統帳號執行權限判斷，不以加入官方帳號作為授權依據。
@@ -80,8 +81,8 @@ LINE_AI_SO_DRAFT_CREATE
 
 ```json
 {
-  "id": "01J...",
-  "number": "SO-2026-0001",
+  "id": 128,
+  "soNumber": "SO-000001",
   "status": "APPROVED",
   "version": 4,
   "updatedAt": "2026-10-05T09:15:30Z"
@@ -105,14 +106,8 @@ LINE_AI_SO_DRAFT_CREATE
 ```json
 {
   "code": "SO_ACTIVE_PRICE_REQUIRED",
-  "message": "品項 PU-001 尚無已啟用的客戶價格，無法送審。",
-  "fieldErrors": [
-    {
-      "field": "lines[1].customerPriceId",
-      "code": "ACTIVE_PRICE_REQUIRED",
-      "message": "請先完成價格建檔與覆核。"
-    }
-  ],
+  "message": "第 2 行 PU-001：尚無已覆核的「個」價格，請先完成價格建檔與覆核。",
+  "fieldErrors": [],
   "traceId": "a7d1..."
 }
 ```
@@ -125,8 +120,9 @@ LINE_AI_SO_DRAFT_CREATE
 | `401` | 未登入或 Token 無效 |
 | `403` | 權限或資料範圍不足 |
 | `404` | 資源不存在或使用者無權得知其存在 |
-| `409` | 狀態不允許、版本衝突、重複編號、重複請求或數量併發衝突 |
-| `422` | 可理解請求，但不符合業務規則 |
+| `409` | 狀態不允許、版本衝突、重複編號、重複請求、數量併發衝突，以及其他業務規則不允許的操作 |
+
+本專案不使用 `422`（D-055）。`fieldErrors` 只在 `400` 欄位驗證失敗時有值；業務規則錯誤的說明放在 `message`，需要指出明細時以「第 n 行」開頭。
 
 前端不得只顯示「操作失敗」，應優先呈現 `message` 及可處理的欄位錯誤。
 
@@ -271,7 +267,7 @@ SO 核准時，若引用價格已轉為 `REPLACED`，後端仍依送審快照完
 | `CUSTOMER_PRICE_CREATE` | SALES |
 | `CUSTOMER_PRICE_APPROVE`、`CUSTOMER_PRICE_REVOKE` | SALES_MANAGER |
 
-單位換算的新增與修改沿用 `COMPANY_ITEM_UPDATE`。核准服務依核准申請的目標類型對應上表的 `XXX_APPROVE` 權限；其他模組的權限於實作時補入本文件。
+單位換算的新增與修改沿用 `COMPANY_ITEM_UPDATE`。核准服務依核准申請的目標類型對應上表的 `XXX_APPROVE` 權限；SO 與庫存權限見 6.3、7.3 節，其他模組的權限於實作時補入本文件。安全庫存查詢接受 `COMPANY_ITEM_VIEW` 或 `INVENTORY_VIEW` 任一權限，倉管也能查看。
 
 ## 6. SO 與餘量取消契約
 
@@ -290,50 +286,112 @@ SO詳情 至少顯示：
 
 | 操作 | Method | Path | 權限 |
 | --- | --- | --- | --- |
-| 清單／詳情 | `GET` | `/sales-orders`、`/sales-orders/{id}` | `SO_VIEW` |
-| 建立 | `POST` | `/sales-orders` | `SO_CREATE` |
+| 清單 | `GET` | `/sales-orders?keyword=&status=&customerId=` | `SO_VIEW` |
+| 詳情 | `GET` | `/sales-orders/{id}` | `SO_VIEW` |
+| 建立草稿 | `POST` | `/sales-orders` | `SO_CREATE` |
 | 修改草稿 | `PATCH` | `/sales-orders/{id}` | `SO_UPDATE` |
 | 送審 | `POST` | `/sales-orders/{id}/submit` | `SO_SUBMIT` |
-| 建立關聯 PO 草稿 | `POST` | `/sales-orders/{id}/purchase-order-drafts` | `PO_CREATE` |
-| 通知本次出貨 | `POST` | `/sales-orders/{id}/delivery-orders` | `DO_CREATE` |
+| 放棄草稿 | `POST` | `/sales-orders/{id}/cancel` | `SO_UPDATE` |
+| 核准／退回 | `POST` | `/approval-requests/{id}/approve`、`/approval-requests/{id}/return` | `SO_APPROVE` |
+| 取消申請清單 | `GET` | `/sales-orders/{id}/cancellations` | `SO_VIEW` |
 | 建立取消申請 | `POST` | `/sales-orders/{id}/cancellations` | `SO_CANCELLATION_CREATE` |
+| 取消申請詳情 | `GET` | `/sales-order-cancellations/{id}` | `SO_VIEW` |
+| 修改取消申請 | `PATCH` | `/sales-order-cancellations/{id}` | `SO_CANCELLATION_CREATE` |
 | 取消申請送審 | `POST` | `/sales-order-cancellations/{id}/submit` | `SO_CANCELLATION_SUBMIT` |
+| 撤回取消申請 | `POST` | `/sales-order-cancellations/{id}/withdraw` | `SO_CANCELLATION_CREATE` |
+| 取消申請核准／退回 | `POST` | `/approval-requests/{id}/approve`、`/approval-requests/{id}/return` | `SO_CANCELLATION_APPROVE` |
+| 建立關聯 PO 草稿（P4） | `POST` | `/sales-orders/{id}/purchase-order-drafts` | `PO_CREATE` |
+| 通知本次出貨（P5） | `POST` | `/sales-orders/{id}/delivery-orders` | `DO_CREATE` |
+
+清單的 `keyword` 比對 SO 編號與客戶訂單編號。
 
 建立或修改 SO 的主要輸入：
 
 ```json
 {
-  "customerId": "01J...",
+  "customerId": 3,
   "customerOrderNumber": "CUS-PO-1008",
-  "responsibleSalesUserId": "01J...",
+  "responsibleSalesUserId": 12,
   "requestedDeliveryDate": "2026-10-20",
   "deliveryMethod": "DELIVERY",
-  "deliveryAddress": "台中市...",
+  "deliveryAddress": "台中市西屯區工業區一路 1 號",
   "contactName": "王先生",
-  "contactPhone": "09...",
+  "contactPhone": "0912000000",
+  "remark": null,
   "lines": [
     {
-      "customerItemMappingId": "01J...",
+      "customerItemMappingId": 15,
       "quantity": 10,
-      "unitCode": "PCS"
+      "unit": "PCS"
     }
   ],
   "version": 0
 }
 ```
 
+- `version` 只在修改時帶入；送審與放棄的 request 只有 `version`。
+- `responsibleSalesUserId` 未填時為建立者；建立者沒有 `SALES` 角色時必須指定。
+- `deliveryMethod` 為 `DELIVERY / CUSTOMER_PICKUP`；外送時送審須填寫地址、收貨聯絡人與電話。草稿可暫缺交期與交貨資料。
+- 修改採整份取代：明細全部重新送出。
+
 送審時由後端重新取得 `ACTIVE` 價格、單位換算與付款條件並保存交易快照；前端不得直接指定核准後使用的未稅單價。
+
+SO 詳情 response 的重點欄位：
+
+| 欄位 | 說明 |
+| --- | --- |
+| `soNumber`、`status`、`version` | 編號、狀態與目前版本 |
+| `paymentTerm`、`untaxedAmount`、`taxAmount`、`totalAmount` | 送審後為快照；草稿與退回時依目前主檔試算，缺價格時金額為 `null` |
+| `warnings` | 草稿與退回時列出送審前須處理的問題，例如缺少價格或換算 |
+| `lines[].supply` | 核准後才有值：`reservedQty`、`plannedNotOrderedQty`、`inTransitQty`、`shippedQty`、`cancelledQty`、`unplannedQty`，皆為基準單位 |
+
+建立或修改取消申請：
+
+```json
+{
+  "reason": "客戶縮減需求",
+  "lines": [
+    {
+      "salesOrderLineId": 301,
+      "quantity": 2
+    }
+  ],
+  "version": 0
+}
+```
+
+取消數量使用該 SO 明細的訂購單位，後端依送審時的換算倍率換算為基準數量。`version` 只在修改時帶入；送審與撤回的 request 只有 `version`。
+
+SO 與取消申請的錯誤碼：
+
+| 錯誤碼 | HTTP | 情境 |
+| --- | --- | --- |
+| `SALES_ORDER_NOT_FOUND`、`SALES_ORDER_CANCELLATION_NOT_FOUND` | 404 | 資源不存在 |
+| `SO_STATUS_CONFLICT` | 409 | SO 狀態不允許該操作 |
+| `SO_CUSTOMER_INACTIVE` | 409 | 建立或修改時客戶未啟用 |
+| `SO_RESPONSIBLE_SALES_INVALID` | 400 | 負責業務不是啟用中的業務 |
+| `SO_MAPPING_CUSTOMER_MISMATCH` | 400 | 客戶料號對應不屬於該客戶 |
+| `SO_LINE_INVALID` | 400 | 明細重複、小數位不符或不屬於該 SO |
+| `SO_DELIVERY_INFO_INCOMPLETE` | 400 | 送審時交期或交貨資料缺漏 |
+| `SO_LINES_REQUIRED` | 400 | 送審時沒有明細 |
+| `SO_MASTER_DATA_INACTIVE` | 409 | 送審或核准時客戶、對應或公司料號未啟用 |
+| `SO_UNIT_INVALID` | 409 | 單位不是基準單位也沒有設定換算 |
+| `SO_ACTIVE_PRICE_REQUIRED` | 409 | 該單位沒有 `ACTIVE` 價格 |
+| `SO_PRICE_REVOKED` | 409 | 核准時引用價格已撤銷（D-033） |
+| `SO_CANCELLATION_STATUS_CONFLICT` | 409 | 取消申請狀態不允許該操作 |
+| `SO_CANCELLATION_PENDING_EXISTS` | 409 | 該 SO 已有未完成的取消申請 |
+| `SO_CANCELLATION_QUANTITY_EXCEEDED` | 409 | 取消量超過可取消量，訊息含最多可取消數量 |
 
 建立關聯 PO 草稿：
 
 ```json
 {
-  "supplierId": "01J...",
+  "supplierId": 1,
   "lines": [
     {
-      "salesOrderLineId": "01J...",
+      "salesOrderLineId": 1,
       "quantity": 3,
-      "unitCode": "PCS"
+      "unit": "PCS"
     }
   ]
 }
@@ -348,15 +406,25 @@ SO詳情 至少顯示：
   "plannedShipmentDate": "2026-10-18",
   "lines": [
     {
-      "salesOrderLineId": "01J...",
+      "salesOrderLineId": 1,
       "plannedQuantity": 10,
-      "unitCode": "PCS"
+      "unit": "PCS"
     }
   ]
 }
 ```
 
 SO 詳情 response 直接包含各明細的已預留、已規劃未下單、採購在途及尚待規劃等供應狀態，不另提供供應狀態專用 API。後端將預計出貨量換算成基準單位，並檢查同一 SO 明細所有有效 DO 草稿合計不超過預留。
+
+### 6.3 SO 細部權限與預設角色
+
+| 權限 | 預設角色 |
+| --- | --- |
+| `SO_VIEW` | SALES、SALES_MANAGER、PURCHASING、PURCHASING_MANAGER、MANAGER |
+| `SO_CREATE`、`SO_UPDATE`、`SO_SUBMIT` | SALES、SALES_MANAGER（代建） |
+| `SO_APPROVE` | SALES_MANAGER、MANAGER（替代核准） |
+| `SO_CANCELLATION_CREATE`、`SO_CANCELLATION_SUBMIT` | SALES、SALES_MANAGER |
+| `SO_CANCELLATION_APPROVE` | SALES_MANAGER |
 
 ## 7. PO、收貨與庫存契約
 
@@ -399,9 +467,9 @@ SO 詳情 response 直接包含各明細的已預留、已規劃未下單、採�
   "receivedDate": "2026-10-10",
   "lines": [
     {
-      "purchaseOrderLineId": "01J...",
+      "purchaseOrderLineId": 1,
       "receivedQuantity": 10,
-      "unitCode": "PCS",
+      "unit": "PCS",
       "acceptedQuantity": 9,
       "damagedQuantity": 1,
       "nonconformingQuantity": 0,
@@ -419,11 +487,15 @@ SO 詳情 response 直接包含各明細的已預留、已規劃未下單、採�
 
 | 操作 | Method | Path | 權限 |
 | --- | --- | --- | --- |
-| 庫存餘額 | `GET` | `/inventory/balances` | `INVENTORY_VIEW` |
+| 庫存餘額 | `GET` | `/inventory/balances?keyword=` | `INVENTORY_VIEW` |
 | 商品庫存歷程 | `GET` | `/inventory/items/{companyItemId}/transactions` | `INVENTORY_TRANSACTION_VIEW` |
 | 預留明細 | `GET` | `/inventory/items/{companyItemId}/reservations` | `INVENTORY_RESERVATION_VIEW` |
+| 一致性檢查 | `GET` | `/inventory/consistency-check` | `INVENTORY_VIEW` |
+| 調整詳情 | `GET` | `/inventory/adjustments/{id}` | `INVENTORY_TRANSACTION_VIEW` 或 `INVENTORY_ADJUSTMENT_POST` |
 | 過帳調整 | `POST` | `/inventory/adjustments` | `INVENTORY_ADJUSTMENT_POST` |
 | 反向更正 | `POST` | `/inventory/adjustments/{id}/reverse` | `INVENTORY_ADJUSTMENT_POST` |
+
+餘額清單回傳可出貨實體數量 `onHandQty`、有效預留 `reservedQty`、可用庫存 `availableQty` 與安全庫存；預留明細包含 SO 編號與每筆預留事件。一致性檢查回傳不一致項目清單，空清單代表全部一致。
 
 調整 request：
 
@@ -433,7 +505,7 @@ SO 詳情 response 直接包含各明細的已預留、已規劃未下單、採�
   "description": "月末盤點差異",
   "lines": [
     {
-      "companyItemId": "01J...",
+      "companyItemId": 1,
       "quantityChangeBase": -2
     }
   ]
@@ -448,14 +520,45 @@ SO 詳情 response 直接包含各明細的已預留、已規劃未下單、採�
   "description": "系統導入期初庫存",
   "lines": [
     {
-      "companyItemId": "01J...",
+      "companyItemId": 1,
       "quantityChangeBase": 100
     }
   ]
 }
 ```
 
-調減不得超過可用庫存，也不得侵蝕有效預留。`OPENING_BALANCE` 數量必須為正，每個公司料號只允許一次，且只能在尚無庫存異動、預留及交易引用時建立。已過帳收貨輸入錯誤不得以庫存調整代替；正式收貨沖銷列為後續擴充。
+反向更正 request：
+
+```json
+{
+  "reason": "期初登錄錯誤",
+  "version": 0
+}
+```
+
+反向更正不需輸入數量，後端讀取原調整的明細並產生數量相反的新調整；原調整轉為 `REVERSED`。
+
+調減不得超過可用庫存，也不得侵蝕有效預留。`OPENING_BALANCE` 數量必須為正，每個公司料號只允許一次，且只能在尚無庫存異動及預留時建立。已過帳收貨輸入錯誤不得以庫存調整代替；正式收貨沖銷列為後續擴充。
+
+庫存錯誤碼：
+
+| 錯誤碼 | HTTP | 情境 |
+| --- | --- | --- |
+| `INVENTORY_ADJUSTMENT_NOT_FOUND` | 404 | 調整不存在 |
+| `INVENTORY_ADJUSTMENT_LINES_INVALID` | 400 | 同一料號重複、數量為 0 或小數位不符 |
+| `INVENTORY_OPENING_BALANCE_NOT_ALLOWED` | 409 | 期初為負數，或料號已有異動或預留 |
+| `INVENTORY_INSUFFICIENT` | 409 | 調整後實體數量小於 0 |
+| `INVENTORY_RESERVATION_WOULD_BE_BREACHED` | 409 | 調減會低於有效預留，訊息列出受影響的 SO |
+| `INVENTORY_ADJUSTMENT_NOT_REVERSIBLE` | 409 | 已更正過，或本身是更正紀錄 |
+
+庫存細部權限與預設角色：
+
+| 權限 | 預設角色 |
+| --- | --- |
+| `INVENTORY_VIEW` | SALES、SALES_MANAGER、PURCHASING、PURCHASING_MANAGER、WAREHOUSE、WAREHOUSE_MANAGER、MANAGER |
+| `INVENTORY_TRANSACTION_VIEW` | WAREHOUSE、WAREHOUSE_MANAGER、MANAGER |
+| `INVENTORY_RESERVATION_VIEW` | SALES_MANAGER、PURCHASING、PURCHASING_MANAGER、WAREHOUSE、WAREHOUSE_MANAGER、MANAGER |
+| `INVENTORY_ADJUSTMENT_POST` | WAREHOUSE_MANAGER |
 
 ## 8. DO 契約
 
@@ -485,9 +588,9 @@ WH-03 只顯示倉管履約所需資料，不提供非必要的客戶價格、PO
 {
   "lines": [
     {
-      "deliveryOrderLineId": "01J...",
+      "deliveryOrderLineId": 1,
       "actualQuantity": 10,
-      "unitCode": "PCS"
+      "unit": "PCS"
     }
   ],
   "version": 2
@@ -556,18 +659,18 @@ WH-03 只顯示倉管履約所需資料，不提供非必要的客戶價格、PO
 ```json
 {
   "clientRequestId": "8f12d18a-5f8d-4b13-a8bd-a688359fd014",
-  "customerId": "01J...",
+  "customerId": 1,
   "receivedDate": "2026-10-20",
   "amount": 31500,
   "method": "BANK_TRANSFER",
   "referenceNumber": "BANK-1020-001",
   "allocations": [
     {
-      "receivableId": "01J...",
+      "receivableId": 1,
       "allocatedAmount": 10500
     },
     {
-      "receivableId": "01J...",
+      "receivableId": 1,
       "allocatedAmount": 21000
     }
   ]
@@ -636,7 +739,7 @@ request 只傳分析範圍，不接受使用者直接提供 SQL 或任意資料�
 
 ```json
 {
-  "id": "string",
+  "id": 1,
   "status": "COMPLETED",
   "executiveSummary": "string",
   "importantChanges": [],
@@ -713,7 +816,7 @@ POST /integrations/line/webhook
 
 - JWT access token 與 refresh token 的有效時間及撤銷方式。
 - 查詢 API 的實際索引、最大分頁筆數及模糊搜尋策略。
-- 權限代碼的完整 seed 清單及各角色預設對應（帳號權限見 D-036，主檔權限見第 5.3 節，其餘模組實作時補齊）。
+- 權限代碼的完整 seed 清單及各角色預設對應（帳號權限見 D-036，主檔權限見第 5.3 節，SO 與庫存權限見 6.3、7.3 節，其餘模組實作時補齊）。
 - API 文件以 SpringDoc OpenAPI 產生的 schema 與範例。
 - LINE 確認 token 與 webhook event ID 的保存期限，以及收款 `clientRequestId` 的重送回應策略。
 

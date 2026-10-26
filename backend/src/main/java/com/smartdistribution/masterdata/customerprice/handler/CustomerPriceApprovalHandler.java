@@ -54,7 +54,7 @@ public class CustomerPriceApprovalHandler implements ApprovalHandler {
 
     //核准後新價格立即生效，舊價格在同一交易中轉為 REPLACED
     @Override
-    public void onApproved(Long targetId, Long approverId) {
+    public void onApproved(Long targetId, Long approverId, Long approvalRequestId) {
         CustomerPrice price = findPrice(targetId);
 
         CustomerItemMapping mapping =
