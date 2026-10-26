@@ -26,7 +26,7 @@ public class InventoryController {
 
     private final InventoryQueryService inventoryQueryService;
 
-    // 排序固定為料號，寫在查詢裡
+    //排序固定為料號，寫在查詢裡
     @GetMapping("/balances")
     public ResponseEntity<PageResponse<InventoryBalanceResponse>> findBalances(
             @RequestParam(required = false) String keyword,

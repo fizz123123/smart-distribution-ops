@@ -9,11 +9,14 @@ public record InventoryBalanceResponse(
         String itemCode,
         String name,
         UnitOfMeasure baseUnit,
-        // 可出貨實體數量
+
+        //可出貨實體數量
         BigDecimal onHandQty,
-        // 有效預留總量
+
+        //有效預留總量
         BigDecimal reservedQty,
-        // 可用庫存 ＝ 可出貨實體數量 － 有效預留總量
+
+        //可用庫存 ＝ 可出貨實體數量 － 有效預留總量
         BigDecimal availableQty,
         BigDecimal safetyStockBaseQty
 ) {

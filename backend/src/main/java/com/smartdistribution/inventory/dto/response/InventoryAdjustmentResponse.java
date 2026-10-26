@@ -20,6 +20,9 @@ public record InventoryAdjustmentResponse(
         List<Line> lines
 ) {
 
-    public record Line(Long companyItemId, BigDecimal quantityChangeBase) {
+    public record Line(
+            Long companyItemId,
+            BigDecimal quantityChangeBase
+    ) {
     }
 }

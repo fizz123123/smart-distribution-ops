@@ -9,6 +9,7 @@ import com.smartdistribution.inventory.entity.InventoryAdjustment;
 import com.smartdistribution.inventory.entity.InventoryAdjustmentLine;
 import com.smartdistribution.inventory.entity.InventoryBalance;
 import com.smartdistribution.inventory.entity.InventoryTransaction;
+import com.smartdistribution.inventory.mapper.InventoryMapper;
 import com.smartdistribution.inventory.repository.InventoryAdjustmentLineRepository;
 import com.smartdistribution.inventory.repository.InventoryAdjustmentRepository;
 import com.smartdistribution.inventory.repository.InventoryReservationRepository;
@@ -42,9 +43,9 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
     private final InventoryTransactionRepository inventoryTransactionRepository;
     private final InventoryReservationRepository inventoryReservationRepository;
     private final InventoryBalanceLocks inventoryBalanceLocks;
-    // 只讀取料號做存在與小數位檢查，不修改主檔
     private final CompanyItemRepository companyItemRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final InventoryMapper inventoryMapper;
 
     @Override
     @PreAuthorize("hasAnyAuthority('INVENTORY_TRANSACTION_VIEW', 'INVENTORY_ADJUSTMENT_POST')")
@@ -58,25 +59,11 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
     public InventoryAdjustmentResponse postAdjustment(PostInventoryAdjustmentRequest request) {
         Map<Long, BigDecimal> changes = toChanges(request.lines());
         Map<Long, CompanyItem> items = loadItems(changes);
-        boolean openingBalance = request.reasonType() == AdjustmentReasonType.OPENING_BALANCE;
-
-        if (openingBalance && changes.values().stream().anyMatch(quantity -> quantity.signum() < 0)) {
-            throw new BusinessException(ErrorCode.INVENTORY_OPENING_BALANCE_NOT_ALLOWED);
-        }
 
         Map<Long, InventoryBalance> balances = inventoryBalanceLocks.lockInItemOrder(changes.keySet());
 
-        // 鎖定之後再檢查，兩個人同時建立同一料號的期初時，後到的會看到前一個人的異動
-        if (openingBalance) {
-            for (Long companyItemId : changes.keySet()) {
-                if (inventoryTransactionRepository.existsByCompanyItemId(companyItemId)
-                        || inventoryReservationRepository.existsByCompanyItemId(companyItemId)) {
-                    throw new BusinessException(
-                            ErrorCode.INVENTORY_OPENING_BALANCE_NOT_ALLOWED,
-                            items.get(companyItemId).getItemCode() + " 已有庫存異動或預留，不能建立期初庫存。"
-                    );
-                }
-            }
+        if (request.reasonType() == AdjustmentReasonType.OPENING_BALANCE) {
+            ensureOpeningBalanceAllowed(changes, items);
         }
 
         InventoryAdjustment adjustment = new InventoryAdjustment(
@@ -126,8 +113,8 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
     }
 
     /**
-     * 檢查數量後寫入調整、明細與異動，並更新餘額；呼叫前必須已鎖定所有相關餘額列。
-     * 任一料號不通過就丟出例外，整張調整都不會寫入。
+     * 檢查數量後寫入調整、明細與異動，並更新餘額；呼叫前必須已鎖定所有相關餘額列
+     * 任一料號不通過就丟出例外，整張調整都不會寫入
      */
     private InventoryAdjustmentResponse post(
             InventoryAdjustment adjustment,
@@ -138,7 +125,7 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
         changes.forEach((companyItemId, change) ->
                 checkQuantity(items.get(companyItemId), balances.get(companyItemId), change));
 
-        // 編號依 ID 產生，所以要先 insert 取得 id 再回填
+        //編號依 ID 產生，所以要先 insert 取得 id 再回填
         inventoryAdjustmentRepository.saveAndFlush(adjustment);
         adjustment.assignNumber();
 
@@ -146,6 +133,7 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
             inventoryAdjustmentLineRepository.save(
                     new InventoryAdjustmentLine(adjustment, companyItemId, change)
             );
+
             inventoryTransactionRepository.save(new InventoryTransaction(
                     companyItemId,
                     change,
@@ -154,6 +142,7 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
                     adjustment.getPostedBy(),
                     adjustment.getPostedAt()
             ));
+
             balances.get(companyItemId).change(change);
         });
 
@@ -162,7 +151,30 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
         return toResponse(adjustment);
     }
 
-    // 調整後實體數量不得小於 0；調減不得讓實體數量低於有效預留（D-010）
+    //必須在鎖定之後檢查，兩人同時建立同一料號的期初時，後到的才會看到前一個人的異動
+    private void ensureOpeningBalanceAllowed(Map<Long, BigDecimal> changes, Map<Long, CompanyItem> items) {
+        for (Map.Entry<Long, BigDecimal> entry : changes.entrySet()) {
+            Long companyItemId = entry.getKey();
+            String itemCode = items.get(companyItemId).getItemCode();
+
+            if (entry.getValue().signum() < 0) {
+                throw new BusinessException(
+                        ErrorCode.INVENTORY_OPENING_BALANCE_NOT_ALLOWED,
+                        itemCode + " 的期初庫存必須是正數。"
+                );
+            }
+
+            if (inventoryTransactionRepository.existsByCompanyItemId(companyItemId)
+                    || inventoryReservationRepository.existsByCompanyItemId(companyItemId)) {
+                throw new BusinessException(
+                        ErrorCode.INVENTORY_OPENING_BALANCE_NOT_ALLOWED,
+                        itemCode + " 已有庫存異動或預留，不能建立期初庫存。"
+                );
+            }
+        }
+    }
+
+    //調整後實體數量不得小於 0；調減不得讓實體數量低於有效預留
     private void checkQuantity(CompanyItem item, InventoryBalance balance, BigDecimal change) {
         BigDecimal newOnHandQty = balance.getOnHandQty().add(change);
 
@@ -196,21 +208,35 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
         }
     }
 
-    // 轉成「料號 → 增減量」；同一料號重複或數量為 0 都視為輸入錯誤
+    //轉成 "料號 → 增減量"；同一料號重複或數量為 0 都視為輸入錯誤
     private Map<Long, BigDecimal> toChanges(List<AdjustmentLineRequest> lines) {
         Map<Long, BigDecimal> changes = new LinkedHashMap<>();
 
         for (AdjustmentLineRequest line : lines) {
-            if (line.quantityChangeBase().signum() == 0
-                    || changes.put(line.companyItemId(), line.quantityChangeBase()) != null) {
-                throw new BusinessException(ErrorCode.INVENTORY_ADJUSTMENT_LINES_INVALID);
+            Long companyItemId = line.companyItemId();
+            BigDecimal quantityChange = line.quantityChangeBase();
+
+            if (quantityChange.signum() == 0) {
+                throw new BusinessException(
+                        ErrorCode.INVENTORY_ADJUSTMENT_LINES_INVALID,
+                        "調整數量不可為 0。"
+                );
             }
+
+            if (changes.containsKey(companyItemId)) {
+                throw new BusinessException(
+                        ErrorCode.INVENTORY_ADJUSTMENT_LINES_INVALID,
+                        "同一張調整的同一料號只能出現一次。"
+                );
+            }
+
+            changes.put(companyItemId, quantityChange);
         }
 
         return changes;
     }
 
-    // 料號必須存在，數量的小數位不得超過庫存基準單位允許的位數
+    //料號必須存在，數量的小數位不得超過庫存基準單位允許的位數
     private Map<Long, CompanyItem> loadItems(Map<Long, BigDecimal> changes) {
         Map<Long, CompanyItem> items = new LinkedHashMap<>();
 
@@ -247,26 +273,9 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
     }
 
     private InventoryAdjustmentResponse toResponse(InventoryAdjustment adjustment) {
-        List<InventoryAdjustmentResponse.Line> lines = inventoryAdjustmentLineRepository
-                .findAllByAdjustmentIdOrderByCompanyItemIdAsc(adjustment.getId())
-                .stream()
-                .map(line -> new InventoryAdjustmentResponse.Line(
-                        line.getCompanyItemId(),
-                        line.getQuantityChangeBase()
-                ))
-                .toList();
-
-        return new InventoryAdjustmentResponse(
-                adjustment.getId(),
-                adjustment.getAdjustmentNumber(),
-                adjustment.getReasonType(),
-                adjustment.getDescription(),
-                adjustment.getStatus(),
-                adjustment.getReversalOfId(),
-                adjustment.getPostedBy(),
-                adjustment.getPostedAt(),
-                adjustment.getVersion(),
-                lines
+        return inventoryMapper.toAdjustmentResponse(
+                adjustment,
+                inventoryAdjustmentLineRepository.findAllByAdjustmentIdOrderByCompanyItemIdAsc(adjustment.getId())
         );
     }
 }

@@ -10,12 +10,13 @@ import com.smartdistribution.inventory.entity.InventoryBalance;
 import com.smartdistribution.inventory.entity.InventoryReservation;
 import com.smartdistribution.inventory.entity.InventoryReservationEvent;
 import com.smartdistribution.inventory.entity.ReservationEventType;
+import com.smartdistribution.inventory.mapper.InventoryMapper;
 import com.smartdistribution.inventory.repository.InventoryBalanceRepository;
-import com.smartdistribution.inventory.repository.InventoryBalanceRow;
+import com.smartdistribution.inventory.repository.InventoryBalanceProjection;
 import com.smartdistribution.inventory.repository.InventoryReservationEventRepository;
 import com.smartdistribution.inventory.repository.InventoryReservationRepository;
 import com.smartdistribution.inventory.repository.InventoryTransactionRepository;
-import com.smartdistribution.inventory.repository.QuantityByKey;
+import com.smartdistribution.inventory.repository.QuantityByKeyProjection;
 import com.smartdistribution.inventory.service.InventoryQueryService;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
@@ -43,32 +44,23 @@ public class InventoryQueryServiceImpl implements InventoryQueryService {
     private final InventoryTransactionRepository inventoryTransactionRepository;
     private final InventoryReservationRepository inventoryReservationRepository;
     private final InventoryReservationEventRepository inventoryReservationEventRepository;
+    private final InventoryMapper inventoryMapper;
 
     @Override
     @PreAuthorize("hasAuthority('INVENTORY_VIEW')")
     public PageResponse<InventoryBalanceResponse> findBalances(String keyword, Pageable pageable) {
         String normalizedKeyword = keyword == null || keyword.isBlank() ? null : keyword.strip();
-        Page<InventoryBalanceRow> rows = inventoryBalanceRepository.searchBalances(normalizedKeyword, pageable);
+        Page<InventoryBalanceProjection> rows = inventoryBalanceRepository.searchBalances(normalizedKeyword, pageable);
 
-        List<Long> companyItemIds = rows.map(InventoryBalanceRow::companyItemId).getContent();
+        List<Long> companyItemIds = rows.map(InventoryBalanceProjection::companyItemId).getContent();
         Map<Long, BigDecimal> reservedQtyByItem = companyItemIds.isEmpty()
                 ? Map.of()
                 : toMap(inventoryReservationRepository.sumOpenQtyByCompanyItemIds(companyItemIds));
 
-        return PageResponse.from(rows.map(row -> {
-            BigDecimal reservedQty = reservedQtyByItem.getOrDefault(row.companyItemId(), BigDecimal.ZERO);
-
-            return new InventoryBalanceResponse(
-                    row.companyItemId(),
-                    row.itemCode(),
-                    row.name(),
-                    row.baseUnit(),
-                    row.onHandQty(),
-                    reservedQty,
-                    row.onHandQty().subtract(reservedQty),
-                    row.safetyStockBaseQty()
-            );
-        }));
+        return PageResponse.from(rows.map(row -> inventoryMapper.toBalanceResponse(
+                row,
+                reservedQtyByItem.getOrDefault(row.companyItemId(), BigDecimal.ZERO)
+        )));
     }
 
     @Override
@@ -78,14 +70,7 @@ public class InventoryQueryServiceImpl implements InventoryQueryService {
 
         Page<InventoryTransactionResponse> transactions = inventoryTransactionRepository
                 .findAllByCompanyItemId(companyItemId, pageable)
-                .map(transaction -> new InventoryTransactionResponse(
-                        transaction.getId(),
-                        transaction.getTransactionType(),
-                        transaction.getQuantityChange(),
-                        transaction.getSourceId(),
-                        transaction.getActorId(),
-                        transaction.getOccurredAt()
-                ));
+                .map(inventoryMapper::toTransactionResponse);
 
         return PageResponse.from(transactions);
     }
@@ -101,24 +86,15 @@ public class InventoryQueryServiceImpl implements InventoryQueryService {
             return List.of();
         }
 
-        Map<Long, List<InventoryReservationResponse.Event>> eventsByReservation =
-                inventoryReservationEventRepository
-                        .findAllByReservationIdInOrderByIdAsc(
-                                reservations.stream().map(InventoryReservation::getId).toList()
-                        )
-                        .stream()
-                        .collect(Collectors.groupingBy(
-                                event -> event.getReservation().getId(),
-                                Collectors.mapping(this::toEvent, Collectors.toList())
-                        ));
+        //一次取回所有預留的事件，再依預留分組，避免每筆預留各查一次
+        Map<Long, List<InventoryReservationEvent>> eventsByReservation = inventoryReservationEventRepository
+                .findAllByReservationIdInOrderByIdAsc(reservations.stream().map(InventoryReservation::getId).toList())
+                .stream()
+                .collect(Collectors.groupingBy(event -> event.getReservation().getId()));
 
         return reservations.stream()
-                .map(reservation -> new InventoryReservationResponse(
-                        reservation.getId(),
-                        reservation.getSalesOrderId(),
-                        reservation.getSalesOrderNumber(),
-                        reservation.getSalesOrderLineId(),
-                        reservation.getOpenQty(),
+                .map(reservation -> inventoryMapper.toReservationResponse(
+                        reservation,
                         eventsByReservation.getOrDefault(reservation.getId(), List.of())
                 ))
                 .toList();
@@ -136,7 +112,8 @@ public class InventoryQueryServiceImpl implements InventoryQueryService {
 
         List<Issue> issues = new ArrayList<>();
 
-        // 1. 可出貨實體數量 ＝ 異動加總；2. 有效預留總量 ≤ 可出貨實體數量
+        //1.可出貨實體數量 ＝ 異動加總
+        //2.有效預留總量 ≤ 可出貨實體數量
         for (InventoryBalance balance : balances) {
             Long companyItemId = balance.getCompanyItemId();
             BigDecimal transactionSum = transactionSumByItem.getOrDefault(companyItemId, BigDecimal.ZERO);
@@ -153,7 +130,7 @@ public class InventoryQueryServiceImpl implements InventoryQueryService {
             }
         }
 
-        // 3. 每筆有效預留 ＝ RESERVE － CONSUME － RELEASE
+        //3.每筆有效預留 ＝ RESERVE － CONSUME － RELEASE
         for (InventoryReservation reservation : inventoryReservationRepository.findAll()) {
             BigDecimal eventSum = eventSumByReservation.getOrDefault(reservation.getId(), BigDecimal.ZERO);
 
@@ -166,26 +143,14 @@ public class InventoryQueryServiceImpl implements InventoryQueryService {
         return new InventoryConsistencyResponse(Instant.now(), balances.size(), issues);
     }
 
-    // 每個公司料號都有餘額列，找不到就代表料號不存在
+    //每個公司料號都有餘額列，找不到就代表料號不存在
     private void ensureItemExists(Long companyItemId) {
         if (inventoryBalanceRepository.findByCompanyItemId(companyItemId).isEmpty()) {
             throw new BusinessException(ErrorCode.COMPANY_ITEM_NOT_FOUND);
         }
     }
 
-    private InventoryReservationResponse.Event toEvent(InventoryReservationEvent event) {
-        return new InventoryReservationResponse.Event(
-                event.getId(),
-                event.getEventType(),
-                event.getQuantity(),
-                event.getSourceType(),
-                event.getSourceId(),
-                event.getActorId(),
-                event.getOccurredAt()
-        );
-    }
-
-    private Map<Long, BigDecimal> toMap(List<QuantityByKey> rows) {
-        return rows.stream().collect(Collectors.toMap(QuantityByKey::key, QuantityByKey::quantity));
+    private Map<Long, BigDecimal> toMap(List<QuantityByKeyProjection> rows) {
+        return rows.stream().collect(Collectors.toMap(QuantityByKeyProjection::key, QuantityByKeyProjection::quantity));
     }
 }

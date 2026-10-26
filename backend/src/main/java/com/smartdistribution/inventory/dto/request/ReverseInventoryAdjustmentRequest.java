@@ -10,7 +10,6 @@ public record ReverseInventoryAdjustmentRequest(
         @Size(max = 400)
         String reason,
 
-        // 原調整的版本，避免兩個人同時更正同一張調整
         @NotNull
         @PositiveOrZero
         Long version

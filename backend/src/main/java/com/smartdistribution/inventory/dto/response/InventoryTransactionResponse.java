@@ -9,8 +9,7 @@ public record InventoryTransactionResponse(
         Long id,
         InventoryTransactionType transactionType,
         BigDecimal quantityChange,
-        // 依異動類型指向來源單據，例如調整異動指向 inventory_adjustment
-        Long sourceId,
+        Long sourceId, //依異動類型指向來源單據，例如調整異動指向 inventory_adjustment
         Long actorId,
         Instant occurredAt
 ) {

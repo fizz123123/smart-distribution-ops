@@ -36,7 +36,7 @@ public class InventoryAdjustmentController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    // 回傳新建立的反向調整
+    //回傳新建立的反向調整
     @PostMapping("/{adjustmentId}/reverse")
     public ResponseEntity<InventoryAdjustmentResponse> reverseAdjustment(
             @PathVariable Long adjustmentId,

@@ -31,8 +31,8 @@ public class InventoryBalance extends TimestampedEntity {
     @Column(name = "company_item_id", nullable = false, unique = true)
     private Long companyItemId;
 
-    //實際可用庫存數量 = 已預留數量 + 尚未被預留數量(系統不存，運算取得);
-    //存料號的基本單位，可能是小數
+    //可出貨實體數量：倉庫實際有的數量，其中一部分可能已被預留；以料號基準單位保存，可能是小數
+    //可用庫存 ＝ 可出貨實體數量 － 有效預留總量，不另外保存
     @Column(name = "on_hand_qty", nullable = false, precision = 15, scale = 3)
     private BigDecimal onHandQty;
 

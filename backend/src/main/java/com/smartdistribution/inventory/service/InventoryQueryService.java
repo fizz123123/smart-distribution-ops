@@ -18,7 +18,7 @@ public interface InventoryQueryService {
     List<InventoryReservationResponse> findReservations(Long companyItemId);
 
     /**
-     * 由異動與預留事件重新驗算目前值（AT-026），回傳不一致的項目。
+     * 由異動與預留事件重新驗算目前值，回傳不一致的項目
      */
     InventoryConsistencyResponse checkConsistency();
 }

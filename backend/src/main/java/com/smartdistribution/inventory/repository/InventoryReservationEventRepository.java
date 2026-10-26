@@ -12,13 +12,19 @@ public interface InventoryReservationEventRepository extends JpaRepository<Inven
 
     List<InventoryReservationEvent> findAllByReservationIdInOrderByIdAsc(List<Long> reservationIds);
 
-    // 一致性檢查用：每筆預留的 RESERVE 加總減掉 CONSUME、RELEASE 加總
+    //一致性檢查用：每筆預留的 RESERVE 加總減掉 CONSUME、RELEASE 加總
     @Query("""
-            SELECT new com.smartdistribution.inventory.repository.QuantityByKey(
+            SELECT new com.smartdistribution.inventory.repository.QuantityByKeyProjection(
                 event.reservation.id,
-                SUM(CASE WHEN event.eventType = :reserve THEN event.quantity ELSE -event.quantity END))
+                SUM(
+                    CASE 
+                        WHEN event.eventType = :reserve THEN event.quantity 
+                        ELSE -event.quantity 
+                    END
+                )
+            )
             FROM InventoryReservationEvent event
             GROUP BY event.reservation.id
             """)
-    List<QuantityByKey> sumNetQuantityByReservation(@Param("reserve") ReservationEventType reserve);
+    List<QuantityByKeyProjection> sumNetQuantityByReservation(@Param("reserve") ReservationEventType reserve);
 }

@@ -7,17 +7,13 @@ import java.util.List;
 public record InventoryConsistencyResponse(
         Instant checkedAt,
         int checkedItemCount,
-        // 空清單代表全部一致
-        List<Issue> issues
+        List<Issue> issues //空List代表全部一致
 ) {
 
     public enum IssueType {
-        // on_hand_qty 不等於異動加總
-        ON_HAND_MISMATCH,
-        // open_qty 不等於預留事件加總
-        RESERVATION_MISMATCH,
-        // 有效預留總量大於可出貨實體數量
-        OVER_RESERVED
+        ON_HAND_MISMATCH,     //on_hand_qty 不等於異動加總
+        RESERVATION_MISMATCH, //open_qty 不等於預留事件加總
+        OVER_RESERVED         //有效預留總量大於可出貨實體數量
     }
 
     /**
