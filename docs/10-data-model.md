@@ -2,7 +2,7 @@
 
 > 文件版本：v1.0  
 > 建立日期：2026-10-04  
-> 最後更新：  
+> 最後更新：2026-10-27  
 > 文件定位：依已確認的產品需求、業務流程、領域規則與決策紀錄，定義核心資料實體、關係、責任與一致性限制。
 
 ---
@@ -86,9 +86,9 @@ erDiagram
     CUSTOMER_ITEM_MAPPING ||--o{ SALES_ORDER_LINE : selected_by
     COMPANY_ITEM ||--o{ SALES_ORDER_LINE : snapshot_item
 
-    SALES_ORDER ||--o{ SO_CANCELLATION : has
-    SO_CANCELLATION ||--|{ SO_CANCELLATION_LINE : contains
-    SALES_ORDER_LINE ||--o{ SO_CANCELLATION_LINE : reduces
+    SALES_ORDER ||--o{ SALES_ORDER_CANCELLATION : has
+    SALES_ORDER_CANCELLATION ||--|{ SALES_ORDER_CANCELLATION_LINE : contains
+    SALES_ORDER_LINE ||--o{ SALES_ORDER_CANCELLATION_LINE : reduces
 ```
 
 ### 4.1 主檔實體
@@ -108,10 +108,10 @@ erDiagram
 
 | 實體 | 主要資料 | 關係與限制 |
 | --- | --- | --- |
-| `sales_order` | SO 編號、客戶、客戶訂單編號、負責業務、建立者、建立管道、狀態、付款條件快照、要求交期、交貨方式與地點、未稅總額、稅額、含稅總額、首次核准時間、版本 | 建立管道為 `WEB / LINE_AI`；核准前不得預留、建立關聯 PO 或產生 DO；送審與核准歷程由核准實體保存 |
-| `sales_order_line` | SO、行號、公司料號、客戶料號快照、輸入數量與單位、換算倍率、基準數量、`ACTIVE` 價格來源、計價數量與單位、未稅單價、未稅小計與稅率快照 | 送審須引用 `ACTIVE` 價格；核准後不可直接更換公司料號；已出貨與已取消數量由已過帳 DO 及已核准取消明細計算 |
-| `so_cancellation` | SO、申請者、狀態、原因、申請與核准時間 | 每次取消申請獨立保存並進入核准流程 |
-| `so_cancellation_line` | 取消申請、SO 明細、取消基準數量 | 核准後減少有效需求並產生預留釋放事件 |
+| `sales_order` | SO 編號、客戶、客戶訂單編號、負責業務、建立者、建立管道、狀態、付款條件快照、要求交期、交貨方式與地址、收貨聯絡人與電話、備註、未稅總額、稅額、含稅總額、送審與核准時間、明細異動時間、版本 | SO 編號依 ID 產生（`SO-` 加 6 位數，D-050）；狀態為 `DRAFT / PENDING_APPROVAL / RETURNED / APPROVED / CLOSED / CANCELLED`；建立管道為 `WEB / LINE_AI`；交貨方式為 `DELIVERY / CUSTOMER_PICKUP`，外送時送審須有地址與收貨聯絡資訊；付款條件與金額為送審快照，草稿為空；明細整批取代時更新明細異動時間，使表頭版本一併遞增；核准前不得預留、建立關聯 PO 或產生 DO；送審與核准歷程由核准實體保存 |
+| `sales_order_line` | SO、行號、客戶料號對應、輸入數量與單位；送審快照：公司料號、客戶料號、換算倍率、基準數量、引用的價格、計價數量與單位、未稅單價、未稅小計與稅率 | 同一 SO 內行號唯一；同一「客戶料號對應＋訂購單位」只能出現一次；快照欄位於送審時寫入，草稿為空；計價單位等於訂購單位（D-050）；核准後不可直接更換公司料號；已出貨與已取消數量由已過帳 DO 及已核准取消明細計算 |
+| `sales_order_cancellation` | 取消申請編號、SO、原因、狀態、建立者、核准時間、明細異動時間、版本 | 編號依 ID 產生（`SOC-` 加 6 位數）；狀態為 `DRAFT / PENDING_APPROVAL / RETURNED / APPROVED / WITHDRAWN`；同一 SO 同時最多一張 `DRAFT / PENDING_APPROVAL / RETURNED` 的申請（D-054）；只有 `APPROVED` 的申請計入已取消量 |
+| `sales_order_cancellation_line` | 取消申請、SO 明細、取消數量與單位、取消基準數量 | 同一申請內每筆 SO 明細只能出現一次；單位沿用 SO 明細的訂購單位，基準數量依送審時的換算倍率計算；不得超過可取消量 |
 
 負責業務與建立者分開保存。主管代建或 LINE AI 建立草稿時，仍須有明確的負責業務。
 
@@ -134,7 +134,7 @@ erDiagram
     INVENTORY_RESERVATION ||--o{ INVENTORY_RESERVATION_EVENT : records
     INVENTORY_ADJUSTMENT ||--|{ INVENTORY_ADJUSTMENT_LINE : contains
     INVENTORY_ADJUSTMENT o|--o| INVENTORY_ADJUSTMENT : reverses
-    INVENTORY_ADJUSTMENT_LINE ||--o{ INVENTORY_TRANSACTION : produces
+    INVENTORY_ADJUSTMENT ||--o{ INVENTORY_TRANSACTION : produces
 
     SALES_ORDER ||--o{ DELIVERY_ORDER : fulfilled_by
     DELIVERY_ORDER ||--|{ DELIVERY_ORDER_LINE : contains
@@ -157,20 +157,20 @@ erDiagram
 | 實體 | 主要資料 | 關係與限制 |
 | --- | --- | --- |
 | `inventory_balance` | 公司料號、可出貨實體數量 `on_hand_qty`、版本、更新時間 | 每個公司料號建立時即建立一筆；停用後仍保留；只由庫存服務更新 |
-| `inventory_transaction` | 公司料號、基準數量增減、異動類型、來源、原因、操作者、發生時間 | 只新增；類型至少包含期初、合格入庫、出貨、調整與反向更正 |
-| `inventory_reservation` | SO 明細、公司料號、目前有效預留 `open_qty`、版本 | 每筆 SO 明細最多一筆；只由庫存服務更新 |
-| `inventory_reservation_event` | 預留、事件類型、基準數量、核准申請／收貨明細／DO 明細／取消明細等可為空來源外鍵、操作者、發生時間 | 只新增；事件為 `RESERVE`、`CONSUME` 或 `RELEASE`，數量一律大於零；來源外鍵須依事件來源恰好一個有值 |
-| `inventory_adjustment` | 調整編號、原因類型、說明、狀態、操作者、過帳時間、原始或相反方向調整關係 | 不另走通用核准；狀態為 `POSTED / REVERSED`。原因類型包含 `OPENING_BALANCE` 與盤點差異等；期初庫存只允許正數，且每個尚無庫存異動、預留或交易的公司料號只能建立一次 |
-| `inventory_adjustment_line` | 調整、公司料號、基準數量增減、原因 | 一次調整可包含多個商品；每筆明細只產生實體庫存異動，不產生預留事件 |
+| `inventory_transaction` | 公司料號、基準數量增減、異動類型、來源 ID、操作者、發生時間 | 只新增；類型至少包含期初、合格入庫、出貨、調整與反向更正；來源 ID 指向哪一張單據由異動類型決定，因此不建立外鍵；原因保存在來源單據 |
+| `inventory_reservation` | SO 明細、SO、SO 編號快照、公司料號、目前有效預留 `open_qty`、版本 | 每筆 SO 明細最多一筆，SO 核准時建立，預留量可為 0；只由庫存服務更新；SO 編號快照供庫存畫面與錯誤訊息使用 |
+| `inventory_reservation_event` | 預留、事件類型、基準數量、來源類型、來源 ID、操作者、發生時間 | 只新增；事件為 `RESERVE`、`CONSUME` 或 `RELEASE`，數量一律大於零；以來源類型＋來源 ID 指向來源（D-052） |
+| `inventory_adjustment` | 調整編號、原因類型、說明、狀態、被更正的原調整、操作者、過帳時間、版本 | 調整編號依 ID 產生（`ADJ-` 加 6 位數）；不另走通用核准；狀態為 `POSTED / REVERSED`。原因類型為 `OPENING_BALANCE / COUNT_DIFFERENCE / DAMAGE / OTHER`；期初庫存只允許正數，且每個尚無庫存異動或預留的公司料號只能建立一次；每張調整最多被更正一次，更正紀錄本身不得再被更正 |
+| `inventory_adjustment_line` | 調整、公司料號、基準數量增減 | 一次調整可包含多個商品，同一商品只能出現一次；數量不得為 0；每筆明細產生一筆實體庫存異動，不產生預留事件 |
 
 預留事件的來源限制：
 
-| 事件與來源 | 必填關係 | 結果 |
+| 事件與來源類型 | 來源 ID 指向 | 結果 |
 | --- | --- | --- |
-| `RESERVE / SO_APPROVAL` | 核准申請 | SO 核准後依可用庫存增加預留 |
-| `RESERVE / PO_RECEIPT` | 合格收貨明細 | 關聯 PO 合格入庫後補足來源 SO 預留 |
-| `CONSUME / DO_POSTING` | DO 明細 | 出貨過帳後使用相應預留 |
-| `RELEASE / SO_CANCELLATION` | 取消明細 | 餘量取消核准後釋放相應預留 |
+| `RESERVE / SO_APPROVAL` | SO 核准申請 | SO 核准後依可用庫存增加預留 |
+| `RESERVE / PO_RECEIPT` | 合格收貨明細（P4） | 關聯 PO 合格入庫後補足來源 SO 預留 |
+| `CONSUME / DO_POSTING` | DO 明細（P5） | 出貨過帳後使用相應預留 |
+| `RELEASE / SO_CANCELLATION` | 餘量取消申請 | 餘量取消核准後，釋放超過剩餘需求的預留（D-054） |
 
 庫存調增可直接執行；調減不得超過當下可用庫存。若調減後 `on_hand_qty` 將低於有效預留總量，系統拒絕操作並列出受影響 SO。庫存調整不產生預留事件，也不重新分配既有缺料 SO。
 
@@ -211,6 +211,8 @@ SO 核准、關聯 PO 合格入庫、DO 建立或修改、DO 過帳及庫存調�
 3. 驗證操作後仍符合一致性規則。
 4. 新增不可修改的異動或預留事件。
 5. 更新對應的目前狀態。
+
+交易隔離層級採 READ COMMITTED，鎖定後的查詢才會讀到其他交易已提交的最新預留（D-052）。
 
 DO 建立、修改及過帳時，還須鎖定相關預留與有效 DO 明細，重新加總同一 SO 明細所有 `DRAFT / READY` 數量，避免多張 DO 草稿各自通過檢查後合計超用預留。
 
@@ -343,7 +345,8 @@ HMAC 伺服器金鑰不得保存在資料庫、Git 版本庫或日誌；由部�
 | 客戶編號、供應商編號唯一；統編有填寫時唯一 | 避免重複建立同一交易對象 |
 | 同一客戶料號與計價單位最多一筆 `ACTIVE` 價格 | 確保 SO 送審取得唯一的已覆核價格，新版啟用時舊版轉為 `REPLACED` |
 | 同一客戶料號與計價單位最多一筆 `PENDING_REVIEW` 價格 | 覆核時只有一筆候選，避免同時核准兩筆價格產生多筆 `ACTIVE` |
-| SO、PO、收貨與 DO 的表頭編號各自唯一 | 提供可追溯的業務識別 |
+| SO、SO 取消申請、PO、收貨、DO 與庫存調整的編號各自唯一 | 提供可追溯的業務識別 |
+| 同一 SO 同時最多一張未完成的取消申請 | 避免多張申請各自通過檢查後合計超過可取消量；由後端服務檢查 |
 | PO 關聯明細只能指向一筆 SO 明細 | 落實方案 C 的來源粒度 |
 | 每筆 SO 明細最多一筆預留目前狀態 | 統一查詢與事件累積位置 |
 | DO 明細必須指向同一張 DO 所屬 SO 的明細 | 防止跨訂單錯誤出貨 |
@@ -368,7 +371,7 @@ HMAC 伺服器金鑰不得保存在資料庫、Git 版本庫或日誌；由部�
 - `document_file` 來源外鍵的欄位命名、索引及「恰好一個有值且與類型一致」檢查限制實作方式；`approval_request` 的 `target_type`、`target_id` 索引設計。
 - JSON 結構化資料的 schema、版本及敏感資料遮蔽方式。
 - PDF 使用 AWS S3 儲存時的 object key、metadata、雜湊與存取方式。
-- 高併發操作的交易隔離層級、悲觀鎖定及重試策略。
+- 高併發操作的悲觀鎖定及重試策略（交易隔離層級已定為 READ COMMITTED，見 D-052）。
 - 儀表板查詢 View、索引及未來彙總表需求。
 
 實體設計不得改變本文件已確認的業務關係；若實作發現需要調整，應先更新需求或決策紀錄，再同步修改資料模型。
