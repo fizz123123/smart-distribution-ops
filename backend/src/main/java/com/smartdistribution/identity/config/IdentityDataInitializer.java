@@ -49,7 +49,14 @@ public class IdentityDataInitializer implements ApplicationRunner {
             new PermissionSeed("USER", "MANAGE"),
             new PermissionSeed("USER_ROLE", "MANAGE"),
             new PermissionSeed("USER_PERMISSION", "MANAGE"),
+            new PermissionSeed("SO", "VIEW"),
             new PermissionSeed("SO", "CREATE"),
+            new PermissionSeed("SO", "UPDATE"),
+            new PermissionSeed("SO", "SUBMIT"),
+            new PermissionSeed("SO", "APPROVE"),
+            new PermissionSeed("SO_CANCELLATION", "CREATE"),
+            new PermissionSeed("SO_CANCELLATION", "SUBMIT"),
+            new PermissionSeed("SO_CANCELLATION", "APPROVE"),
             new PermissionSeed("CUSTOMER", "VIEW"),
             new PermissionSeed("CUSTOMER", "CREATE"),
             new PermissionSeed("CUSTOMER", "UPDATE"),
@@ -107,7 +114,13 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "CUSTOMER_ITEM_MAPPING_SUBMIT",
             "CUSTOMER_PRICE_VIEW",
             "CUSTOMER_PRICE_CREATE",
-            "INVENTORY_VIEW"
+            "INVENTORY_VIEW",
+            "SO_VIEW",
+            "SO_CREATE",
+            "SO_UPDATE",
+            "SO_SUBMIT",
+            "SO_CANCELLATION_CREATE",
+            "SO_CANCELLATION_SUBMIT"
     );
 
     private static final List<String> SALES_MANAGER_PERMISSIONS = List.of(
@@ -124,7 +137,16 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "CUSTOMER_PRICE_APPROVE",
             "CUSTOMER_PRICE_REVOKE",
             "INVENTORY_VIEW",
-            "INVENTORY_RESERVATION_VIEW"
+            "INVENTORY_RESERVATION_VIEW",
+            // 主管代建 SO 時也需要建立、修改與送審（04 號）
+            "SO_VIEW",
+            "SO_CREATE",
+            "SO_UPDATE",
+            "SO_SUBMIT",
+            "SO_APPROVE",
+            "SO_CANCELLATION_CREATE",
+            "SO_CANCELLATION_SUBMIT",
+            "SO_CANCELLATION_APPROVE"
     );
 
     private static final List<String> PURCHASING_PERMISSIONS = List.of(
@@ -134,7 +156,9 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "SUPPLIER_SUBMIT",
             "COMPANY_ITEM_VIEW",
             "INVENTORY_VIEW",
-            "INVENTORY_RESERVATION_VIEW"
+            "INVENTORY_RESERVATION_VIEW",
+            // P4 由 SO 缺料建立 PO 時需要查看 SO
+            "SO_VIEW"
     );
 
     private static final List<String> PURCHASING_MANAGER_PERMISSIONS = List.of(
@@ -144,7 +168,8 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "COMPANY_ITEM_VIEW",
             "INVENTORY_POLICY_MANAGE",
             "INVENTORY_VIEW",
-            "INVENTORY_RESERVATION_VIEW"
+            "INVENTORY_RESERVATION_VIEW",
+            "SO_VIEW"
     );
 
     private static final List<String> WAREHOUSE_PERMISSIONS = List.of(
@@ -175,7 +200,9 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "SUPPLIER_APPROVE",
             "INVENTORY_VIEW",
             "INVENTORY_TRANSACTION_VIEW",
-            "INVENTORY_RESERVATION_VIEW"
+            "INVENTORY_RESERVATION_VIEW",
+            "SO_VIEW",
+            "SO_APPROVE"
     );
 
     private final RoleRepository roleRepository;

@@ -152,6 +152,74 @@ public enum ErrorCode {
             "目前狀態不允許此操作，請重新載入。"
     ),
 
+    // Sales order
+    SALES_ORDER_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "找不到指定的銷售訂單。"
+    ),
+    SO_STATUS_CONFLICT(
+            HttpStatus.CONFLICT,
+            "銷售訂單目前的狀態不允許此操作，請重新載入。"
+    ),
+    SO_CUSTOMER_INACTIVE(
+            HttpStatus.CONFLICT,
+            "客戶尚未啟用或已停用，不能用於銷售訂單。"
+    ),
+    SO_RESPONSIBLE_SALES_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "負責業務必須是啟用中且具有業務角色的使用者。"
+    ),
+    SO_MAPPING_CUSTOMER_MISMATCH(
+            HttpStatus.BAD_REQUEST,
+            "客戶料號不屬於這張銷售訂單的客戶。"
+    ),
+    SO_LINE_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "銷售訂單明細不正確。"
+    ),
+    SO_DELIVERY_INFO_INCOMPLETE(
+            HttpStatus.BAD_REQUEST,
+            "請填寫要求交期與交貨方式；外送時另需交貨地址、收貨聯絡人與電話。"
+    ),
+    SO_LINES_REQUIRED(
+            HttpStatus.BAD_REQUEST,
+            "銷售訂單至少要有一筆明細才能送審。"
+    ),
+    SO_MASTER_DATA_INACTIVE(
+            HttpStatus.CONFLICT,
+            "銷售訂單引用的客戶、客戶料號對應或公司料號尚未啟用或已停用。"
+    ),
+    SO_UNIT_INVALID(
+            HttpStatus.CONFLICT,
+            "訂購單位必須是庫存基準單位或已設定換算的單位。"
+    ),
+    SO_ACTIVE_PRICE_REQUIRED(
+            HttpStatus.CONFLICT,
+            "尚無已覆核的客戶價格，無法送審。"
+    ),
+    SO_PRICE_REVOKED(
+            HttpStatus.CONFLICT,
+            "引用的價格已撤銷，請退回後依目前價格重新送審。"
+    ),
+
+    // Sales order cancellation
+    SALES_ORDER_CANCELLATION_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "找不到指定的 SO 取消申請。"
+    ),
+    SO_CANCELLATION_STATUS_CONFLICT(
+            HttpStatus.CONFLICT,
+            "SO 取消申請目前的狀態不允許此操作，請重新載入。"
+    ),
+    SO_CANCELLATION_PENDING_EXISTS(
+            HttpStatus.CONFLICT,
+            "這張 SO 已有尚未完成的取消申請，請先送審、撤回或等待核准結果。"
+    ),
+    SO_CANCELLATION_QUANTITY_EXCEEDED(
+            HttpStatus.CONFLICT,
+            "取消數量超過目前可取消的未出貨餘量。"
+    ),
+
     // Inventory
     INVENTORY_ADJUSTMENT_NOT_FOUND(
             HttpStatus.NOT_FOUND,
