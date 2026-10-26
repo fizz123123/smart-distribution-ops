@@ -3,8 +3,6 @@ package com.smartdistribution.masterdata.customeritemmapping.mapper;
 import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.masterdata.customeritemmapping.dto.response.CustomerItemMappingResponse;
-import com.smartdistribution.masterdata.customeritemmapping.dto.response.MappingCompanyItemResponse;
-import com.smartdistribution.masterdata.customeritemmapping.dto.response.MappingCustomerResponse;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import org.springframework.stereotype.Component;
 
@@ -17,13 +15,13 @@ public class CustomerItemMappingMapper {
 
         return new CustomerItemMappingResponse(
                 mapping.getId(),
-                new MappingCustomerResponse(
+                new CustomerItemMappingResponse.CustomerRef(
                         customer.getId(),
                         customer.getCustomerCode(),
                         customer.getName()
                 ),
                 mapping.getCustomerItemCode(),
-                new MappingCompanyItemResponse(
+                new CustomerItemMappingResponse.CompanyItemRef(
                         companyItem.getId(),
                         companyItem.getItemCode(),
                         companyItem.getName(),

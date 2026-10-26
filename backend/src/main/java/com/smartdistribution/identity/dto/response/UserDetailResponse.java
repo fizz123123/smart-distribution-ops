@@ -12,10 +12,20 @@ public record UserDetailResponse(
         AppUserStatus status,
         List<RoleResponse> roles,
         List<PermissionResponse> effectivePermissions,
-        List<PermissionGrantResponse> permissionGrants,
+        List<PermissionGrant> permissionGrants,
         Instant authorizationUpdatedAt,
         Long version,
         Instant createdAt,
         Instant updatedAt
 ) {
+
+    // effective：依目前時間判斷這筆個別授權是否在有效期間內
+    public record PermissionGrant(
+            PermissionResponse permission,
+            String reason,
+            Instant validFrom,
+            Instant validTo,
+            boolean effective
+    ) {
+    }
 }
