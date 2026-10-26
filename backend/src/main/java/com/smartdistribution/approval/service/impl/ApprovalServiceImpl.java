@@ -2,7 +2,6 @@ package com.smartdistribution.approval.service.impl;
 
 import com.smartdistribution.approval.dto.request.ApproveRequest;
 import com.smartdistribution.approval.dto.request.ReturnRequest;
-import com.smartdistribution.approval.dto.response.ApprovalActionResponse;
 import com.smartdistribution.approval.dto.response.ApprovalDetailResponse;
 import com.smartdistribution.approval.dto.response.ApprovalSummaryResponse;
 import com.smartdistribution.approval.entity.ApprovalAction;
@@ -179,7 +178,8 @@ public class ApprovalServiceImpl implements ApprovalService {
 
         getHandler(approvalRequest.getTargetType()).onApproved(
                 approvalRequest.getTargetId(),
-                actor.getUserId()
+                actor.getUserId(),
+                approvalRequest.getId()
         );
 
         return toDetail(approvalRequest);
@@ -298,7 +298,7 @@ public class ApprovalServiceImpl implements ApprovalService {
 
         Map<Long, String> userNames = userDirectoryService.findNamesByIds(userIds);
 
-        List<ApprovalActionResponse> actionResponses = actions.stream()
+        List<ApprovalDetailResponse.Action> actionResponses = actions.stream()
                 .map(action -> approvalMapper.toAction(action, userNames))
                 .toList();
 
