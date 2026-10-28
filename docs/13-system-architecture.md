@@ -30,7 +30,8 @@
 | 正式文件 | 獨立私有 S3 Bucket | 只保存正式 PO 與 DO PDF；資料庫保存物件位置及文件資訊 |
 | AI | OpenAI API | LINE 訂單解析及營運摘要；不部署本機模型 |
 | LINE | LINE Messaging API | Webhook 進入相同 Spring Boot 應用程式 |
-| 機密資訊 | AWS Secrets Manager | 保存資料庫密碼、OpenAI API Key、LINE Channel Secret 等 |
+| 寄信 | Gmail SMTP | 寄送設定密碼與重設密碼的 HTML 信件；帳號與應用程式密碼以環境變數提供 |
+| 機密資訊 | AWS Secrets Manager | 保存資料庫密碼、OpenAI API Key、LINE Channel Secret、Gmail 應用程式密碼等 |
 | 紀錄與監控 | Amazon CloudWatch | 收集應用程式 Log、部署狀態及環境健康資訊 |
 
 本次架構不使用 ECS、EKS、Kafka、Redis、向量資料庫、Ollama 或微服務。未來若流量、團隊或獨立擴展需求出現，再依實際量測結果評估調整。
@@ -174,7 +175,7 @@ smart-distribution-documents
 
 | 模組 | 主要責任 |
 | --- | --- |
-| `identity` | 登入、使用者、角色、權限與 JWT |
+| `identity` | 登入、使用者、角色、權限、JWT、密碼設定連結與寄信、閒置帳號停用排程 |
 | `masterdata` | 客戶、供應商、公司料號、客戶料號、價格、單位與付款條件 |
 | `approval` | 共用送審、核准與退回紀錄；各目標模組實作核准處理器，自行執行核准或退回後的效果 |
 | `sales` | SO、價格快照、核准後供應狀態及餘量取消 |
