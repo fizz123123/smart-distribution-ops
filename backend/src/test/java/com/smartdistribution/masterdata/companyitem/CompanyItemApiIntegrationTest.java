@@ -157,24 +157,24 @@ class CompanyItemApiIntegrationTest {
     }
 
     @Test
-    void onlySalesManagerCanApprove() throws Exception {
+    void managerCanApproveButWarehouseCannot() throws Exception {
         String sales = login(createUser("approve-creator", "SALES"));
+        String warehouse = login(createUser("approve-warehouse", "WAREHOUSE"));
         String manager = login(createUser("approve-manager", "MANAGER"));
-        String salesManager = login(createUser("approve-sales-manager", "SALES_MANAGER"));
 
         ItemVersion item = submit(sales, createItem(sales, randomCode(), "STICK"));
         Long approvalRequestId = findPendingApprovalId(item.id());
 
-        // 公司料號不開放 MANAGER 核准（D-040）
         mockMvc.perform(post("/api/v1/approval-requests/{id}/approve", approvalRequestId)
-                        .header("Authorization", bearer(manager))
+                        .header("Authorization", bearer(warehouse))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
 
+        // 營運主管可以替代核准所有類型，包含公司料號
         mockMvc.perform(post("/api/v1/approval-requests/{id}/approve", approvalRequestId)
-                        .header("Authorization", bearer(salesManager))
+                        .header("Authorization", bearer(manager))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isOk());

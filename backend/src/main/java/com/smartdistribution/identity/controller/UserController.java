@@ -1,5 +1,6 @@
 package com.smartdistribution.identity.controller;
 
+import com.smartdistribution.identity.dto.request.ChangeOwnPasswordRequest;
 import com.smartdistribution.identity.dto.request.ChangeUserStatusRequest;
 import com.smartdistribution.identity.dto.request.CreateUserRequest;
 import com.smartdistribution.identity.dto.request.ReplaceUserPermissionGrantsRequest;
@@ -42,6 +43,15 @@ public class UserController {
         return ResponseEntity.ok(response);
     }
 
+    @PutMapping("/me/password")
+    public ResponseEntity<Void> changeOwnPassword(
+            @Valid @RequestBody ChangeOwnPasswordRequest request
+    ) {
+        authService.changeOwnPassword(request);
+
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping
     public ResponseEntity<PageResponse<UserSummaryResponse>> findUsers(
             @PageableDefault(size = 20) Pageable pageable
@@ -70,6 +80,16 @@ public class UserController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(response);
+    }
+
+    @PostMapping("/{userId}/invitation")
+    public ResponseEntity<UserDetailResponse> resendInvitation(@PathVariable Long userId) {
+        return ResponseEntity.ok(userManagementService.resendInvitation(userId));
+    }
+
+    @PostMapping("/{userId}/password-reset")
+    public ResponseEntity<UserDetailResponse> sendPasswordReset(@PathVariable Long userId) {
+        return ResponseEntity.ok(userManagementService.sendPasswordReset(userId));
     }
 
     @PatchMapping("/{userId}")

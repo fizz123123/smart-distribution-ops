@@ -1,7 +1,9 @@
 package com.smartdistribution.identity;
 
 import com.jayway.jsonpath.JsonPath;
+import com.smartdistribution.identity.config.RoleInclusions;
 import com.smartdistribution.shared.security.config.SecurityProperties;
+import com.smartdistribution.support.RecordingMailSender;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -22,6 +24,7 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasItem;
@@ -50,6 +53,9 @@ class IdentityApiIntegrationTest {
     @Autowired
     private SecurityProperties securityProperties;
 
+    @Autowired
+    private RecordingMailSender mailSender;
+
     @BeforeEach
     @AfterEach
     void cleanTestData() {
@@ -66,6 +72,7 @@ class IdentityApiIntegrationTest {
                     userId,
                     userId
             );
+            jdbcTemplate.update("DELETE FROM password_token WHERE user_id = ?", userId);
             jdbcTemplate.update(
                     "DELETE FROM user_permission_grant WHERE user_id = ?",
                     userId
@@ -230,6 +237,58 @@ class IdentityApiIntegrationTest {
     }
 
     @Test
+    void permissionGrantsCanGrowBeyondThreeButDuplicatesAreRejected() throws Exception {
+        String accessToken = login(ADMIN_EMAIL, ADMIN_PASSWORD);
+        UserVersion user = createUser(accessToken, testEmail("many-grants"), "整合測試多筆授權");
+
+        MvcResult threeGrants = mockMvc.perform(put("/api/v1/users/{userId}/permission-grants", user.id())
+                        .header("Authorization", bearer(accessToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(grantsRequest(List.of("SUPPLIER_VIEW", "SO_VIEW", "CUSTOMER_VIEW"), user.version())))
+                .andExpect(status().isOk())
+                .andReturn();
+        user = readUserVersion(threeGrants);
+
+        //已有 3 筆，再加第 4 筆不同的權限要能成功；稽核紀錄的內容會超過 255 個字
+        MvcResult fourGrants = mockMvc.perform(put("/api/v1/users/{userId}/permission-grants", user.id())
+                        .header("Authorization", bearer(accessToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(grantsRequest(
+                                List.of("SUPPLIER_VIEW", "SO_VIEW", "CUSTOMER_VIEW", "INVENTORY_VIEW"),
+                                user.version()
+                        )))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.permissionGrants.length()").value(4))
+                .andReturn();
+        user = readUserVersion(fourGrants);
+
+        Integer longestAfterData = jdbcTemplate.queryForObject(
+                "SELECT MAX(CHAR_LENGTH(after_data)) FROM audit_log WHERE target_type = 'USER' AND target_id = ?",
+                Integer.class,
+                user.id()
+        );
+        assertThat(longestAfterData).isGreaterThan(255);
+
+        //同一個權限送兩次，回 400 並說明原因，原本的 4 筆不受影響
+        mockMvc.perform(put("/api/v1/users/{userId}/permission-grants", user.id())
+                        .header("Authorization", bearer(accessToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(grantsRequest(
+                                List.of("SUPPLIER_VIEW", "SO_VIEW", "CUSTOMER_VIEW", "INVENTORY_VIEW", "SUPPLIER_VIEW"),
+                                user.version()
+                        )))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PERMISSION_GRANT_DUPLICATED"));
+
+        Integer grantCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM user_permission_grant WHERE user_id = ?",
+                Integer.class,
+                user.id()
+        );
+        assertThat(grantCount).isEqualTo(4);
+    }
+
+    @Test
     void appAdminCanReadAssignableAuthorizationOptions() throws Exception {
         String accessToken = login(ADMIN_EMAIL, ADMIN_PASSWORD);
 
@@ -250,6 +309,18 @@ class IdentityApiIntegrationTest {
         assertThat(roleCodes)
                 .contains("SALES", "MANAGER")
                 .doesNotContain("APP_ADMIN");
+
+        //主管角色標出它包含的職員角色，前端勾選主管時把職員顯示為已包含
+        List<String> salesManagerIncludes = JsonPath.read(
+                responseBody(result),
+                "$.roles[?(@.roleCode == 'SALES_MANAGER')].includedRoleCodes[*]"
+        );
+        List<String> managerIncludes = JsonPath.read(
+                responseBody(result),
+                "$.roles[?(@.roleCode == 'MANAGER')].includedRoleCodes[*]"
+        );
+        assertThat(salesManagerIncludes).containsExactly("SALES");
+        assertThat(managerIncludes).isEmpty();
         assertThat(permissionCodes)
                 .contains("SO_CREATE")
                 .doesNotContain(
@@ -283,19 +354,24 @@ class IdentityApiIntegrationTest {
                 "$.user.permissions"
         );
 
+        // 營運主管可以替代核准所有類型
         assertThat(managerPermissions).containsExactlyInAnyOrder(
                 "CUSTOMER_VIEW",
                 "CUSTOMER_APPROVE",
                 "COMPANY_ITEM_VIEW",
+                "COMPANY_ITEM_APPROVE",
                 "CUSTOMER_ITEM_MAPPING_VIEW",
+                "CUSTOMER_ITEM_MAPPING_APPROVE",
                 "CUSTOMER_PRICE_VIEW",
+                "CUSTOMER_PRICE_APPROVE",
                 "SUPPLIER_VIEW",
                 "SUPPLIER_APPROVE",
                 "INVENTORY_VIEW",
                 "INVENTORY_TRANSACTION_VIEW",
                 "INVENTORY_RESERVATION_VIEW",
                 "SO_VIEW",
-                "SO_APPROVE"
+                "SO_APPROVE",
+                "SO_CANCELLATION_APPROVE"
         );
 
         mockMvc.perform(get("/api/v1/users")
@@ -401,16 +477,28 @@ class IdentityApiIntegrationTest {
                         .content("""
                                 {
                                   "email": "%s",
-                                  "name": "%s",
-                                  "password": "Test1234"
+                                  "name": "%s"
                                 }
                                 """.formatted(email, name)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.email").value(email))
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andReturn();
+
+        // 用信中的連結設定密碼，帳號轉為啟用；設定密碼會改變版本號，所以重新讀取
+        mockMvc.perform(post("/api/v1/auth/password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"token": "%s", "newPassword": "Test1234"}
+                                """.formatted(mailSender.latestTokenFor(email))))
+                .andExpect(status().isNoContent());
+
+        MvcResult activated = mockMvc.perform(get("/api/v1/users/{userId}", readLong(result, "$.id"))
+                        .header("Authorization", bearer(accessToken)))
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
                 .andReturn();
 
-        return readUserVersion(result);
+        return readUserVersion(activated);
     }
 
     private UserVersion replaceRoles(
@@ -532,6 +620,54 @@ class IdentityApiIntegrationTest {
                 """.formatted(roleCode, reason, version);
     }
 
+    //每一筆授權都帶一段較長的原因，讓稽核紀錄的內容夠長
+    private String grantsRequest(List<String> permissionCodes, Long version) {
+        String grants = permissionCodes.stream()
+                .map(code -> """
+                        {
+                          "permissionCode": "%s",
+                          "reason": "IT-many-grants 支援其他部門查詢資料，期間依主管指示調整",
+                          "validFrom": "2026-01-01T00:00:00Z",
+                          "validTo": null
+                        }
+                        """.formatted(code))
+                .collect(Collectors.joining(","));
+
+        return """
+                {
+                  "grants": [%s],
+                  "reason": "IT-many-grants",
+                  "version": %d
+                }
+                """.formatted(grants, version);
+    }
+
     private record UserVersion(Long id, Long version) {
+    }
+
+    @Test
+    void managerRolesContainAllPermissionsOfIncludedStaffRoles() {
+        //RoleInclusions 說主管包含職員，初始化程式就必須真的把職員的權限都給主管
+        for (String managerRole : List.of("SALES_MANAGER", "PURCHASING_MANAGER", "WAREHOUSE_MANAGER")) {
+            for (String staffRole : RoleInclusions.includedRoleCodesOf(managerRole)) {
+                assertThat(permissionCodesOf(managerRole))
+                        .as("%s 應包含 %s 的全部權限", managerRole, staffRole)
+                        .containsAll(permissionCodesOf(staffRole));
+            }
+        }
+    }
+
+    private List<String> permissionCodesOf(String roleCode) {
+        return jdbcTemplate.queryForList(
+                """
+                        SELECT p.permission_code
+                        FROM role_permission rp
+                        JOIN role r ON r.id = rp.role_id
+                        JOIN permission p ON p.id = rp.permission_id
+                        WHERE r.role_code = ?
+                        """,
+                String.class,
+                roleCode
+        );
     }
 }

@@ -8,7 +8,6 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -46,12 +45,10 @@ public class AuditLog {
     @Column(nullable = false, length = 500)
     private String summary;
 
-    @Lob
-    @Column(name = "before_data")
+    @Column(name = "before_data", columnDefinition = "MEDIUMTEXT")
     private String beforeData;
 
-    @Lob
-    @Column(name = "after_data")
+    @Column(name = "after_data", columnDefinition = "MEDIUMTEXT")
     private String afterData;
 
     @Column(length = 500)

@@ -1,5 +1,6 @@
 package com.smartdistribution.identity.mapper;
 
+import com.smartdistribution.identity.config.RoleInclusions;
 import com.smartdistribution.identity.dto.response.PermissionResponse;
 import com.smartdistribution.identity.dto.response.RoleResponse;
 import com.smartdistribution.identity.dto.response.UserDetailResponse;
@@ -75,7 +76,8 @@ public class UserMapper {
     public RoleResponse toRoleResponse(Role role) {
         return new RoleResponse(
                 role.getRoleCode(),
-                role.getName()
+                role.getName(),
+                RoleInclusions.includedRoleCodesOf(role.getRoleCode())
         );
     }
 

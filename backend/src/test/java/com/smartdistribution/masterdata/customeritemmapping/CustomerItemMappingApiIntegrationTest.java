@@ -176,10 +176,10 @@ class CustomerItemMappingApiIntegrationTest {
     }
 
     @Test
-    void onlySalesManagerCanApprove() throws Exception {
+    void managerCanApproveButWarehouseCannot() throws Exception {
         String sales = login(createUser("approve-creator", "SALES"));
+        String warehouse = login(createUser("approve-warehouse", "WAREHOUSE"));
         String manager = login(createUser("approve-manager", "MANAGER"));
-        String salesManager = login(createUser("approve-sales-manager", "SALES_MANAGER"));
 
         MappingVersion mapping = submit(sales, createMapping(
                 sales,
@@ -189,12 +189,12 @@ class CustomerItemMappingApiIntegrationTest {
         ));
         Long approvalRequestId = findPendingApprovalId(mapping.id());
 
-        // 客戶料號對應不開放 MANAGER 核准（D-040）
-        approve(manager, approvalRequestId)
+        approve(warehouse, approvalRequestId)
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
 
-        approve(salesManager, approvalRequestId).andExpect(status().isOk());
+        // 營運主管可以替代核准所有類型，包含客戶料號對應
+        approve(manager, approvalRequestId).andExpect(status().isOk());
 
         assertThat(mappingStatus(mapping.id())).isEqualTo("ACTIVE");
     }

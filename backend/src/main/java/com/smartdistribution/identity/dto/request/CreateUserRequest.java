@@ -12,10 +12,6 @@ public record CreateUserRequest(
 
         @NotBlank
         @Size(max = 100)
-        String name,
-
-        @NotBlank
-        @Size(min = 8, max = 20)
-        String password
+        String name
 ) {
 }

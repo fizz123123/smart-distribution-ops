@@ -188,7 +188,7 @@ class SalesOrderCancellationApiIntegrationTest extends SalesOrderTestSupport {
     }
 
     @Test
-    void managerCannotApproveCancellation() throws Exception {
+    void cancellationCreatedBySalesManagerIsApprovedByManager() throws Exception {
         String sales = login(createUser("perm-sales", "SALES"));
         String salesManager = login(createUser("perm-sales-manager", "SALES_MANAGER"));
         String manager = login(createUser("perm-manager", "MANAGER"));
@@ -199,11 +199,11 @@ class SalesOrderCancellationApiIntegrationTest extends SalesOrderTestSupport {
         Long salesOrderId = createSubmittedOrder(sales, draftBody(customer, line(mapping, "5", UnitOfMeasure.PCS)));
         approve(salesManager, salesOrderId).andExpect(status().isOk());
 
-        Long cancellationId = createSubmittedCancellation(sales, salesOrderId,
+        // 業務主管自己建立並送審的取消申請，不能自己核准，改由營運主管核准
+        Long cancellationId = createSubmittedCancellation(salesManager, salesOrderId,
                 cancellationLine(findLineIds(salesOrderId).get(0), "1"));
 
-        // 取消核准只給業務主管，MANAGER 沒有 SO_CANCELLATION_APPROVE
-        approveCancellation(manager, cancellationId).andExpect(status().isForbidden());
-        approveCancellation(salesManager, cancellationId).andExpect(status().isOk());
+        approveCancellation(salesManager, cancellationId).andExpect(status().isForbidden());
+        approveCancellation(manager, cancellationId).andExpect(status().isOk());
     }
 }

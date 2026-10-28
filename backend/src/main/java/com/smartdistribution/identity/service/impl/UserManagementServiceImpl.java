@@ -14,6 +14,7 @@ import com.smartdistribution.identity.dto.response.AuthorizationOptionsResponse;
 import com.smartdistribution.identity.dto.response.PermissionResponse;
 import com.smartdistribution.identity.dto.response.RoleResponse;
 import com.smartdistribution.identity.entity.AppUser;
+import com.smartdistribution.identity.entity.PasswordTokenPurpose;
 import com.smartdistribution.identity.entity.Permission;
 import com.smartdistribution.identity.entity.Role;
 import com.smartdistribution.identity.entity.UserPermissionGrant;
@@ -25,6 +26,7 @@ import com.smartdistribution.identity.repository.RoleRepository;
 import com.smartdistribution.identity.repository.UserPermissionGrantRepository;
 import com.smartdistribution.identity.repository.UserRoleRepository;
 import com.smartdistribution.identity.service.EffectivePermissionResolver;
+import com.smartdistribution.identity.service.PasswordTokenIssuer;
 import com.smartdistribution.identity.service.UserManagementService;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
@@ -35,7 +37,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,7 +55,7 @@ public class UserManagementServiceImpl implements UserManagementService {
     private final UserRoleRepository userRoleRepository;
     private final UserPermissionGrantRepository userPermissionGrantRepository;
     private final EffectivePermissionResolver effectivePermissionResolver;
-    private final PasswordEncoder passwordEncoder;
+    private final PasswordTokenIssuer passwordTokenIssuer;
     private final CurrentUserProvider currentUserProvider;
     private final UserMapper userMapper;
     private final AuditService auditService;
@@ -119,11 +120,7 @@ public class UserManagementServiceImpl implements UserManagementService {
     @Transactional
     @PreAuthorize("hasAuthority('USER_MANAGE')")
     public UserDetailResponse createUser(CreateUserRequest request) {
-        AppUser user = new AppUser(
-                request.email(),
-                request.name(),
-                passwordEncoder.encode(request.password())
-        );
+        AppUser user = AppUser.pending(request.email(), request.name());
 
         try {
             userRepository.saveAndFlush(user);
@@ -138,6 +135,49 @@ public class UserManagementServiceImpl implements UserManagementService {
                 "建立使用者",
                 null,
                 userSnapshot(user),
+                null
+        );
+
+        passwordTokenIssuer.issue(user, PasswordTokenPurpose.INVITE, Instant.now());
+
+        return toDetail(user);
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize("hasAuthority('USER_MANAGE')")
+    public UserDetailResponse resendInvitation(Long userId) {
+        AppUser user = findUserById(userId);
+
+        if (!user.isPending()) {
+            throw new BusinessException(ErrorCode.USER_STATUS_CONFLICT);
+        }
+
+        passwordTokenIssuer.issue(user, PasswordTokenPurpose.INVITE, Instant.now());
+
+        return toDetail(user);
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize("hasAuthority('USER_MANAGE')")
+    public UserDetailResponse sendPasswordReset(Long userId) {
+        AppUser user = findUserById(userId);
+        ensureTargetIsNotCurrentUser(userId);
+
+        if (!user.isActive()) {
+            throw new BusinessException(ErrorCode.USER_STATUS_CONFLICT);
+        }
+
+        passwordTokenIssuer.issue(user, PasswordTokenPurpose.RESET, Instant.now());
+
+        auditService.record(
+                currentUserProvider.getCurrentUserId(),
+                AuditActionType.USER_PASSWORD_RESET_SEND,
+                userId,
+                "寄出重設密碼連結",
+                null,
+                null,
                 null
         );
 
@@ -190,7 +230,7 @@ public class UserManagementServiceImpl implements UserManagementService {
 
         String beforeData = userSnapshot(user);
 
-        user.activate();
+        user.activate(Instant.now());
         userRepository.flush();
 
         auditService.record(
@@ -309,6 +349,11 @@ public class UserManagementServiceImpl implements UserManagementService {
                 .map(PermissionGrantItemRequest::permissionCode)
                 .collect(Collectors.toSet());
 
+        //清單裡同一個權限出現兩次時，轉成 Set 後數量會變少；先擋下來，不要等資料庫的唯一約束報錯
+        if (requestedPermissionCodes.size() != request.grants().size()) {
+            throw new BusinessException(ErrorCode.PERMISSION_GRANT_DUPLICATED);
+        }
+
         if (!Collections.disjoint(
                 requestedPermissionCodes,
                 NON_GRANTABLE_PERMISSION_CODES
@@ -390,26 +435,13 @@ public class UserManagementServiceImpl implements UserManagementService {
             return Map.of();
         }
 
-        // 1. 一次查詢，把這一頁所有使用者的角色全部撈回來
-        List<UserRole> assignments = userRoleRepository.findAllByUserIdIn(userIds);
-
-        // 2. 在記憶體裡，依 userId 分組
-        Map<Long, List<Role>> rolesByUserId = new HashMap<>();
-
-        for (UserRole assignment : assignments) {
-            Long userId = assignment.getUser().getId();
-            Role role = assignment.getRole();
-
-            List<Role> roles = rolesByUserId.get(userId);
-
-            if (roles == null) {
-                roles = new ArrayList<>();
-                rolesByUserId.put(userId, roles);
-            }
-            roles.add(role);
-        }
-
-        return rolesByUserId;
+        //一次查回這一頁所有使用者的角色，再依使用者分組
+        return userRoleRepository.findAllByUserIdIn(userIds)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        assignment -> assignment.getUser().getId(),
+                        Collectors.mapping(UserRole::getRole, Collectors.toList())
+                ));
     }
 
     private List<Role> findRolesByCodes(Set<String> roleCodes) {

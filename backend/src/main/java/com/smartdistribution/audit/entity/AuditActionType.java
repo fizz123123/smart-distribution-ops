@@ -14,6 +14,10 @@ public enum AuditActionType {
     USER_UPDATE(AuditTargetType.USER),
     USER_ACTIVATE(AuditTargetType.USER),
     USER_DISABLE(AuditTargetType.USER),
+    //系統管理員替使用者寄出重設密碼連結
+    USER_PASSWORD_RESET_SEND(AuditTargetType.USER),
+    //閒置超過設定天數，由排程自動停用
+    USER_AUTO_DISABLE(AuditTargetType.USER),
     USER_ROLES_REPLACE(AuditTargetType.USER),
     USER_PERMISSION_GRANTS_REPLACE(AuditTargetType.USER),
 

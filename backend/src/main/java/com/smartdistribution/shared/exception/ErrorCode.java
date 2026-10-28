@@ -33,6 +33,22 @@ public enum ErrorCode {
             HttpStatus.UNAUTHORIZED,
             "此帳號已停用。"
     ),
+    USER_PENDING_ACTIVATION(
+            HttpStatus.UNAUTHORIZED,
+            "帳號尚未啟用，請先使用信中的連結設定密碼。"
+    ),
+    USER_STATUS_CONFLICT(
+            HttpStatus.CONFLICT,
+            "帳號目前的狀態不允許此操作，請重新載入。"
+    ),
+    PASSWORD_TOKEN_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "連結已失效，請聯絡系統管理員重新寄送。"
+    ),
+    CURRENT_PASSWORD_INCORRECT(
+            HttpStatus.BAD_REQUEST,
+            "目前的密碼不正確。"
+    ),
     USER_NOT_FOUND(
             HttpStatus.NOT_FOUND,
             "找不到指定的使用者。"
@@ -52,6 +68,10 @@ public enum ErrorCode {
     USER_MANAGEMENT_PERMISSION_NOT_GRANTABLE(
             HttpStatus.BAD_REQUEST,
             "帳號與授權管理權限不可作為個別權限授予。"
+    ),
+    PERMISSION_GRANT_DUPLICATED(
+            HttpStatus.BAD_REQUEST,
+            "同一個權限只能授予一次，若要調整期間請修改原本那一筆。"
     ),
 
     // Role and permission management
