@@ -79,11 +79,6 @@ public class SalesOrderAssembler {
     public SalesOrderDetailResponse toDetail(SalesOrder salesOrder) {
         Customer customer = salesOrderMasterData.findCustomer(salesOrder.getCustomerId());
 
-        //負責業務和建立者常是同一人，Set.of 遇到重複會丟例外，所以用 HashSet
-        Map<Long, String> userNames = userDirectoryService.findNamesByIds(
-                new HashSet<>(List.of(salesOrder.getResponsibleSalesUserId(), salesOrder.getCreatedBy()))
-        );
-
         List<SalesOrderLine> lines =
                 salesOrderLineRepository.findAllBySalesOrderIdOrderByLineNoAsc(salesOrder.getId());
 
@@ -122,8 +117,8 @@ public class SalesOrderAssembler {
                         customer.getName()
                 ),
                 salesOrder.getCustomerOrderNumber(),
-                userRef(salesOrder.getResponsibleSalesUserId(), userNames),
-                userRef(salesOrder.getCreatedBy(), userNames),
+                userRef(salesOrder.getResponsibleSalesUserId()),
+                userRef(salesOrder.getCreatedBy()),
                 //草稿時顯示客戶目前的付款條件，送審後是快照
                 preview ? customer.getPaymentTerm() : salesOrder.getPaymentTerm(),
                 salesOrder.getRequestedDeliveryDate(),
@@ -267,7 +262,7 @@ public class SalesOrderAssembler {
         return new Supply(reservedQty, plannedNotOrderedQty, inTransitQty, shippedQty, cancelledQty, unplannedQty);
     }
 
-    private SalesOrderDetailResponse.UserRef userRef(Long userId, Map<Long, String> userNames) {
-        return new SalesOrderDetailResponse.UserRef(userId, userNames.get(userId));
+    private SalesOrderDetailResponse.UserRef userRef(Long userId) {
+        return new SalesOrderDetailResponse.UserRef(userId, userDirectoryService.findName(userId));
     }
 }
