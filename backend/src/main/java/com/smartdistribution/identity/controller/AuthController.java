@@ -1,6 +1,7 @@
 package com.smartdistribution.identity.controller;
 
 import com.smartdistribution.identity.dto.request.LoginRequest;
+import com.smartdistribution.identity.dto.request.SetPasswordRequest;
 import com.smartdistribution.identity.dto.response.LoginResponse;
 import com.smartdistribution.identity.service.AuthService;
 import jakarta.validation.Valid;
@@ -25,5 +26,15 @@ public class AuthController {
         LoginResponse response = authService.login(request);
 
         return ResponseEntity.ok(response);
+    }
+
+    //用信中的連結設定密碼：首次設定與重設密碼共用；使用者還沒登入，由 token 證明身分
+    @PostMapping("/password")
+    public ResponseEntity<Void> setPassword(
+            @Valid @RequestBody SetPasswordRequest request
+    ) {
+        authService.setPassword(request);
+
+        return ResponseEntity.noContent().build();
     }
 }

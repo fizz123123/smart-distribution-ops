@@ -123,29 +123,18 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "SO_CANCELLATION_SUBMIT"
     );
 
+    //業務主管包含業務的全部權限（啟動時一併指派，對照見 RoleInclusions），這裡只列主管額外的權限
     private static final List<String> SALES_MANAGER_PERMISSIONS = List.of(
-            "CUSTOMER_VIEW",
             "CUSTOMER_APPROVE",
             "CUSTOMER_STATUS_MANAGE",
-            "COMPANY_ITEM_VIEW",
-            "COMPANY_ITEM_STATUS_MANAGE",
             "COMPANY_ITEM_APPROVE",
-            "CUSTOMER_ITEM_MAPPING_VIEW",
+            "COMPANY_ITEM_STATUS_MANAGE",
             "CUSTOMER_ITEM_MAPPING_APPROVE",
             "CUSTOMER_ITEM_MAPPING_STATUS_MANAGE",
-            "CUSTOMER_PRICE_VIEW",
             "CUSTOMER_PRICE_APPROVE",
             "CUSTOMER_PRICE_REVOKE",
-            "INVENTORY_VIEW",
             "INVENTORY_RESERVATION_VIEW",
-            // 主管代建 SO 時也需要建立、修改與送審（04 號）
-            "SO_VIEW",
-            "SO_CREATE",
-            "SO_UPDATE",
-            "SO_SUBMIT",
             "SO_APPROVE",
-            "SO_CANCELLATION_CREATE",
-            "SO_CANCELLATION_SUBMIT",
             "SO_CANCELLATION_APPROVE"
     );
 
@@ -161,15 +150,11 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "SO_VIEW"
     );
 
+    //採購主管包含採購的全部權限，這裡只列主管額外的權限
     private static final List<String> PURCHASING_MANAGER_PERMISSIONS = List.of(
-            "SUPPLIER_VIEW",
             "SUPPLIER_APPROVE",
             "SUPPLIER_STATUS_MANAGE",
-            "COMPANY_ITEM_VIEW",
-            "INVENTORY_POLICY_MANAGE",
-            "INVENTORY_VIEW",
-            "INVENTORY_RESERVATION_VIEW",
-            "SO_VIEW"
+            "INVENTORY_POLICY_MANAGE"
     );
 
     private static final List<String> WAREHOUSE_PERMISSIONS = List.of(
@@ -178,10 +163,8 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "INVENTORY_RESERVATION_VIEW"
     );
 
+    //倉管主管包含倉管的全部權限，這裡只列主管額外的權限
     private static final List<String> WAREHOUSE_MANAGER_PERMISSIONS = List.of(
-            "INVENTORY_VIEW",
-            "INVENTORY_TRANSACTION_VIEW",
-            "INVENTORY_RESERVATION_VIEW",
             "INVENTORY_ADJUSTMENT_POST"
     );
 
@@ -190,19 +173,24 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "CUSTOMER_PAYMENT_TERM_MANAGE"
     );
 
+    //營運主管可以替代核准所有類型，主管自己建立的資料由營運主管核准
     private static final List<String> MANAGER_PERMISSIONS = List.of(
             "CUSTOMER_VIEW",
             "COMPANY_ITEM_VIEW",
             "CUSTOMER_ITEM_MAPPING_VIEW",
             "CUSTOMER_PRICE_VIEW",
-            "CUSTOMER_APPROVE",
             "SUPPLIER_VIEW",
-            "SUPPLIER_APPROVE",
             "INVENTORY_VIEW",
             "INVENTORY_TRANSACTION_VIEW",
             "INVENTORY_RESERVATION_VIEW",
             "SO_VIEW",
-            "SO_APPROVE"
+            "CUSTOMER_APPROVE",
+            "SUPPLIER_APPROVE",
+            "COMPANY_ITEM_APPROVE",
+            "CUSTOMER_ITEM_MAPPING_APPROVE",
+            "CUSTOMER_PRICE_APPROVE",
+            "SO_APPROVE",
+            "SO_CANCELLATION_APPROVE"
     );
 
     private final RoleRepository roleRepository;
@@ -234,6 +222,12 @@ public class IdentityDataInitializer implements ApplicationRunner {
         assignPermissions(
                 rolesByCode.get("SALES_MANAGER"),
                 permissionsByCode,
+                SALES_PERMISSIONS
+        );
+
+        assignPermissions(
+                rolesByCode.get("SALES_MANAGER"),
+                permissionsByCode,
                 SALES_MANAGER_PERMISSIONS
         );
 
@@ -246,11 +240,23 @@ public class IdentityDataInitializer implements ApplicationRunner {
         assignPermissions(
                 rolesByCode.get("PURCHASING_MANAGER"),
                 permissionsByCode,
+                PURCHASING_PERMISSIONS
+        );
+
+        assignPermissions(
+                rolesByCode.get("PURCHASING_MANAGER"),
+                permissionsByCode,
                 PURCHASING_MANAGER_PERMISSIONS
         );
 
         assignPermissions(
                 rolesByCode.get("WAREHOUSE"),
+                permissionsByCode,
+                WAREHOUSE_PERMISSIONS
+        );
+
+        assignPermissions(
+                rolesByCode.get("WAREHOUSE_MANAGER"),
                 permissionsByCode,
                 WAREHOUSE_PERMISSIONS
         );

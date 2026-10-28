@@ -1,5 +1,6 @@
 package com.smartdistribution.sales;
 
+import com.smartdistribution.identity.entity.AppUser;
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
 import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.customer.entity.Customer;
@@ -235,19 +236,22 @@ class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
     }
 
     @Test
-    void responsibleSalesMustBeActiveSalesUser() throws Exception {
-        String salesManager = login(createUser("on-behalf", "SALES_MANAGER"));
+    void responsibleSalesMustHaveSoCreatePermission() throws Exception {
+        AppUser salesManagerUser = createUser("manager", "SALES_MANAGER");
+        String salesManager = login(salesManagerUser);
         Long salesUserId = createUser("owner", "SALES").getId();
+        Long warehouseUserId = createUser("warehouse", "WAREHOUSE").getId();
         Customer customer = createActiveCustomer(PaymentTerm.DUE_0);
 
-        // 主管代建且沒有業務角色時，必須指定負責業務
+        //只有業務主管角色也能自己建 SO，並成為負責業務：主管包含業務的全部權限
         mockMvc.perform(post("/api/v1/sales-orders")
                         .header("Authorization", bearer(salesManager))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(draftBody(customer, "")))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("SO_RESPONSIBLE_SALES_INVALID"));
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.responsibleSales.id").value(salesManagerUser.getId()));
 
+        //可以指定其他業務為負責業務
         mockMvc.perform(post("/api/v1/sales-orders")
                         .header("Authorization", bearer(salesManager))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -256,6 +260,16 @@ class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
                                 """.formatted(customer.getId(), salesUserId)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.responsibleSales.id").value(salesUserId));
+
+        //沒有建立 SO 權限的人不能當負責業務
+        mockMvc.perform(post("/api/v1/sales-orders")
+                        .header("Authorization", bearer(salesManager))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerId": %d, "responsibleSalesUserId": %d, "lines": []}
+                                """.formatted(customer.getId(), warehouseUserId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("SO_RESPONSIBLE_SALES_INVALID"));
     }
 
     @Test

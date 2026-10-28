@@ -277,6 +277,33 @@ class CustomerApiIntegrationTest {
     }
 
     @Test
+    void salesManagerCanCreateCustomerButManagerMustApproveIt() throws Exception {
+        String salesManager = login(createUser("cover-sales-manager", "SALES_MANAGER"));
+        String manager = login(createUser("cover-manager", "MANAGER"));
+
+        // 業務主管包含業務的全部權限，可以自己建立並送審客戶
+        CustomerVersion customer = submit(salesManager, createCustomer(salesManager, null));
+        Long approvalRequestId = jdbcTemplate.queryForObject(
+                """
+                SELECT id FROM approval_request
+                WHERE target_type = 'CUSTOMER' AND target_id = ? AND status = 'PENDING'
+                """,
+                Long.class,
+                customer.id()
+        );
+
+        // 但不能核准自己建立的資料，由營運主管核准
+        mockMvc.perform(post("/api/v1/approval-requests/{id}/approve", approvalRequestId)
+                        .header("Authorization", bearer(salesManager))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("APPROVAL_SELF_APPROVAL_FORBIDDEN"));
+
+        approve(manager, customer.id());
+    }
+
+    @Test
     void financeManagerCanChangePaymentTermInAnyStatus() throws Exception {
         String sales = login(createUser("term-creator", "SALES"));
         String finance = login(createUser("term-finance", "FINANCE_MANAGER"));

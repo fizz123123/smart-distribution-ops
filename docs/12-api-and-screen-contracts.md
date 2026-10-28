@@ -2,7 +2,7 @@
 
 > 文件版本：v1.0  
 > 建立日期：2026-10-05  
-> 最後更新：2026-10-27  
+> 最後更新：2026-10-28  
 > 文件定位：依功能模組、角色權限、領域規則、資料模型及狀態轉換，定義前端畫面與後端 API 的責任邊界、主要操作、輸入輸出及錯誤處理。
 
 ---
@@ -130,9 +130,10 @@ LINE_AI_SO_DRAFT_CREATE
 
 | 畫面編號 | 畫面 | 主要角色 | 主要用途 |
 | --- | --- | --- | --- |
-| AUTH-01 | 登入 | 全體內部使用者 | 取得 JWT 與目前使用者權限 |
+| AUTH-01 | 登入 | 全體內部使用者 | 取得 JWT 與目前使用者權限；顯示「忘記密碼請聯絡系統管理員」 |
+| AUTH-02 | 設定密碼 | 收到連結的使用者 | 以信中連結首次設定或重設密碼，不需登入 |
 | HOME-01 | 我的工作台 | 全體內部使用者 | 彙整目前使用者的待核准、待處理及近期操作；儀表板的「我的待辦」入口連至此畫面 |
-| ADM-01 | 使用者與角色 | APP_ADMIN | 管理一般使用者；APP_ADMIN 為初始化建立的固定專用角色，不在畫面提供指派、移除或額外授權操作 |
+| ADM-01 | 使用者與角色 | APP_ADMIN | 管理一般使用者、重寄設定密碼連結、寄送重設密碼連結；APP_ADMIN 為初始化建立的固定專用角色，不在畫面提供指派、移除或額外授權操作 |
 | ADM-02 | LINE 綁定 | SALES、APP_ADMIN | 本人取得驗證碼；管理員查看、停用或解除綁定 |
 | MDM-01 | 客戶 | SALES、SALES_MANAGER、FINANCE_MANAGER | 客戶建檔、核准、啟停與付款條件 |
 | MDM-02 | 公司料號 | SALES、SALES_MANAGER、PURCHASING_MANAGER | 業務維護商品規格、基準單位與偏好供應商；採購主管維護安全庫存 |
@@ -162,13 +163,17 @@ HOME-01 是個人作業入口，不另建立「待辦中心」。畫面可組合
 
 | 畫面／操作 | Method | Path | 權限 | 說明 |
 | --- | --- | --- | --- | --- |
-| 登入 | `POST` | `/auth/login` | 公開 | 驗證登入 Email 與密碼並回傳 JWT；請求即使附帶過期或無效的既有 token，也不影響重新登入 |
+| 登入 | `POST` | `/auth/login` | 公開 | 驗證登入 Email 與密碼並回傳 JWT；請求即使附帶過期或無效的既有 token，也不影響重新登入；待啟用帳號回 `401 USER_PENDING_ACTIVATION`，停用帳號回 `401 USER_DISABLED` |
+| 以連結設定密碼 | `POST` | `/auth/password` | 公開 | 送 `token`、`newPassword`，成功回 `204`；首次設定與重設共用 |
 | 目前使用者 | `GET` | `/users/me` | 已登入 | 回傳使用者、角色、細部權限及資料範圍 |
+| 修改自己的密碼 | `PUT` | `/users/me/password` | 已登入 | 送 `currentPassword`、`newPassword`，成功回 `204` |
 | 使用者清單／詳情 | `GET` | `/users`、`/users/{id}` | `USER_MANAGE` | 查詢其他一般使用者及目前版本 |
-| 建立／修改使用者 | `POST/PATCH` | `/users`、`/users/{id}` | `USER_MANAGE` | Email 為登入識別且正規化後須唯一；不得修改自己的授權 |
-| 可指派角色與權限 | `GET` | `/users/authorization-options` | `USER_MANAGE` | 回傳角色與個別權限勾選清單；排除 `APP_ADMIN` 及三項帳號管理權限 |
+| 建立／修改使用者 | `POST/PATCH` | `/users`、`/users/{id}` | `USER_MANAGE` | 建立時只送 Email 與姓名，不送密碼；建立後為 `PENDING` 並寄出設定密碼連結；Email 為登入識別且正規化後須唯一；不得修改自己的授權 |
+| 重寄設定密碼連結 | `POST` | `/users/{id}/invitation` | `USER_MANAGE` | 只限 `PENDING` 帳號；舊連結作廢 |
+| 寄送重設密碼連結 | `POST` | `/users/{id}/password-reset` | `USER_MANAGE` | 只限 `ACTIVE` 帳號，且不得對自己操作；舊密碼在設定新密碼前仍可使用 |
+| 可指派角色與權限 | `GET` | `/users/authorization-options` | `USER_MANAGE` | 回傳角色與個別權限勾選清單；排除 `APP_ADMIN` 及三項帳號管理權限；每個角色附 `includedRoleCodes` |
 | 指派角色 | `PUT` | `/users/{id}/roles` | `USER_ROLE_MANAGE` | 完整取代一般使用者角色集合且至少保留一個角色；異動原因必填；不得操作自己，也不得指派或異動 `APP_ADMIN` |
-| 個別額外授權 | `PUT` | `/users/{id}/permission-grants` | `USER_PERMISSION_MANAGE` | 完整取代一般使用者個別業務權限；異動原因必填；不提供 `DENY`，不得授予三項帳號管理權限，且不得以 `APP_ADMIN` 為目標 |
+| 個別額外授權 | `PUT` | `/users/{id}/permission-grants` | `USER_PERMISSION_MANAGE` | 完整取代一般使用者個別業務權限；異動原因必填；不提供 `DENY`，不得授予三項帳號管理權限，不得以 `APP_ADMIN` 為目標；同一權限只能出現一次 |
 | 我的待核准 | `GET` | `/approval-requests/my-pending` | 依核准權限 | 後端排除建立者及本輪送審者本人 |
 | 核准詳情 | `GET` | `/approval-requests/{id}` | 依核准權限 | 回傳目標摘要、建立者、送審者、警示與歷次意見 |
 | 核准 | `POST` | `/approval-requests/{id}/approve` | 依目標核准權限 | 執行目標資料核准及後續效果；`comment` 選填 |
@@ -185,6 +190,44 @@ HOME-01 是個人作業入口，不另建立「待辦中心」。畫面可組合
 ```
 
 目標在待核准期間不得修改，核准與退回因此不帶目標版本。申請已被處理時回傳 `409 APPROVAL_ALREADY_PROCESSED`；兩人同時處理同一申請時，後完成者回傳 `409 VERSION_CONFLICT`。
+
+### 4.2 設定密碼與信件
+
+- 信中連結為 `{APP_FRONTEND_BASE_URL}/set-password?token=…`，首次設定與重設共用 AUTH-02。頁面只需要「新密碼」「確認新密碼」兩個欄位；兩次輸入是否相同由前端檢查，後端只收 `newPassword`。
+- 連結有效 24 小時、只能使用一次。連結不存在、已使用、已過期或帳號狀態不符，一律回 `400 PASSWORD_TOKEN_INVALID`，畫面提示「連結已失效，請聯絡系統管理員重新寄送」。
+- 信件在帳號資料寫入成功後才於背景寄出；寄送失敗不影響 API 結果，APP_ADMIN 可在 ADM-01 重寄。
+- 登入頁不提供自助忘記密碼。APP_ADMIN 在 ADM-01 對 `ACTIVE` 帳號按「寄送重設密碼信」；對 `PENDING` 帳號按「重寄設定密碼信」。
+
+### 4.3 角色與個別授權的指派畫面
+
+角色選項範例：
+
+```json
+{
+  "roleCode": "SALES_MANAGER",
+  "name": "業務主管",
+  "includedRoleCodes": ["SALES"]
+}
+```
+
+- 勾選某個角色時，`includedRoleCodes` 列出的角色顯示為已勾選並鎖住，旁邊註明「已包含於{角色名稱}」。被鎖住的角色不送進 `roleCodes`，資料庫只保存主管角色（D-058）。
+- 取消勾選主管時，被包含的角色恢復為可勾選、未勾選的狀態；降職為職員時，改勾職員角色。
+- 個別授權沒有單獨的新增或刪除 API。建議畫面先在清單上新增、修改或刪除，最後填寫異動原因並按「儲存」，以 `PUT /users/{id}/permission-grants` 整組送出；未修改的授權須原樣帶回原因與期間。
+- 新增個別授權的下拉選單應排除清單中已有的權限；同一權限出現兩次時回 `400 PERMISSION_GRANT_DUPLICATED`。要調整期間，修改原本那一筆即可。
+- 代理提早結束時，可把該筆的結束時間改為現在，保留紀錄並使其失效；給錯權限時直接刪除。刪除的授權可從稽核紀錄追查（D-060）。
+
+### 4.4 帳號相關錯誤碼
+
+| 錯誤碼 | HTTP | 情境 |
+| --- | --- | --- |
+| `AUTH_INVALID_CREDENTIALS` | 401 | Email 不存在或密碼錯誤 |
+| `USER_PENDING_ACTIVATION` | 401 | 待啟用帳號嘗試登入 |
+| `USER_DISABLED` | 401 | 停用帳號登入或使用既有 JWT |
+| `PASSWORD_TOKEN_INVALID` | 400 | 設定密碼連結無效 |
+| `CURRENT_PASSWORD_INCORRECT` | 400 | 修改自己的密碼時目前密碼錯誤 |
+| `PERMISSION_GRANT_DUPLICATED` | 400 | 個別授權清單中同一權限出現兩次 |
+| `USER_STATUS_CONFLICT` | 409 | 帳號狀態不允許此操作，例如重寄設定密碼連結給已啟用的帳號 |
+| `USER_SELF_MANAGEMENT_FORBIDDEN` | 403 | 對自己的帳號進行停用、授權異動或寄送重設連結 |
 
 ## 5. 主檔管理契約
 
@@ -245,6 +288,8 @@ SO 核准時，若引用價格已轉為 `REPLACED`，後端仍依送審快照完
 
 ### 5.3 主檔細部權限與預設角色
 
+部門主管包含同部門職員的全部權限（D-058）：下表列為 SALES、PURCHASING 的權限，SALES_MANAGER、PURCHASING_MANAGER 也具有。
+
 | 權限 | 預設角色 |
 | --- | --- |
 | `CUSTOMER_VIEW` | SALES、SALES_MANAGER、FINANCE_MANAGER、MANAGER |
@@ -258,14 +303,17 @@ SO 核准時，若引用價格已轉為 `REPLACED`，後端仍依送審快照完
 | `SUPPLIER_STATUS_MANAGE` | PURCHASING_MANAGER |
 | `COMPANY_ITEM_VIEW` | SALES、SALES_MANAGER、PURCHASING、PURCHASING_MANAGER、MANAGER |
 | `COMPANY_ITEM_CREATE`、`COMPANY_ITEM_UPDATE`、`COMPANY_ITEM_SUBMIT` | SALES |
-| `COMPANY_ITEM_APPROVE`、`COMPANY_ITEM_STATUS_MANAGE` | SALES_MANAGER |
+| `COMPANY_ITEM_APPROVE` | SALES_MANAGER、MANAGER（替代核准） |
+| `COMPANY_ITEM_STATUS_MANAGE` | SALES_MANAGER |
 | `INVENTORY_POLICY_MANAGE` | PURCHASING_MANAGER |
 | `CUSTOMER_ITEM_MAPPING_VIEW` | SALES、SALES_MANAGER、MANAGER |
 | `CUSTOMER_ITEM_MAPPING_CREATE`、`CUSTOMER_ITEM_MAPPING_UPDATE`、`CUSTOMER_ITEM_MAPPING_SUBMIT` | SALES |
-| `CUSTOMER_ITEM_MAPPING_APPROVE`、`CUSTOMER_ITEM_MAPPING_STATUS_MANAGE` | SALES_MANAGER |
+| `CUSTOMER_ITEM_MAPPING_APPROVE` | SALES_MANAGER、MANAGER（替代核准） |
+| `CUSTOMER_ITEM_MAPPING_STATUS_MANAGE` | SALES_MANAGER |
 | `CUSTOMER_PRICE_VIEW` | SALES、SALES_MANAGER、MANAGER |
 | `CUSTOMER_PRICE_CREATE` | SALES |
-| `CUSTOMER_PRICE_APPROVE`、`CUSTOMER_PRICE_REVOKE` | SALES_MANAGER |
+| `CUSTOMER_PRICE_APPROVE` | SALES_MANAGER、MANAGER（替代核准） |
+| `CUSTOMER_PRICE_REVOKE` | SALES_MANAGER |
 
 單位換算的新增與修改沿用 `COMPANY_ITEM_UPDATE`。核准服務依核准申請的目標類型對應上表的 `XXX_APPROVE` 權限；SO 與庫存權限見 6.3、7.3 節，其他模組的權限於實作時補入本文件。安全庫存查詢接受 `COMPANY_ITEM_VIEW` 或 `INVENTORY_VIEW` 任一權限，倉管也能查看。
 
@@ -369,7 +417,7 @@ SO 與取消申請的錯誤碼：
 | `SALES_ORDER_NOT_FOUND`、`SALES_ORDER_CANCELLATION_NOT_FOUND` | 404 | 資源不存在 |
 | `SO_STATUS_CONFLICT` | 409 | SO 狀態不允許該操作 |
 | `SO_CUSTOMER_INACTIVE` | 409 | 建立或修改時客戶未啟用 |
-| `SO_RESPONSIBLE_SALES_INVALID` | 400 | 負責業務不是啟用中的業務 |
+| `SO_RESPONSIBLE_SALES_INVALID` | 400 | 負責業務不是啟用中、且有效權限包含 `SO_CREATE` 的使用者 |
 | `SO_MAPPING_CUSTOMER_MISMATCH` | 400 | 客戶料號對應不屬於該客戶 |
 | `SO_LINE_INVALID` | 400 | 明細重複、小數位不符或不屬於該 SO |
 | `SO_DELIVERY_INFO_INCOMPLETE` | 400 | 送審時交期或交貨資料缺漏 |
@@ -421,10 +469,10 @@ SO 詳情 response 直接包含各明細的已預留、已規劃未下單、採�
 | 權限 | 預設角色 |
 | --- | --- |
 | `SO_VIEW` | SALES、SALES_MANAGER、PURCHASING、PURCHASING_MANAGER、MANAGER |
-| `SO_CREATE`、`SO_UPDATE`、`SO_SUBMIT` | SALES、SALES_MANAGER（代建） |
+| `SO_CREATE`、`SO_UPDATE`、`SO_SUBMIT` | SALES、SALES_MANAGER |
 | `SO_APPROVE` | SALES_MANAGER、MANAGER（替代核准） |
 | `SO_CANCELLATION_CREATE`、`SO_CANCELLATION_SUBMIT` | SALES、SALES_MANAGER |
-| `SO_CANCELLATION_APPROVE` | SALES_MANAGER |
+| `SO_CANCELLATION_APPROVE` | SALES_MANAGER、MANAGER（替代核准） |
 
 ## 7. PO、收貨與庫存契約
 
