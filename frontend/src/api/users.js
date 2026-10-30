@@ -21,12 +21,29 @@ export async function fetchAuthorizationOptions() {
 }
 
 /**
- * 新增使用者：POST /users
- * @param {{ email: string, name: string, password: string }} body 密碼 8～20 字
+ * 新增使用者：POST /users（只送 Email 與姓名；建立後為待啟用，後端寄出啟用連結）
+ * @param {{ email: string, name: string }} body
  */
 export async function createUser(body) {
   const { data } = await http.post('/users', body)
   return data
+}
+
+// 重新寄送啟用連結：POST /users/{id}/invitation（只限待啟用帳號；舊連結作廢）
+export async function resendInvitation(id) {
+  const { data } = await http.post(`/users/${id}/invitation`)
+  return data
+}
+
+// 寄送密碼重設連結：POST /users/{id}/password-reset（只限啟用帳號；不能對自己）
+export async function sendPasswordReset(id) {
+  const { data } = await http.post(`/users/${id}/password-reset`)
+  return data
+}
+
+// 修改自己的密碼：PUT /users/me/password（須輸入目前密碼）
+export async function changeOwnPassword({ currentPassword, newPassword }) {
+  await http.put('/users/me/password', { currentPassword, newPassword })
 }
 
 // 修改 Email、姓名：PATCH /users/{id}

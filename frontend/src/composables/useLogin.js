@@ -1,6 +1,7 @@
 import { computed, reactive, ref, shallowRef } from 'vue'
 
 import { useAuthStore } from '@/stores/auth'
+import { normalizeEmail } from '@/utils/text'
 
 // 登入表單的狀態與送出邏輯（AUTH-01）。畫面只負責顯示，這裡負責驗證與呼叫 API。
 export function useLogin({ onSuccess } = {}) {
@@ -17,7 +18,13 @@ export function useLogin({ onSuccess } = {}) {
   const rules = {
     email: [
       { required: true, message: '請輸入 Email', trigger: 'blur' },
-      { type: 'email', message: 'Email 格式不正確，例如 name@company.com', trigger: 'blur' },
+      {
+        type: 'email',
+        message: 'Email 格式不正確，例如 name@company.com',
+        trigger: 'blur',
+        // 先轉半形、去掉前後空白再檢查
+        transform: normalizeEmail,
+      },
     ],
     password: [{ required: true, message: '請輸入密碼', trigger: 'blur' }],
   }
@@ -29,7 +36,7 @@ export function useLogin({ onSuccess } = {}) {
 
     isSubmitting.value = true
     try {
-      await authStore.login(credentials.email.trim(), credentials.password)
+      await authStore.login(normalizeEmail(credentials.email), credentials.password)
       onSuccess?.()
     } catch (error) {
       loginError.value = error

@@ -47,11 +47,11 @@ src/
 │  ├─ navigation.js  側邊選單與畫面權限（畫面編號對應 docs/12 第 3 節）
 │  ├─ status.js      狀態代碼 → 中文與色調，StatusTag 使用
 │  └─ identity.js    角色、權限的中文名稱與使用者清單設定
-├─ layouts/        登入後的版面：側邊選單、右上角工具、帳號選單、全站搜尋
-├─ components/     共用元件：AppIcon、ListPage、StatusTag、ReasonDialog…
-│  └─ users/       使用者與權限專用的對話框
+├─ layouts/        登入後的版面：側邊選單、右上角工具、帳號選單、全站搜尋；不用登入的頁面（登入、設定密碼）共用 AuthLayout
+├─ components/     共用元件：AppIcon、ListPage、StatusTag、ReasonDialog、ConfirmDialog、ChangePasswordDialog…
+│  └─ users/       使用者與權限專用：新增／編輯使用者、角色勾選、有效權限表、個別授權視窗
 ├─ composables/    可重用的邏輯：useAsync（載入資料）、useSidebar、useLogin
-├─ views/          畫面；依模組分資料夾，例如 views/users/
+├─ views/          畫面；依模組分資料夾，例如 views/users/；SetPasswordView 是信中連結開啟的設定密碼頁
 ├─ styles/         設計 token（tokens.css）、Element Plus 主題（element-theme.css）、全站樣式（base.css）
 └─ utils/          時間與數字格式、清單篩選、提示訊息（notify）
 ```
