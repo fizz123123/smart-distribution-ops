@@ -1,6 +1,7 @@
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import AppIcon from '@/components/AppIcon.vue'
+import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
@@ -10,6 +11,7 @@ const open = ref(false)
 const root = ref(null)
 const trigger = ref(null)
 const firstItem = ref(null)
+const isChangingPassword = ref(false)
 
 const initial = () => authStore.user?.name.slice(0, 1) ?? ''
 
@@ -32,6 +34,11 @@ function onDocClick(e) {
 
 function onKey(e) {
   if (e.key === 'Escape' && open.value) close(true)
+}
+
+function openChangePassword() {
+  close()
+  isChangingPassword.value = true
 }
 
 function handleLogout() {
@@ -80,10 +87,20 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div class="sep" role="separator"></div>
-      <button ref="firstItem" class="item" type="button" role="menuitem" @click="handleLogout">
+      <button
+        ref="firstItem"
+        class="item"
+        type="button"
+        role="menuitem"
+        @click="openChangePassword"
+      >
+        <AppIcon name="edit" :size="20" />修改密碼
+      </button>
+      <button class="item" type="button" role="menuitem" @click="handleLogout">
         <AppIcon name="logout" :size="20" />登出
       </button>
     </div>
+    <ChangePasswordDialog v-model:open="isChangingPassword" />
   </div>
 </template>
 

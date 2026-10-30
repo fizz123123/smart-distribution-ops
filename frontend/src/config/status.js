@@ -64,6 +64,7 @@ export const statusMaps = {
     PENDING: { label: '待處理', tone: 'warning' },
   },
   user: {
+    PENDING: { label: '待啟用', tone: 'warning' },
     ACTIVE: { label: '啟用', tone: 'success' },
     DISABLED: { label: '停用', tone: 'neutral' },
   },
