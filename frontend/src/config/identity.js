@@ -21,6 +21,7 @@ export const RESOURCE_LABELS = {
   USER_ROLE: '使用者角色',
   USER_PERMISSION: '使用者個別權限',
   SO: '銷售訂單',
+  SO_CANCELLATION: '餘量取消',
   CUSTOMER: '客戶',
   SUPPLIER: '供應商',
   COMPANY_ITEM: '商品（公司料號）',
@@ -46,16 +47,22 @@ export const ACTION_LABELS = {
   POST: '過帳',
 }
 
+// 有效權限表的欄標題較窄，只在這裡用短名稱；權限名稱（清單、送出視窗）仍用完整名稱
+const GRID_ACTION_LABELS = { PAYMENT_TERM_MANAGE: '付款條件' }
+
 export const permissionLabel = (p) =>
   `${RESOURCE_LABELS[p.resource] ?? p.resource}・${ACTION_LABELS[p.action] ?? p.action}`
 
 // 帳號管理權限不能用個別授權給（後端 USER_MANAGEMENT_PERMISSION_NOT_GRANTABLE）
 export const NOT_GRANTABLE = ['USER_MANAGE', 'USER_ROLE_MANAGE', 'USER_PERMISSION_MANAGE']
 
+// 角色的顯示名稱
+export const roleLabel = (role) => role.name || ROLE_LABELS[role.roleCode] || role.roleCode
+
 // 清單用的顯示列
 export const toUserRow = (u) => ({
   ...u,
-  roleText: u.roles.map((r) => r.name || ROLE_LABELS[r.roleCode] || r.roleCode).join('、') || '—',
+  roleText: u.roles.map(roleLabel).join('、') || '—',
 })
 
 export const usersList = {
@@ -67,6 +74,7 @@ export const usersList = {
   tabs: [
     { label: '全部' },
     { label: '啟用', filter: by('status', 'ACTIVE') },
+    { label: '待啟用', filter: by('status', 'PENDING') },
     { label: '停用', filter: by('status', 'DISABLED') },
   ],
   columns: [
@@ -103,28 +111,102 @@ export function roleOwnedCodes(user) {
   return user.effectivePermissions.map((p) => p.permissionCode).filter((code) => !granted.has(code))
 }
 
-// 有效權限表：列＝資料（資源），欄＝動作。
-// 格子三種：owned（有）、missing（這個動作存在但沒有）、none（系統沒有這個動作）。
-export function permissionTable(allPermissions, effectivePermissions) {
-  const owned = new Set(effectivePermissions.map((p) => p.permissionCode))
+// 有效權限表：列＝資料（資源），欄＝動作。每一格是一個權限，種類：
+//   role：角色本來就有（深藍勾，不能改）
+//   grant：個別額外授權，生效中（綠勾）
+//   open：可以個別授權、目前沒有
+//   locked：系統有這個權限，但不能個別授權（帳號管理權限），也沒有擁有
+//   none：系統沒有這個動作
+export function permissionGrid(allPermissions, user) {
+  const effective = user.effectivePermissions
+  const roleOwned = new Set(roleOwnedCodes(user))
+  const activeGrants = new Set(
+    user.permissionGrants
+      .filter((g) => grantStatus(g) === GRANT_STATUS.ACTIVE)
+      .map((g) => g.permission.permissionCode),
+  )
   const all = [
     ...allPermissions,
-    ...effectivePermissions.filter(
-      (p) => !allPermissions.some((a) => a.permissionCode === p.permissionCode),
-    ),
+    ...effective.filter((p) => !allPermissions.some((a) => a.permissionCode === p.permissionCode)),
   ]
   const actions = Object.keys(ACTION_LABELS).filter((a) => all.some((p) => p.action === a))
   const resources = [...new Set(all.map((p) => p.resource))]
+  const kindOf = (code) => {
+    if (roleOwned.has(code)) return 'role'
+    if (activeGrants.has(code)) return 'grant'
+    if (NOT_GRANTABLE.includes(code)) return 'locked'
+    return 'open'
+  }
   return {
-    actions: actions.map((a) => ({ key: a, label: ACTION_LABELS[a] })),
+    actions: actions.map((a) => ({
+      key: a,
+      label: GRID_ACTION_LABELS[a] ?? ACTION_LABELS[a],
+      fullLabel: ACTION_LABELS[a],
+    })),
     rows: resources.map((resource) => ({
       resource,
       label: RESOURCE_LABELS[resource] ?? resource,
       cells: actions.map((action) => {
         const p = all.find((x) => x.resource === resource && x.action === action)
-        if (!p) return 'none'
-        return owned.has(p.permissionCode) ? 'owned' : 'missing'
+        return p ? { code: p.permissionCode, kind: kindOf(p.permissionCode), permission: p } : null
       }),
     })),
   }
+}
+
+// 有效權限表與下方個別授權清單共用的欄寬（px）：第一欄是資料名稱，動作欄一律同寬（以最長的標題為準）。
+// 兩張表用同一組欄寬（table-layout: fixed），清單的欄位才會和權限表上下對齊。
+export function gridColumnWidths(actions) {
+  const longest = Math.max(0, ...actions.map((a) => a.label.length))
+  const actionWidth = Math.max(64, longest * 12 + 32)
+  return [180, ...actions.map(() => actionWidth)]
+}
+
+// 下方清單只顯示還沒過期的授權（生效中、尚未開始）
+export const visibleGrants = (user) =>
+  user.permissionGrants.filter((g) => grantStatus(g) !== GRANT_STATUS.EXPIRED)
+
+// 送給後端的一筆授權
+export const toGrantRequest = (g) => ({
+  permissionCode: g.permission.permissionCode,
+  reason: g.reason,
+  validFrom: g.validFrom,
+  validTo: g.validTo,
+})
+
+/**
+ * 依勾選結果組出整組授權（後端整組取代，同一權限只能一筆）。
+ * 取消勾選的移除；新勾選的加入，若原本有已過期的同權限紀錄，就以新設定取代那一筆。
+ */
+export function buildGrants(user, { added, removed, reason, validFrom, validTo }) {
+  const kept = user.permissionGrants
+    .filter((g) => !removed.includes(g.permission.permissionCode))
+    .filter((g) => !added.includes(g.permission.permissionCode))
+    .map(toGrantRequest)
+  const fresh = added.map((code) => ({ permissionCode: code, reason, validFrom, validTo }))
+  return [...kept, ...fresh]
+}
+
+/**
+ * 主管包含職員角色（後端 includedRoleCodes）：勾選主管時，被包含的職員角色顯示為已勾選並鎖住。
+ * 回傳每個角色的勾選狀態，被包含的角色不送給後端。
+ * @param {{ roleCode, name, includedRoleCodes? }[]} roles 可指派的角色
+ * @param {string[]} selected 使用者勾選的角色代碼
+ */
+export function roleChoices(roles, selected) {
+  const includedBy = {}
+  roles
+    .filter((r) => selected.includes(r.roleCode))
+    .forEach((r) => (r.includedRoleCodes ?? []).forEach((code) => (includedBy[code] ??= r.name)))
+  return roles.map((r) => ({
+    ...r,
+    includedBy: includedBy[r.roleCode] ?? '',
+    checked: selected.includes(r.roleCode) || Boolean(includedBy[r.roleCode]),
+  }))
+}
+
+// 送給後端的角色：去掉被主管包含的職員角色
+export function rolesToSubmit(roles, selected) {
+  const choices = roleChoices(roles, selected)
+  return selected.filter((code) => !choices.find((c) => c.roleCode === code)?.includedBy)
 }

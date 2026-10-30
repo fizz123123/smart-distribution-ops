@@ -1,12 +1,15 @@
 <script setup>
 import { computed, ref, shallowRef, watch } from 'vue'
+import RoleCheckboxes from '@/components/users/RoleCheckboxes.vue'
+import { rolesToSubmit } from '@/config/identity'
 
 // 編輯角色對話框：勾選要給的角色（整組取代），必填原因。
+// 主管包含職員角色：勾主管時職員角色鎖住，只送主管給後端。
 // APP_ADMIN 是固定的系統管理角色，不能透過畫面指派（後端 APP_ADMIN_AUTHORIZATION_IMMUTABLE）。
 const open = defineModel('open', { type: Boolean, required: true })
 
 const props = defineProps({
-  roles: { type: Array, required: true }, // 可選的角色 [{ roleCode, name }]
+  roles: { type: Array, required: true }, // 可選的角色 [{ roleCode, name, includedRoleCodes }]
   current: { type: Array, required: true }, // 目前的角色代碼
   isSubmitting: { type: Boolean, default: false },
   error: { type: Object, default: null },
@@ -25,14 +28,18 @@ watch(open, (isOpen) => {
   touched.value = false
 })
 
-const assignable = computed(() => props.roles.filter((r) => r.roleCode !== 'APP_ADMIN'))
 const canConfirm = computed(
   () => selected.value.length > 0 && reason.value.trim() !== '' && !props.isSubmitting,
 )
 
 function confirm() {
   touched.value = true
-  if (canConfirm.value) emit('confirm', { roleCodes: selected.value, reason: reason.value.trim() })
+  if (canConfirm.value) {
+    emit('confirm', {
+      roleCodes: rolesToSubmit(props.roles, selected.value),
+      reason: reason.value.trim(),
+    })
+  }
 }
 </script>
 
@@ -45,14 +52,7 @@ function confirm() {
     append-to-body
   >
     <p class="desc">角色決定使用者能用哪些功能。勾選的結果會<b>整組取代</b>目前的角色。</p>
-    <fieldset class="roles">
-      <legend class="sr-only">角色</legend>
-      <label v-for="r in assignable" :key="r.roleCode" class="role">
-        <input v-model="selected" type="checkbox" :value="r.roleCode" />
-        <span>{{ r.name }}</span>
-        <small class="mono">{{ r.roleCode }}</small>
-      </label>
-    </fieldset>
+    <RoleCheckboxes v-model="selected" :roles="roles" />
     <p v-if="touched && !selected.length" class="field-error">至少要選一個角色</p>
     <el-form label-position="top" @submit.prevent="confirm">
       <el-form-item label="原因" required for="roles-reason">
@@ -83,48 +83,8 @@ function confirm() {
   color: var(--ink-2);
 }
 
-.roles {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin: 0 0 12px;
-  padding: 0;
-  border: 0;
-}
-
-.role {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  cursor: pointer;
-}
-
-.role:has(input:checked) {
-  border-color: var(--accent);
-  background: var(--info-soft);
-}
-
-.role input {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--accent-strong);
-}
-
-.role span {
-  font-weight: 600;
-}
-
-.role small {
-  margin-left: auto;
-  font-size: 10.5px;
-  color: var(--ink-3);
-}
-
 .field-error {
-  margin: -6px 0 10px;
+  margin: 6px 0 10px;
   font-size: 12px;
   color: var(--danger);
 }
