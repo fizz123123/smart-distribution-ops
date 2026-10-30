@@ -266,6 +266,20 @@ public enum ErrorCode {
             "此調整已更正過，或本身就是更正紀錄，不能再更正。"
     ),
 
+    // Document
+    DOCUMENT_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "找不到正式文件。"
+    ),
+    DOCUMENT_ALREADY_EXISTS(
+            HttpStatus.CONFLICT,
+            "這張單據已經產生過正式文件。"
+    ),
+    DOCUMENT_INTEGRITY_FAILED(
+            HttpStatus.INTERNAL_SERVER_ERROR,
+            "正式文件的內容與產生時不一致，請聯絡系統管理員。"
+    ),
+
     // Concurrency control
     VERSION_CONFLICT(
             HttpStatus.CONFLICT,
