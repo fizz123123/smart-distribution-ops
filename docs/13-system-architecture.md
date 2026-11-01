@@ -2,7 +2,7 @@
 
 > 文件版本：v1.0  
 > 建立日期：2026-10-05  
-> 最後更新：  
+> 最後更新：2026-11-01  
 > 文件定位：說明系統元件、部署方式、後端模組邊界、外部整合、安全責任與主要資料流，作為開發、部署及簡報架構圖的共同參考。
 
 ---
@@ -166,8 +166,11 @@ smart-distribution-documents
 
 - Web Bucket 由 CloudFront OAC 唯讀存取，不開放直接公開讀取。
 - Document Bucket 只允許後端 IAM Instance Profile 存取。
-- MySQL 的 `document_file` 只保存文件類型、來源單據、S3 object key、檔案大小、雜湊、建立時間及作廢資訊。
-- PDF 下載須先通過後端權限檢查並留下「下載連結核發」紀錄，再由後端產生 3 分鐘有效的 S3 Presigned URL，以 `302 Redirect` 導向 S3 下載。短效網址不得保存於資料庫或寫入 Log；如需證明使用者確實完成下載，須另行啟用 S3 存取紀錄，不以連結核發紀錄代替。
+- MySQL 的 `document_file` 只保存文件類型、來源單據 ID、object key、檔案大小、SHA-256、建立時間及作廢資訊；每次下載都重算雜湊比對（D-061、D-065）。
+- PDF 下載須先通過後端權限檢查，並在應用程式 log 記錄下載連結核發（D-067），再由後端產生 3 分鐘有效的 S3 Presigned URL，以 `302 Redirect` 導向 S3 下載。短效網址不得保存於資料庫或寫入 Log；如需證明使用者確實完成下載，須另行啟用 S3 存取紀錄，不以連結核發紀錄代替。
+- 作廢的 PDF 仍可下載，原始檔不變，下載檔名加上 `-voided`（D-061）。
+
+**開發環境**：文件透過 `DocumentStorage` 介面保存，目前的實作存在本機目錄（設定 `app.document.local-dir`，預設為後端目錄下的 `storage/documents`，不提交版本控制），object key 與上方 S3 的路徑相同。開發環境的下載 API 直接回傳檔案；部署階段新增 S3 實作並改為 `302` 導向 Presigned URL，前端與 `document_file` 不需要調整。
 
 ## 5. 後端模組化單體
 
@@ -178,15 +181,15 @@ smart-distribution-documents
 | `identity` | 登入、使用者、角色、權限、JWT、密碼設定連結與寄信、閒置帳號停用排程 |
 | `masterdata` | 客戶、供應商、公司料號、客戶料號、價格、單位與付款條件 |
 | `approval` | 共用送審、核准與退回紀錄；各目標模組實作核准處理器，自行執行核准或退回後的效果 |
-| `sales` | SO、價格快照、核准後供應狀態及餘量取消 |
-| `procurement` | PO、關聯 SO 需求、採購在途、取消與短收結案 |
-| `inventory` | 收貨、庫存餘額、異動、預留、調整及一致性檢查 |
+| `sales` | SO、價格快照、核准後供應狀態及餘量取消；採購數量透過 `PurchaseSupplyProvider` 介面取得，不依賴 `purchasing`（D-066） |
+| `purchasing` | PO、關聯 SO 需求、採購在途、驗收入庫、取消與短收結案 |
+| `inventory` | 庫存餘額、異動、預留、調整及一致性檢查；收貨入庫與補足預留由 `purchasing` 呼叫庫存服務完成 |
 | `fulfillment` | DO、揀貨、正式出貨單及出貨過帳 |
 | `finance` | 客戶應收、外部發票資料、收款及核銷；不含供應商應付與付款 |
 | `analytics` | 儀表板指標、風險規則、趨勢及來源下鑽 |
 | `ai` | OpenAI Client、LINE 解析 DTO、營運摘要輸入輸出及防護 |
 | `integration.line` | LINE 綁定碼、帳號綁定、Webhook、簽章、event ID 防重與確認流程 |
-| `document` | PO／DO PDF 產生、S3 存取及文件狀態 |
+| `document` | PO／DO PDF 產生、檔案儲存（開發環境為本機，部署為 S3）及文件狀態；以文件類型加來源 ID 對應單據，不認得各種單據 |
 | `audit` | 重要操作、授權異動及資料前後值紀錄 |
 
 模組名稱對應 [03-functional-modules.md](03-functional-modules.md) 的產品模組，但程式模組可以依共同交易責任適度合併；不要求每個產品模組都成為獨立部署服務。
@@ -196,36 +199,35 @@ smart-distribution-documents
 採用「領域優先、領域內分層」：
 
 ```text
-com.example.smartdistribution
+com.smartdistribution
+├── identity
+├── masterdata
+├── approval
 ├── sales
 │   ├── controller
-│   ├── dto
-│   ├── service
+│   ├── dto（request、response）
 │   ├── entity
-│   └── repository
-├── procurement
-│   ├── controller
-│   ├── dto
-│   ├── service
-│   ├── entity
-│   └── repository
+│   ├── repository
+│   ├── service（介面、輔助類別、模組之間傳遞的 record）
+│   │   └── impl
+│   ├── mapper
+│   └── handler（核准處理器）
+├── purchasing          （同 sales 的分層）
 ├── inventory
-│   ├── controller
-│   ├── dto
-│   ├── service
-│   ├── entity
-│   └── repository
-├── fulfillment
-├── finance
-├── analytics
-├── ai
+├── document
+├── audit
+├── fulfillment         （尚未實作）
+├── finance             （尚未實作）
+├── analytics           （尚未實作）
+├── ai                  （尚未實作）
 ├── integration
-│   └── line
+│   └── line            （尚未實作）
 └── shared
     ├── config
     ├── security
     ├── exception
-    └── persistence
+    ├── persistence
+    └── web
 ```
 
 共用規則：
@@ -237,7 +239,27 @@ com.example.smartdistribution
 - DTO 不直接作為 JPA Entity，也不將 Entity 原樣回傳前端。
 - `shared` 只放真正跨模組的技術能力，不作為無法分類程式碼的集中區。
 
-### 5.3 跨模組交易
+### 5.3 Service 套件的命名慣例
+
+`service` 套件除了 Service 介面與實作，還有協助 Service 的輔助類別。輔助類別的後綴表示它的角色，看名字就知道用途：
+
+| 後綴 | 意思 | 查資料庫 | 例子 |
+| --- | --- | --- | --- |
+| `Service` | 對外的業務操作入口；實作放在 `impl`，類別名稱加 `Impl` | 會 | `SalesOrderService`、`PurchaseOrderServiceImpl` |
+| `Amounts` | 金額與數量的計算規則；只有 static 方法與常數，不是 Spring bean | 不會 | `SalesOrderAmounts`、`PurchaseOrderAmounts` |
+| `Quantities` | 查詢並算出數量，例如已取消量、已規劃未下單、採購在途 | 會 | `SalesOrderQuantities`、`PurchaseOrderQuantities` |
+| `MasterData` | 唯讀取用其他模組的主檔，不修改 | 會 | `SalesOrderMasterData`、`PurchaseOrderMasterData` |
+| `Validator` | 檢查規則，不通過時丟出業務例外 | 會 | `PurchaseOrderLineValidator` |
+| `Locks` | 依固定順序鎖定資料列，避免死結 | 會 | `InventoryBalanceLocks` |
+| `Resolver` | 從多個來源算出一個結果 | 會 | `EffectivePermissionResolver` |
+| `Issuer` | 產生並發出某個東西 | 會 | `PasswordTokenIssuer` |
+| `Provider` | 由別的模組實作的介面，用來讓模組依賴只有一個方向 | 由實作決定 | `PurchaseSupplyProvider`（sales 定義、purchasing 實作） |
+| `PdfLayout` | 某種單據的 PDF 版面，呼叫 `document` 模組的 `PdfRenderer` 產生 | 會（查料號名稱） | `PurchaseOrderPdfLayout` |
+| 沒有後綴的 record | 模組之間傳遞的資料，不是 API 的 DTO | 不會 | `ReservationLine`、`SalesOrderLineDemand`、`PurchaseSupply` |
+
+其他套件沿用 Spring 慣例：`Controller`、`Repository`、`Assembler`（需要查詢其他資料才能組出的回應）、`Mapper`（單純的欄位轉換）、`ApprovalHandler`（核准處理器）、`Projection`（查詢結果）。新增輔助類別時，先從上表挑一個符合的後綴；都不符合時，再新增後綴並補進本表。
+
+### 5.4 跨模組交易
 
 以下流程必須由應用服務在單一 MySQL 交易中完成，任一步驟失敗時全部回復：
 

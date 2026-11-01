@@ -2,7 +2,7 @@
 
 > 文件版本：v1.0  
 > 建立日期：2026-10-05  
-> 最後更新：2026-10-28  
+> 最後更新：2026-11-01  
 > 文件定位：依功能模組、角色權限、領域規則、資料模型及狀態轉換，定義前端畫面與後端 API 的責任邊界、主要操作、輸入輸出及錯誤處理。
 
 ---
@@ -348,7 +348,6 @@ SO詳情 至少顯示：
 | 取消申請送審 | `POST` | `/sales-order-cancellations/{id}/submit` | `SO_CANCELLATION_SUBMIT` |
 | 撤回取消申請 | `POST` | `/sales-order-cancellations/{id}/withdraw` | `SO_CANCELLATION_CREATE` |
 | 取消申請核准／退回 | `POST` | `/approval-requests/{id}/approve`、`/approval-requests/{id}/return` | `SO_CANCELLATION_APPROVE` |
-| 建立關聯 PO 草稿（P4） | `POST` | `/sales-orders/{id}/purchase-order-drafts` | `PO_CREATE` |
 | 通知本次出貨（P5） | `POST` | `/sales-orders/{id}/delivery-orders` | `DO_CREATE` |
 
 清單的 `keyword` 比對 SO 編號與客戶訂單編號。
@@ -430,22 +429,7 @@ SO 與取消申請的錯誤碼：
 | `SO_CANCELLATION_PENDING_EXISTS` | 409 | 該 SO 已有未完成的取消申請 |
 | `SO_CANCELLATION_QUANTITY_EXCEEDED` | 409 | 取消量超過可取消量，訊息含最多可取消數量 |
 
-建立關聯 PO 草稿：
-
-```json
-{
-  "supplierId": 1,
-  "lines": [
-    {
-      "salesOrderLineId": 1,
-      "quantity": 3,
-      "unit": "PCS"
-    }
-  ]
-}
-```
-
-後端必須鎖定並重新計算尚待規劃供應量，不能只相信畫面數字。
+SO 頁面的「轉 PO」只是把缺料明細預填到 PO 建立畫面，送出時呼叫 `POST /purchase-orders`（D-062），不另開 API。
 
 通知出貨 request：
 
@@ -480,15 +464,51 @@ SO 詳情 response 直接包含各明細的已預留、已規劃未下單、採�
 
 | 操作 | Method | Path | 權限 |
 | --- | --- | --- | --- |
-| 清單／詳情 | `GET` | `/purchase-orders`、`/purchase-orders/{id}` | `PO_VIEW` |
-| 待收貨 PO | `GET` | `/purchase-orders?receivingStatus=OPEN` | `GOODS_RECEIPT_VIEW` |
-| 建立一般補庫 PO | `POST` | `/purchase-orders` | `PO_CREATE` |
+| 清單 | `GET` | `/purchase-orders?keyword=&status=&supplierId=` | `PO_VIEW` |
+| 詳情 | `GET` | `/purchase-orders/{id}` | `PO_VIEW` |
+| 最近一次核准單價 | `GET` | `/purchase-orders/last-price?supplierId=&companyItemId=&unit=` | `PO_CREATE` |
+| 建立草稿 | `POST` | `/purchase-orders` | `PO_CREATE` |
 | 修改草稿 | `PATCH` | `/purchase-orders/{id}` | `PO_UPDATE` |
 | 送審 | `POST` | `/purchase-orders/{id}/submit` | `PO_SUBMIT` |
-| 下載正式 PDF | `GET` | `/purchase-orders/{id}/document` | `PO_DOCUMENT_VIEW` |
 | 放棄草稿 | `POST` | `/purchase-orders/{id}/cancel-draft` | `PO_UPDATE` |
+| 核准／退回 | `POST` | `/approval-requests/{id}/approve`、`/approval-requests/{id}/return` | `PO_APPROVE` |
 | 取消已核准 PO | `POST` | `/purchase-orders/{id}/cancel` | `PO_CLOSE` |
 | 短收結案 | `POST` | `/purchase-orders/{id}/close-short` | `PO_CLOSE` |
+| 下載正式 PDF | `GET` | `/purchase-orders/{id}/document` | `PO_DOCUMENT_VIEW` |
+
+清單的 `keyword` 比對 PO 編號。最近一次核准單價沒有資料時回 `{"unitPriceExcludingTax": null}`。
+
+建立或修改 PO 草稿：
+
+```json
+{
+  "supplierId": 1,
+  "expectedArrivalDate": "2026-11-10",
+  "remark": null,
+  "lines": [
+    {
+      "companyItemId": 8,
+      "salesOrderLineId": 301,
+      "quantity": 3,
+      "unit": "PCS",
+      "unitPriceExcludingTax": 120
+    },
+    {
+      "companyItemId": 8,
+      "salesOrderLineId": null,
+      "quantity": 5,
+      "unit": "PCS",
+      "unitPriceExcludingTax": 120
+    }
+  ],
+  "version": 0
+}
+```
+
+- `salesOrderLineId` 有值就是關聯該 SO 明細的缺料採購，沒有值就是一般補庫（D-062）。關聯的明細必須來自已核准的 SO、料號相同，數量不超過該明細的尚待規劃量；建立、修改與送審時都重新檢查。
+- 草稿只要求供應商；預計到貨日、明細與單價可以之後再補，送審時才檢查是否完整。
+- `unit` 為公司料號的基準單位，或已設定換算的單位；`unitPriceExcludingTax` 以訂購單位計，最多 2 位小數。
+- `version` 只在修改時帶入；送審與放棄草稿的 request 只有 `version`。修改採整份取代，明細全部重新送出。
 
 取消或短收 request：
 
@@ -499,13 +519,29 @@ SO 詳情 response 直接包含各明細的已預留、已規劃未下單、採�
 }
 ```
 
-核准 PO 使用共用核准 API。核准成功後才產生正式 PDF 並列入採購在途。取消已核准 PO 僅允許沒有任何已過帳收貨的 PO；部分收貨後只能短收結案。下載正式 PDF 時，後端先驗證 `PO_DOCUMENT_VIEW` 與資料範圍、保存下載連結核發紀錄，再回傳 `302 Redirect` 至 3 分鐘有效的 S3 Presigned URL。
+PO 詳情 response 的重點欄位：
+
+| 欄位 | 說明 |
+| --- | --- |
+| `poNumber`、`status`、`version` | 編號、狀態與目前版本 |
+| `untaxedAmount` | 送審後為保存的未稅總額；草稿在每筆明細都有單價時試算，否則為 `null`。稅額與含稅總額只顯示在 PDF（D-064） |
+| `cancellation`、`shortClose` | 取消或短收結案的原因、操作者與時間；沒有發生時為 `null`。全部收齊而結案的 PO，`shortClose` 為 `null` |
+| `lines[].source` | 關聯的 SO 明細 ID、SO ID、SO 編號與行號；一般補庫為 `null` |
+| `lines[].acceptedBaseQty`、`cancelledBaseQty`、`openBaseQty` | 累計合格入庫、不再等的數量與未結量，皆為基準單位 |
+| `receipts` | 這張 PO 的收貨單編號與到貨日 |
+
+核准 PO 使用共用核准 API。核准時只檢查供應商與公司料號仍啟用；來源 SO 需求變少或單價和最近一次核准單價不同時，核准申請詳情的 `warnings` 列出提示，不擋核准（D-063）。核准成功後產生正式 PDF 並列入採購在途。
+
+取消已核准 PO 只允許沒有任何收貨的 PO，取消後正式 PDF 作廢；部分收貨後只能短收結案，PDF 不作廢（D-069）。
+
+下載正式 PDF 時，後端驗證 `PO_DOCUMENT_VIEW` 後回傳檔案（`application/pdf`），並在應用程式 log 記錄下載（D-067）。作廢的 PDF 仍可下載，檔名加上 `-voided`，例如 `PO-000001-voided.pdf`。部署換成 S3 後，改為回傳 `302 Redirect` 至 3 分鐘有效的 S3 Presigned URL（D-061）。
 
 ### 7.2 收貨入庫
 
 | 操作 | Method | Path | 權限 |
 | --- | --- | --- | --- |
-| 收貨紀錄 | `GET` | `/goods-receipts`、`/goods-receipts/{id}` | `GOODS_RECEIPT_VIEW` |
+| 待收貨 PO | `GET` | `/goods-receipts/open-purchase-orders` | `GOODS_RECEIPT_VIEW` |
+| 收貨紀錄 | `GET` | `/goods-receipts?purchaseOrderId=`、`/goods-receipts/{id}` | `GOODS_RECEIPT_VIEW` |
 | 過帳收貨 | `POST` | `/purchase-orders/{id}/goods-receipts` | `GOODS_RECEIPT_POST` |
 
 過帳收貨 request：
@@ -517,7 +553,6 @@ SO 詳情 response 直接包含各明細的已預留、已規劃未下單、採�
     {
       "purchaseOrderLineId": 1,
       "receivedQuantity": 10,
-      "unit": "PCS",
       "acceptedQuantity": 9,
       "damagedQuantity": 1,
       "nonconformingQuantity": 0,
@@ -527,9 +562,47 @@ SO 詳情 response 直接包含各明細的已預留、已規劃未下單、採�
 }
 ```
 
+- 數量使用 PO 明細的單位，不另外輸入單位；後端依 PO 明細的換算倍率換成基準數量。
+- 實收 ＝ 合格 ＋ 損壞 ＋ 規格不符；有損壞或規格不符時 `exceptionReason` 必填；實收不得超過未結量（D-068）。
+- 每筆 PO 明細在同一次收貨只能出現一次，而且必須尚未結案。
+- 只有合格數量入庫。關聯 SO 的明細先補足來源 SO 的預留，其餘成為一般庫存（D-063）。
+
 送出過帳前，畫面須再次顯示 PO、品項、實收、合格、損壞及規格不符數量，並要求使用者確認。過帳成功後，收貨紀錄不得修改或刪除；本次交付版本不提供收貨沖銷，庫存調整也不得用來偽裝更正 PO 收貨進度。
 
-倉管以 `GET /purchase-orders?receivingStatus=OPEN` 取得待收貨清單；此查詢只回傳驗收所需的 PO 與未結數量，不因使用 `purchase-orders` 路徑而開放 PO 採購單價或完整 PO 管理資料。
+待收貨清單列出狀態為 `APPROVED / PARTIALLY_RECEIVED` 的 PO，每筆明細回傳訂購數量、已合格入庫與未結數量（PO 明細的單位），不含採購單價。WAREHOUSE 沒有 `PO_VIEW`，不能查看 PO 本身。收貨單詳情同樣不含單價。
+
+PO 與收貨的錯誤碼：
+
+| 錯誤碼 | HTTP | 情境 |
+| --- | --- | --- |
+| `PURCHASE_ORDER_NOT_FOUND`、`GOODS_RECEIPT_NOT_FOUND` | 404 | 資源不存在 |
+| `PO_STATUS_CONFLICT` | 409 | PO 狀態不允許該操作 |
+| `PO_SUPPLIER_INACTIVE` | 409 | 建立或修改時供應商未啟用 |
+| `PO_ITEM_INACTIVE` | 409 | 建立或修改時公司料號未啟用 |
+| `PO_UNIT_INVALID` | 409 | 單位不是基準單位也沒有設定換算 |
+| `PO_LINE_INVALID` | 400 | 明細小數位不符或內容不正確 |
+| `PO_SUBMIT_INFO_INCOMPLETE` | 400 | 送審時預計到貨日、明細或單價缺漏 |
+| `PO_SOURCE_INVALID` | 409 | 來源 SO 未核准，或料號和採購明細不同 |
+| `PO_SOURCE_QUANTITY_EXCEEDED` | 409 | 數量超過來源 SO 明細的尚待規劃量 |
+| `PO_MASTER_DATA_INACTIVE` | 409 | 核准時供應商或公司料號已停用 |
+| `PO_HAS_RECEIPTS` | 409 | 已有收貨不能整張取消，請改用短收結案 |
+| `GOODS_RECEIPT_LINE_INVALID` | 400 | 收貨明細不屬於這張 PO、已結案或重複出現 |
+| `GOODS_RECEIPT_QUANTITY_INVALID` | 400 | 小數位不符、數量加總不等於實收，或有異常數量卻沒填原因 |
+| `GOODS_RECEIPT_QUANTITY_EXCEEDED` | 409 | 實收超過未結量，訊息含最多還能收的數量 |
+| `DOCUMENT_NOT_FOUND` | 404 | 這張 PO 還沒有正式 PDF |
+| `DOCUMENT_INTEGRITY_FAILED` | 500 | PDF 內容與產生時的雜湊不一致，不提供下載 |
+
+PO 與收貨細部權限與預設角色：
+
+| 權限 | 預設角色 |
+| --- | --- |
+| `PO_VIEW` | PURCHASING、PURCHASING_MANAGER、MANAGER |
+| `PO_CREATE`、`PO_UPDATE`、`PO_SUBMIT` | PURCHASING、PURCHASING_MANAGER |
+| `PO_APPROVE` | PURCHASING_MANAGER、MANAGER（替代核准） |
+| `PO_CLOSE` | PURCHASING_MANAGER |
+| `PO_DOCUMENT_VIEW` | PURCHASING、PURCHASING_MANAGER、MANAGER |
+| `GOODS_RECEIPT_VIEW` | PURCHASING、PURCHASING_MANAGER、WAREHOUSE、WAREHOUSE_MANAGER、MANAGER |
+| `GOODS_RECEIPT_POST` | WAREHOUSE、WAREHOUSE_MANAGER |
 
 ### 7.3 庫存與調整
 
@@ -864,7 +937,7 @@ POST /integrations/line/webhook
 
 - JWT access token 與 refresh token 的有效時間及撤銷方式。
 - 查詢 API 的實際索引、最大分頁筆數及模糊搜尋策略。
-- 權限代碼的完整 seed 清單及各角色預設對應（帳號權限見 D-036，主檔權限見第 5.3 節，SO 與庫存權限見 6.3、7.3 節，其餘模組實作時補齊）。
+- 權限代碼的完整 seed 清單及各角色預設對應（帳號權限見 D-036，主檔權限見第 5.3 節，SO 權限見 6.3 節，PO 與收貨權限見 7.2 節，庫存權限見 7.3 節，其餘模組實作時補齊）。
 - API 文件以 SpringDoc OpenAPI 產生的 schema 與範例。
 - LINE 確認 token 與 webhook event ID 的保存期限，以及收款 `clientRequestId` 的重送回應策略。
 

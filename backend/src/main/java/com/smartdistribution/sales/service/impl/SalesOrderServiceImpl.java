@@ -295,7 +295,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         }
     }
 
-    //未指定時是建立者；負責業務必須是啟用中且具有業務角色的使用者
+    //未指定時是建立者；負責業務必須是啟用中、且有建立 SO 權限的使用者
     private Long resolveResponsibleSales(Long requestedUserId, Long currentUserId) {
         Long userId = requestedUserId != null ? requestedUserId : currentUserId;
 

@@ -40,6 +40,15 @@ public interface InventoryService {
     );
 
     /**
+     * PO 驗收時呼叫：鎖定相關料號的餘額列，合格數量入庫並寫入 GOODS_RECEIPT 異動；
+     * 關聯 SO 的明細再補足預留，寫入 RESERVE 事件（來源 PO_RECEIPT）
+     *
+     * <p>補足量 ＝ min(合格量, max(0, 剩餘需求 － 目前預留))，其餘合格數量成為一般可用庫存；
+     * 一般補庫的入庫不會改配給任何缺料 SO
+     */
+    void receiveForPurchaseOrder(List<ReceiptLine> lines, Long actorId);
+
+    /**
      * @return SO 明細 ID → 目前有效預留；沒有預留列的明細不會出現在結果中
      */
     Map<Long, BigDecimal> findOpenQtyBySalesOrderLines(Collection<Long> salesOrderLineIds);

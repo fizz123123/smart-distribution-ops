@@ -7,5 +7,6 @@ package com.smartdistribution.inventory.entity;
 public enum InventoryTransactionType {
     OPENING_BALANCE,    //source_id → inventory_adjustment
     ADJUSTMENT,         //source_id → inventory_adjustment
-    ADJUSTMENT_REVERSAL //source_id → inventory_adjustment（反向更正的那一張）
+    ADJUSTMENT_REVERSAL, //source_id → inventory_adjustment（反向更正的那一張）
+    GOODS_RECEIPT        //source_id → goods_receipt_line（PO 驗收的合格數量）
 }

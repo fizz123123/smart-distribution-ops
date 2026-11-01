@@ -5,5 +5,6 @@ package com.smartdistribution.inventory.entity;
  */
 public enum ReservationSourceType {
     SO_APPROVAL,    // source_id → approval_request
-    SO_CANCELLATION // source_id → sales_order_cancellation
+    SO_CANCELLATION, // source_id → sales_order_cancellation
+    PO_RECEIPT       // source_id → goods_receipt_line（關聯 PO 入庫時補足預留）
 }

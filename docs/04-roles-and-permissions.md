@@ -2,7 +2,7 @@
 
 > 文件版本：v1.0  
 > 建立日期：2026-09-29  
-> 最後更新：2026-10-28  
+> 最後更新：2026-11-01  
 > 文件定位：定義系統角色、兼任原則、核准責任與資料查看邊界。
 
 ## 角色模型
@@ -51,7 +51,8 @@ APP_ADMIN 不因管理帳號而自動取得業務資料、交易或核准權限�
 | 客戶價格 | SALES | SALES_MANAGER 或具相應權限的 MANAGER | 保存未稅 TWD 單價與計價單位；核准後立即啟用並取代舊版本；SO 草稿可暫缺價格，但送審須引用 `ACTIVE` 價格 |
 | 銷售訂單 SO | SALES、SALES_MANAGER；可另行指定負責業務 | SALES_MANAGER 或具相應權限的 MANAGER | 送審時保存交易快照；核准前不預留、不可建立關聯 PO、不可通知出貨；`DRAFT / RETURNED` 可放棄為 `CANCELLED` |
 | 供應商 | PURCHASING | PURCHASING_MANAGER 或具相應權限的 MANAGER | 核准後可成為正式採購來源；停用或重新啟用由 PURCHASING_MANAGER 直接執行並留存原因 |
-| 採購單 PO | PURCHASING | PURCHASING_MANAGER 或具相應權限的 MANAGER | 核准後才產生正式 PO PDF、向供應商下單並列入採購在途 |
+| 採購單 PO | PURCHASING | PURCHASING_MANAGER 或具相應權限的 MANAGER | 核准後才產生正式 PO PDF、向供應商下單並列入採購在途；取消尚未收貨的已核准 PO 或短收結案由 PURCHASING_MANAGER 直接執行並留存原因（D-069） |
+| PO 收貨 | WAREHOUSE | 不另設核准 | PO 已核准且有未結數量；建立即過帳，只有合格數量入庫；過帳後不得修改或沖銷（D-068） |
 | 安全庫存政策 | PURCHASING_MANAGER 或具相應細部權限者直接設定 | 不另設核准 | 以庫存基準單位保存；修改須留下前後值、操作者與時間，其他相關角色只能查看 |
 | 出貨單 DO | SALES 通知出貨、系統建立 | 不另設主管核准 | SO 已核准，且預計出貨量均已預留；由 WAREHOUSE 確認不高於預計量的實際出貨量，完成揀貨與 PDF 後轉為 `READY`，交車時過帳 |
 | 簡化應收 | 系統依已過帳 DO 建立 | FINANCE 確認 | 一張 DO 對一筆應收；外部發票資料填妥後轉為正式應收 |
@@ -59,6 +60,20 @@ APP_ADMIN 不因管理帳號而自動取得業務資料、交易或核准權限�
 | 庫存例外 | WAREHOUSE_MANAGER 或具相應細部權限者 | 不另設核准 | 直接過帳具原因且可追溯的調整；調減不得超過可用庫存，侵蝕預留時拒絕；更正以相反方向的新調整處理 |
 | 財務例外 | FINANCE | FINANCE_MANAGER | 不直接改寫已完成的原始交易；保留例外原因與處理紀錄 |
 | 一般使用者的角色與個別權限 | APP_ADMIN | 不得由帳號本人處理 | 保存異動前後差異、操作者與時間；APP_ADMIN 授權不在 API 可異動範圍；個別授權以整組替換方式新增、修改或刪除，同一權限只能授予一次 |
+
+## 採購與收貨權限
+
+| 權限 | 預設角色 | 用途 |
+| --- | --- | --- |
+| `PO_VIEW` | PURCHASING、PURCHASING_MANAGER、MANAGER | 查看 PO 清單與詳情，包含採購單價 |
+| `PO_CREATE`、`PO_UPDATE`、`PO_SUBMIT` | PURCHASING、PURCHASING_MANAGER | 建立、修改、放棄與送審 PO 草稿 |
+| `PO_APPROVE` | PURCHASING_MANAGER、MANAGER（替代核准） | 核准或退回 PO |
+| `PO_CLOSE` | PURCHASING_MANAGER | 取消尚未收貨的已核准 PO、短收結案 |
+| `PO_DOCUMENT_VIEW` | PURCHASING、PURCHASING_MANAGER、MANAGER | 下載正式 PO PDF |
+| `GOODS_RECEIPT_VIEW` | PURCHASING、PURCHASING_MANAGER、WAREHOUSE、WAREHOUSE_MANAGER、MANAGER | 查看待收貨清單與收貨紀錄；回應不含採購單價 |
+| `GOODS_RECEIPT_POST` | WAREHOUSE、WAREHOUSE_MANAGER | 過帳收貨 |
+
+WAREHOUSE 沒有 `PO_VIEW`，看不到 PO 採購單價；驗收所需的 PO 與未結數量由待收貨清單提供。
 
 ## 分析資料查看範圍
 
