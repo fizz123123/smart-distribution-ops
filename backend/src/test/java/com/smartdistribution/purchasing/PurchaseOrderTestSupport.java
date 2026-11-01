@@ -228,6 +228,21 @@ abstract class PurchaseOrderTestSupport extends SalesOrderTestSupport {
         );
     }
 
+    Long poVersion(String token, Long purchaseOrderId) throws Exception {
+        return readLong(getPo(token, purchaseOrderId).andExpect(status().isOk()).andReturn(), "$.version");
+    }
+
+    //action 是 cancel 或 close-short，兩者的 request 相同
+    ResultActions closePo(String token, String action, Long purchaseOrderId, String reason, Long version)
+            throws Exception {
+        return mockMvc.perform(post("/api/v1/purchase-orders/{id}/" + action, purchaseOrderId)
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"reason": "%s", "version": %d}
+                        """.formatted(reason, version)));
+    }
+
     // ===== 收貨 =====
 
     String receiptLine(Long purchaseOrderLineId, String received, String accepted, String damaged, String reason) {

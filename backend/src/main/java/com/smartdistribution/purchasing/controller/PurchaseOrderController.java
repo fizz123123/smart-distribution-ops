@@ -3,6 +3,7 @@ package com.smartdistribution.purchasing.controller;
 import com.smartdistribution.document.service.StoredDocument;
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
 import com.smartdistribution.purchasing.dto.request.CreatePurchaseOrderRequest;
+import com.smartdistribution.purchasing.dto.request.PurchaseOrderReasonRequest;
 import com.smartdistribution.purchasing.dto.request.PurchaseOrderVersionRequest;
 import com.smartdistribution.purchasing.dto.request.UpdatePurchaseOrderRequest;
 import com.smartdistribution.purchasing.dto.response.LastPriceResponse;
@@ -93,6 +94,22 @@ public class PurchaseOrderController {
             @Valid @RequestBody PurchaseOrderVersionRequest request
     ) {
         return ResponseEntity.ok(purchaseOrderService.cancelDraft(purchaseOrderId, request));
+    }
+
+    @PostMapping("/{purchaseOrderId}/cancel")
+    public ResponseEntity<PurchaseOrderDetailResponse> cancelApproved(
+            @PathVariable Long purchaseOrderId,
+            @Valid @RequestBody PurchaseOrderReasonRequest request
+    ) {
+        return ResponseEntity.ok(purchaseOrderService.cancelApproved(purchaseOrderId, request));
+    }
+
+    @PostMapping("/{purchaseOrderId}/close-short")
+    public ResponseEntity<PurchaseOrderDetailResponse> closeShort(
+            @PathVariable Long purchaseOrderId,
+            @Valid @RequestBody PurchaseOrderReasonRequest request
+    ) {
+        return ResponseEntity.ok(purchaseOrderService.closeShort(purchaseOrderId, request));
     }
 
     @GetMapping("/{purchaseOrderId}/document")

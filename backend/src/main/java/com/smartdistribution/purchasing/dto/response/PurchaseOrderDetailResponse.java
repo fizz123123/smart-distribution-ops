@@ -23,6 +23,8 @@ public record PurchaseOrderDetailResponse(
         UserRef createdBy,
         Instant submittedAt,
         Instant approvedAt,
+        Closure cancellation,
+        Closure shortClose,
         Instant createdAt,
         Instant updatedAt,
         Long version,
@@ -63,8 +65,17 @@ public record PurchaseOrderDetailResponse(
             BigDecimal unitPriceExcludingTax,
             BigDecimal lineAmountExcludingTax,
             BigDecimal acceptedBaseQty,
+            BigDecimal cancelledBaseQty,
             BigDecimal openBaseQty,
             PurchaseOrderLineStatus status
+    ) {
+    }
+
+    //取消或短收結案的紀錄；沒發生過時整個是 null
+    public record Closure(
+            String reason,
+            UserRef by,
+            Instant at
     ) {
     }
 

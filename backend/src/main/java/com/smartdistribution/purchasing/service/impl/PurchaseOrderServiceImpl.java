@@ -9,6 +9,7 @@ import com.smartdistribution.masterdata.common.MasterDataStatus;
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
 import com.smartdistribution.masterdata.supplier.entity.Supplier;
 import com.smartdistribution.purchasing.dto.request.CreatePurchaseOrderRequest;
+import com.smartdistribution.purchasing.dto.request.PurchaseOrderReasonRequest;
 import com.smartdistribution.purchasing.dto.request.PurchaseOrderVersionRequest;
 import com.smartdistribution.purchasing.dto.request.UpdatePurchaseOrderRequest;
 import com.smartdistribution.purchasing.dto.response.LastPriceResponse;
@@ -202,6 +203,40 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     }
 
     @Override
+    @Transactional
+    @PreAuthorize("hasAuthority('PO_CLOSE')")
+    public PurchaseOrderDetailResponse cancelApproved(Long purchaseOrderId, PurchaseOrderReasonRequest request) {
+        //和收貨一樣先鎖 PO 表頭，避免取消的同時有人在收貨
+        PurchaseOrder purchaseOrder = findPurchaseOrderForUpdate(purchaseOrderId);
+        verifyVersion(purchaseOrder, request.version());
+
+        Long actorId = currentUserProvider.getCurrentUserId();
+        purchaseOrder.cancelApproved(actorId, request.reason(), Instant.now());
+        purchaseOrderLineRepository.findAllByPurchaseOrderIdOrderByLineNoAsc(purchaseOrderId)
+                .forEach(PurchaseOrderLine::cancel);
+
+        documentService.voidDocument(DocumentType.PURCHASE_ORDER, purchaseOrderId, actorId, request.reason().strip());
+        purchaseOrderRepository.flush();
+
+        return purchaseOrderAssembler.toDetail(purchaseOrder);
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize("hasAuthority('PO_CLOSE')")
+    public PurchaseOrderDetailResponse closeShort(Long purchaseOrderId, PurchaseOrderReasonRequest request) {
+        PurchaseOrder purchaseOrder = findPurchaseOrderForUpdate(purchaseOrderId);
+        verifyVersion(purchaseOrder, request.version());
+
+        purchaseOrder.closeShort(currentUserProvider.getCurrentUserId(), request.reason(), Instant.now());
+        purchaseOrderLineRepository.findAllByPurchaseOrderIdOrderByLineNoAsc(purchaseOrderId)
+                .forEach(PurchaseOrderLine::closeShort);
+        purchaseOrderRepository.flush();
+
+        return purchaseOrderAssembler.toDetail(purchaseOrder);
+    }
+
+    @Override
     @PreAuthorize("hasAuthority('PO_DOCUMENT_VIEW')")
     public StoredDocument downloadDocument(Long purchaseOrderId) {
         PurchaseOrder purchaseOrder = findPurchaseOrderById(purchaseOrderId);
@@ -246,6 +281,11 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
     private PurchaseOrder findPurchaseOrderById(Long purchaseOrderId) {
         return purchaseOrderRepository.findById(purchaseOrderId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PURCHASE_ORDER_NOT_FOUND));
+    }
+
+    private PurchaseOrder findPurchaseOrderForUpdate(Long purchaseOrderId) {
+        return purchaseOrderRepository.findByIdForUpdate(purchaseOrderId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PURCHASE_ORDER_NOT_FOUND));
     }
 

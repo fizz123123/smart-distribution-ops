@@ -63,6 +63,26 @@ public class PurchaseOrder extends TimestampedEntity {
     @Column(name = "approved_at")
     private Instant approvedAt;
 
+    //取消已核准 PO 時寫入
+    @Column(name = "cancel_reason", length = 500)
+    private String cancelReason;
+
+    @Column(name = "cancelled_by")
+    private Long cancelledBy;
+
+    @Column(name = "cancelled_at")
+    private Instant cancelledAt;
+
+    //短收結案時寫入；全部收齊而結案的 PO 這三個欄位是空的
+    @Column(name = "close_reason", length = 500)
+    private String closeReason;
+
+    @Column(name = "closed_by")
+    private Long closedBy;
+
+    @Column(name = "closed_at")
+    private Instant closedAt;
+
     //明細存在另一張表，整批取代時更新這個欄位，讓表頭的版本跟著加 1
     @Column(name = "lines_updated_at")
     private Instant linesUpdatedAt;
@@ -131,6 +151,33 @@ public class PurchaseOrder extends TimestampedEntity {
         }
 
         this.status = allLinesDone ? PurchaseOrderStatus.CLOSED : PurchaseOrderStatus.PARTIALLY_RECEIVED;
+    }
+
+    /**
+     * 取消已核准、還沒有任何收貨的 PO；有收貨的要改用短收結案
+     */
+    public void cancelApproved(Long actorId, String reason, Instant cancelledAt) {
+        if (status == PurchaseOrderStatus.PARTIALLY_RECEIVED) {
+            throw new BusinessException(ErrorCode.PO_HAS_RECEIPTS);
+        }
+        ensureStatus(PurchaseOrderStatus.APPROVED);
+
+        this.cancelReason = reason.strip();
+        this.cancelledBy = actorId;
+        this.cancelledAt = cancelledAt;
+        this.status = PurchaseOrderStatus.CANCELLED;
+    }
+
+    /**
+     * 短收結案：已部分收貨的 PO，剩下的數量不再等，直接結案
+     */
+    public void closeShort(Long actorId, String reason, Instant closedAt) {
+        ensureStatus(PurchaseOrderStatus.PARTIALLY_RECEIVED);
+
+        this.closeReason = reason.strip();
+        this.closedBy = actorId;
+        this.closedAt = closedAt;
+        this.status = PurchaseOrderStatus.CLOSED;
     }
 
     //放棄草稿；已送審的 PO 要先被退回才能放棄

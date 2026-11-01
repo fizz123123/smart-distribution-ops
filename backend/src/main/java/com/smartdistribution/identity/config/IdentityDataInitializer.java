@@ -96,6 +96,7 @@ public class IdentityDataInitializer implements ApplicationRunner {
             new PermissionSeed("PO", "UPDATE"),
             new PermissionSeed("PO", "SUBMIT"),
             new PermissionSeed("PO", "APPROVE"),
+            new PermissionSeed("PO", "CLOSE"),
             new PermissionSeed("PO_DOCUMENT", "VIEW"),
             new PermissionSeed("GOODS_RECEIPT", "VIEW"),
             new PermissionSeed("GOODS_RECEIPT", "POST")
@@ -169,7 +170,8 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "SUPPLIER_APPROVE",
             "SUPPLIER_STATUS_MANAGE",
             "INVENTORY_POLICY_MANAGE",
-            "PO_APPROVE"
+            "PO_APPROVE",
+            "PO_CLOSE"
     );
 
     private static final List<String> WAREHOUSE_PERMISSIONS = List.of(

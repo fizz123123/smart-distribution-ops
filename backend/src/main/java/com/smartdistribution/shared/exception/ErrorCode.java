@@ -307,6 +307,10 @@ public enum ErrorCode {
             HttpStatus.CONFLICT,
             "供應商或公司料號已停用，無法核准。"
     ),
+    PO_HAS_RECEIPTS(
+            HttpStatus.CONFLICT,
+            "這張 PO 已經有收貨，不能整張取消，請改用短收結案。"
+    ),
 
     // Goods receipt
     GOODS_RECEIPT_NOT_FOUND(

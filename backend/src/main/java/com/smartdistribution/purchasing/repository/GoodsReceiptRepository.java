@@ -20,6 +20,4 @@ public interface GoodsReceiptRepository extends JpaRepository<GoodsReceipt, Long
     Page<GoodsReceipt> search(@Param("purchaseOrderId") Long purchaseOrderId, Pageable pageable);
 
     List<GoodsReceipt> findAllByPurchaseOrderIdOrderByIdAsc(Long purchaseOrderId);
-
-    boolean existsByPurchaseOrderId(Long purchaseOrderId);
 }

@@ -20,6 +20,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -107,6 +108,8 @@ public class PurchaseOrderAssembler {
                 ),
                 purchaseOrder.getSubmittedAt(),
                 purchaseOrder.getApprovedAt(),
+                toClosure(purchaseOrder.getCancelReason(), purchaseOrder.getCancelledBy(), purchaseOrder.getCancelledAt()),
+                toClosure(purchaseOrder.getCloseReason(), purchaseOrder.getClosedBy(), purchaseOrder.getClosedAt()),
                 purchaseOrder.getCreatedAt(),
                 purchaseOrder.getUpdatedAt(),
                 purchaseOrder.getVersion(),
@@ -119,6 +122,18 @@ public class PurchaseOrderAssembler {
                                 receipt.getReceivedDate()
                         ))
                         .toList()
+        );
+    }
+
+    private PurchaseOrderDetailResponse.Closure toClosure(String reason, Long userId, Instant at) {
+        if (at == null) {
+            return null;
+        }
+
+        return new PurchaseOrderDetailResponse.Closure(
+                reason,
+                new PurchaseOrderDetailResponse.UserRef(userId, userDirectoryService.findName(userId)),
+                at
         );
     }
 
@@ -146,6 +161,7 @@ public class PurchaseOrderAssembler {
                 line.getUnitPriceExcludingTax(),
                 line.getLineAmountExcludingTax(),
                 line.getAcceptedBaseQty(),
+                line.getCancelledBaseQty(),
                 line.openBaseQty(),
                 line.getStatus()
         );

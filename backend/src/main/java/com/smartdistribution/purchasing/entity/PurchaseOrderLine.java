@@ -133,6 +133,22 @@ public class PurchaseOrderLine {
         }
     }
 
+    //整張 PO 取消：全部數量都不再等
+    public void cancel() {
+        this.cancelledBaseQty = baseQty;
+        this.status = PurchaseOrderLineStatus.CANCELLED;
+    }
+
+    //短收結案：還沒收齊的明細，剩下的未結量轉為不再等；已完成的明細不變
+    public void closeShort() {
+        if (!isOpen()) {
+            return;
+        }
+
+        this.cancelledBaseQty = cancelledBaseQty.add(openBaseQty());
+        this.status = PurchaseOrderLineStatus.CLOSED_SHORT;
+    }
+
     //送審時用最新的換算倍率重算基準數量與小計
     public void applyConversion(BigDecimal conversionFactor) {
         this.conversionFactor = conversionFactor;
