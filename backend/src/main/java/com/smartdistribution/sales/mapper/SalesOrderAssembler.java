@@ -15,6 +15,8 @@ import com.smartdistribution.sales.entity.SalesOrder;
 import com.smartdistribution.sales.entity.SalesOrderLine;
 import com.smartdistribution.sales.entity.SalesOrderStatus;
 import com.smartdistribution.sales.repository.SalesOrderLineRepository;
+import com.smartdistribution.sales.service.PurchaseSupply;
+import com.smartdistribution.sales.service.PurchaseSupplyProvider;
 import com.smartdistribution.sales.service.SalesOrderAmounts;
 import com.smartdistribution.sales.service.SalesOrderMasterData;
 import com.smartdistribution.sales.service.SalesOrderQuantities;
@@ -43,6 +45,7 @@ public class SalesOrderAssembler {
     private final UserDirectoryService userDirectoryService;
     private final InventoryService inventoryService;
     private final SalesOrderQuantities salesOrderQuantities;
+    private final PurchaseSupplyProvider purchaseSupplyProvider;
 
     public Page<SalesOrderSummaryResponse> toSummaries(Page<SalesOrder> salesOrders) {
         Set<Long> customerIds = new HashSet<>();
@@ -211,6 +214,10 @@ public class SalesOrderAssembler {
                 ? salesOrderQuantities.findCancelledQty(lineIds)
                 : Map.of();
 
+        Map<Long, PurchaseSupply> purchaseByLine = approved
+                ? purchaseSupplyProvider.findBySalesOrderLines(lineIds)
+                : Map.of();
+
         return lines.stream()
                 .map(line -> {
                     CompanyItem item = items.get(line.getCompanyItemId());
@@ -231,23 +238,25 @@ public class SalesOrderAssembler {
                             line.getCustomerPriceId(),
                             line.getUnitPriceExcludingTax(),
                             line.getLineAmountExcludingTax(),
-                            approved ? toSupply(line, reservedByLine, cancelledByLine) : null
+                            approved ? toSupply(line, reservedByLine, cancelledByLine, purchaseByLine) : null
                     );
                 }).toList();
     }
 
     /**
      * 尚待規劃 ＝ 有效訂購量 － 已出貨 － 已預留 － 已規劃未下單 － 採購在途，最低為 0
-     * 有效訂購量 ＝ 訂購基準數量 － 已核准取消量；PO、DO 完成前，規劃、在途與出貨先固定為 0
+     * 有效訂購量 ＝ 訂購基準數量 － 已核准取消量；已規劃未下單與採購在途由採購模組提供；DO 完成前出貨先固定為 0
      */
     private Supply toSupply(
             SalesOrderLine line,
             Map<Long, BigDecimal> reservedByLine,
-            Map<Long, BigDecimal> cancelledByLine
+            Map<Long, BigDecimal> cancelledByLine,
+            Map<Long, PurchaseSupply> purchaseByLine
     ) {
         BigDecimal reservedQty = reservedByLine.getOrDefault(line.getId(), BigDecimal.ZERO);
-        BigDecimal plannedNotOrderedQty = BigDecimal.ZERO;
-        BigDecimal inTransitQty = BigDecimal.ZERO;
+        PurchaseSupply purchase = purchaseByLine.getOrDefault(line.getId(), PurchaseSupply.NONE);
+        BigDecimal plannedNotOrderedQty = purchase.plannedNotOrderedQty();
+        BigDecimal inTransitQty = purchase.inTransitQty();
         BigDecimal shippedQty = salesOrderQuantities.shippedQty(line);
         BigDecimal cancelledQty = cancelledByLine.getOrDefault(line.getId(), BigDecimal.ZERO);
 

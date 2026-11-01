@@ -78,7 +78,7 @@ public record SalesOrderDetailResponse(
 
     /**
      * 供應狀態：全部以庫存基準單位表示
-     * 已規劃未下單與採購在途 P4 才有資料，已出貨 P5 才有資料，目前固定為 0
+     * 已規劃未下單與採購在途來自 PO；已出貨要等出貨單完成，目前固定為 0
      */
     public record Supply(
             BigDecimal reservedQty,

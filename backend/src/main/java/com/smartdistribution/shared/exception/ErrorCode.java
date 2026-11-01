@@ -266,6 +266,48 @@ public enum ErrorCode {
             "此調整已更正過，或本身就是更正紀錄，不能再更正。"
     ),
 
+    // Purchase order
+    PURCHASE_ORDER_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "找不到指定的採購單。"
+    ),
+    PO_STATUS_CONFLICT(
+            HttpStatus.CONFLICT,
+            "採購單目前的狀態不允許此操作，請重新載入。"
+    ),
+    PO_SUPPLIER_INACTIVE(
+            HttpStatus.CONFLICT,
+            "供應商尚未啟用，不能用於採購。"
+    ),
+    PO_ITEM_INACTIVE(
+            HttpStatus.CONFLICT,
+            "公司料號尚未啟用，不能用於採購。"
+    ),
+    PO_UNIT_INVALID(
+            HttpStatus.CONFLICT,
+            "單位不是庫存基準單位，也沒有設定換算。"
+    ),
+    PO_LINE_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "採購明細不正確。"
+    ),
+    PO_SUBMIT_INFO_INCOMPLETE(
+            HttpStatus.BAD_REQUEST,
+            "送審前請填寫預計到貨日、至少一筆明細，以及每筆明細的單價。"
+    ),
+    PO_SOURCE_INVALID(
+            HttpStatus.CONFLICT,
+            "來源 SO 明細不正確：SO 必須已核准，且料號要和採購明細相同。"
+    ),
+    PO_SOURCE_QUANTITY_EXCEEDED(
+            HttpStatus.CONFLICT,
+            "採購數量超過來源 SO 明細的尚待規劃量。"
+    ),
+    PO_MASTER_DATA_INACTIVE(
+            HttpStatus.CONFLICT,
+            "供應商或公司料號已停用，無法核准。"
+    ),
+
     // Document
     DOCUMENT_NOT_FOUND(
             HttpStatus.NOT_FOUND,

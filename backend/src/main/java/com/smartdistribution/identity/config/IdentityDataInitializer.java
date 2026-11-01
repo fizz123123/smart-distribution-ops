@@ -90,7 +90,13 @@ public class IdentityDataInitializer implements ApplicationRunner {
             new PermissionSeed("INVENTORY", "VIEW"),
             new PermissionSeed("INVENTORY_TRANSACTION", "VIEW"),
             new PermissionSeed("INVENTORY_RESERVATION", "VIEW"),
-            new PermissionSeed("INVENTORY_ADJUSTMENT", "POST")
+            new PermissionSeed("INVENTORY_ADJUSTMENT", "POST"),
+            new PermissionSeed("PO", "VIEW"),
+            new PermissionSeed("PO", "CREATE"),
+            new PermissionSeed("PO", "UPDATE"),
+            new PermissionSeed("PO", "SUBMIT"),
+            new PermissionSeed("PO", "APPROVE"),
+            new PermissionSeed("PO_DOCUMENT", "VIEW")
     );
 
     private static final List<String> APP_ADMIN_PERMISSIONS = List.of(
@@ -146,15 +152,21 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "COMPANY_ITEM_VIEW",
             "INVENTORY_VIEW",
             "INVENTORY_RESERVATION_VIEW",
-            // P4 由 SO 缺料建立 PO 時需要查看 SO
-            "SO_VIEW"
+            //由 SO 缺料建立 PO 時需要查看 SO
+            "SO_VIEW",
+            "PO_VIEW",
+            "PO_CREATE",
+            "PO_UPDATE",
+            "PO_SUBMIT",
+            "PO_DOCUMENT_VIEW"
     );
 
     //採購主管包含採購的全部權限，這裡只列主管額外的權限
     private static final List<String> PURCHASING_MANAGER_PERMISSIONS = List.of(
             "SUPPLIER_APPROVE",
             "SUPPLIER_STATUS_MANAGE",
-            "INVENTORY_POLICY_MANAGE"
+            "INVENTORY_POLICY_MANAGE",
+            "PO_APPROVE"
     );
 
     private static final List<String> WAREHOUSE_PERMISSIONS = List.of(
@@ -190,7 +202,10 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "CUSTOMER_ITEM_MAPPING_APPROVE",
             "CUSTOMER_PRICE_APPROVE",
             "SO_APPROVE",
-            "SO_CANCELLATION_APPROVE"
+            "SO_CANCELLATION_APPROVE",
+            "PO_VIEW",
+            "PO_DOCUMENT_VIEW",
+            "PO_APPROVE"
     );
 
     private final RoleRepository roleRepository;
