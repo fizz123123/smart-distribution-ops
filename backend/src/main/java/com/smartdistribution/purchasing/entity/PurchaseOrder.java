@@ -116,6 +116,23 @@ public class PurchaseOrder extends TimestampedEntity {
         this.status = PurchaseOrderStatus.RETURNED;
     }
 
+    public boolean canReceive() {
+        return status == PurchaseOrderStatus.APPROVED || status == PurchaseOrderStatus.PARTIALLY_RECEIVED;
+    }
+
+    /**
+     * 收貨過帳後更新：所有明細都不再有未結量時結案，否則為部分收貨
+     *
+     * @param allLinesDone 每筆明細都已完成、短收結案或取消
+     */
+    public void recordReceipt(boolean allLinesDone) {
+        if (!canReceive()) {
+            throw new BusinessException(ErrorCode.PO_STATUS_CONFLICT);
+        }
+
+        this.status = allLinesDone ? PurchaseOrderStatus.CLOSED : PurchaseOrderStatus.PARTIALLY_RECEIVED;
+    }
+
     //放棄草稿；已送審的 PO 要先被退回才能放棄
     public void cancelDraft() {
         ensureDraftOrReturned();

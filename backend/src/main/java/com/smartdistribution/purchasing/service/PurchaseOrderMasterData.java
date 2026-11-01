@@ -47,6 +47,13 @@ public class PurchaseOrderMasterData {
                 .orElseThrow(() -> new BusinessException(ErrorCode.COMPANY_ITEM_NOT_FOUND));
     }
 
+    //清單頁一次取回多個料號
+    public Map<Long, CompanyItem> findCompanyItems(Collection<Long> companyItemIds) {
+        return companyItemRepository.findAllById(companyItemIds)
+                .stream()
+                .collect(Collectors.toMap(CompanyItem::getId, Function.identity()));
+    }
+
     //基準單位倍率固定為 1；其他單位要有換算，找不到代表這個單位不能用
     public Optional<BigDecimal> findConversionFactor(CompanyItem item, UnitOfMeasure unit) {
         if (item.getBaseUnit() == unit) {

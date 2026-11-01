@@ -9,6 +9,7 @@ import com.smartdistribution.purchasing.dto.response.PurchaseOrderDetailResponse
 import com.smartdistribution.purchasing.dto.response.PurchaseOrderSummaryResponse;
 import com.smartdistribution.purchasing.entity.PurchaseOrder;
 import com.smartdistribution.purchasing.entity.PurchaseOrderLine;
+import com.smartdistribution.purchasing.repository.GoodsReceiptRepository;
 import com.smartdistribution.purchasing.repository.PurchaseOrderLineRepository;
 import com.smartdistribution.purchasing.service.PurchaseOrderAmounts;
 import com.smartdistribution.purchasing.service.PurchaseOrderMasterData;
@@ -33,6 +34,7 @@ import java.util.Set;
 public class PurchaseOrderAssembler {
 
     private final PurchaseOrderLineRepository purchaseOrderLineRepository;
+    private final GoodsReceiptRepository goodsReceiptRepository;
     private final PurchaseOrderMasterData purchaseOrderMasterData;
     private final SalesOrderDemandService salesOrderDemandService;
     private final UserDirectoryService userDirectoryService;
@@ -108,7 +110,15 @@ public class PurchaseOrderAssembler {
                 purchaseOrder.getCreatedAt(),
                 purchaseOrder.getUpdatedAt(),
                 purchaseOrder.getVersion(),
-                lineResponses
+                lineResponses,
+                goodsReceiptRepository.findAllByPurchaseOrderIdOrderByIdAsc(purchaseOrder.getId())
+                        .stream()
+                        .map(receipt -> new PurchaseOrderDetailResponse.ReceiptRef(
+                                receipt.getId(),
+                                receipt.getReceiptNumber(),
+                                receipt.getReceivedDate()
+                        ))
+                        .toList()
         );
     }
 
@@ -135,6 +145,8 @@ public class PurchaseOrderAssembler {
                 line.getBaseQty(),
                 line.getUnitPriceExcludingTax(),
                 line.getLineAmountExcludingTax(),
+                line.getAcceptedBaseQty(),
+                line.openBaseQty(),
                 line.getStatus()
         );
     }

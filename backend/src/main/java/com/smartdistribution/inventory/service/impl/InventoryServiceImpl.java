@@ -3,14 +3,18 @@ package com.smartdistribution.inventory.service.impl;
 import com.smartdistribution.inventory.entity.InventoryBalance;
 import com.smartdistribution.inventory.entity.InventoryReservation;
 import com.smartdistribution.inventory.entity.InventoryReservationEvent;
+import com.smartdistribution.inventory.entity.InventoryTransaction;
+import com.smartdistribution.inventory.entity.InventoryTransactionType;
 import com.smartdistribution.inventory.entity.ReservationEventType;
 import com.smartdistribution.inventory.entity.ReservationSourceType;
 import com.smartdistribution.inventory.repository.InventoryBalanceRepository;
 import com.smartdistribution.inventory.repository.InventoryReservationEventRepository;
 import com.smartdistribution.inventory.repository.InventoryReservationRepository;
+import com.smartdistribution.inventory.repository.InventoryTransactionRepository;
 import com.smartdistribution.inventory.repository.QuantityByKeyProjection;
 import com.smartdistribution.inventory.service.InventoryBalanceLocks;
 import com.smartdistribution.inventory.service.InventoryService;
+import com.smartdistribution.inventory.service.ReceiptLine;
 import com.smartdistribution.inventory.service.ReservationDemand;
 import com.smartdistribution.inventory.service.ReservationLine;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +27,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -33,6 +38,7 @@ public class InventoryServiceImpl implements InventoryService {
     private final InventoryBalanceRepository inventoryBalanceRepository;
     private final InventoryReservationRepository inventoryReservationRepository;
     private final InventoryReservationEventRepository inventoryReservationEventRepository;
+    private final InventoryTransactionRepository inventoryTransactionRepository;
     private final InventoryBalanceLocks inventoryBalanceLocks;
 
     @Override
@@ -127,6 +133,64 @@ public class InventoryServiceImpl implements InventoryService {
                         releasedQty,
                         ReservationSourceType.SO_CANCELLATION,
                         cancellationId,
+                        actorId,
+                        now
+                ));
+            }
+        }
+    }
+
+    @Override
+    @Transactional
+    public void receiveForPurchaseOrder(List<ReceiptLine> lines, Long actorId) {
+        //入庫也會改變可用量，和預留、調整一樣先依料號順序鎖定
+        Map<Long, InventoryBalance> balances = inventoryBalanceLocks.lockInItemOrder(
+                lines.stream().map(ReceiptLine::companyItemId).toList()
+        );
+
+        Map<Long, InventoryReservation> reservations = inventoryReservationRepository
+                .findAllBySalesOrderLineIdIn(lines.stream()
+                        .map(ReceiptLine::salesOrderLineId)
+                        .filter(Objects::nonNull)
+                        .toList())
+                .stream()
+                .collect(Collectors.toMap(InventoryReservation::getSalesOrderLineId, reservation -> reservation));
+
+        Instant now = Instant.now();
+
+        for (ReceiptLine line : lines) {
+            balances.get(line.companyItemId()).change(line.acceptedBaseQty());
+            inventoryTransactionRepository.save(new InventoryTransaction(
+                    line.companyItemId(),
+                    line.acceptedBaseQty(),
+                    InventoryTransactionType.GOODS_RECEIPT,
+                    line.goodsReceiptLineId(),
+                    actorId,
+                    now
+            ));
+
+            //一般補庫沒有來源 SO；先判斷再取值，避免用 null 查詢
+            if (line.salesOrderLineId() == null) {
+                continue;
+            }
+
+            InventoryReservation reservation = reservations.get(line.salesOrderLineId());
+            if (reservation == null) {
+                continue;
+            }
+
+            //例：剩餘需求 5、預留 2、合格 3 → 補 3；剩餘需求 3、預留 2、合格 3 → 只補 1，其餘 2 成為一般庫存
+            BigDecimal topUpQty = line.acceptedBaseQty()
+                    .min(line.remainingQty().subtract(reservation.getOpenQty()).max(BigDecimal.ZERO));
+
+            if (topUpQty.signum() > 0) {
+                reservation.increase(topUpQty);
+                inventoryReservationEventRepository.save(new InventoryReservationEvent(
+                        reservation,
+                        ReservationEventType.RESERVE,
+                        topUpQty,
+                        ReservationSourceType.PO_RECEIPT,
+                        line.goodsReceiptLineId(),
                         actorId,
                         now
                 ));

@@ -26,7 +26,8 @@ public record PurchaseOrderDetailResponse(
         Instant createdAt,
         Instant updatedAt,
         Long version,
-        List<Line> lines
+        List<Line> lines,
+        List<ReceiptRef> receipts
 ) {
 
     public record SupplierRef(
@@ -43,7 +44,9 @@ public record PurchaseOrderDetailResponse(
     }
 
     /**
-     * @param source 關聯 SO 時才有值；一般補庫為 null
+     * @param source          關聯 SO 時才有值；一般補庫為 null
+     * @param acceptedBaseQty 累計合格入庫（基準單位）
+     * @param openBaseQty     未結量（基準單位）：訂購量 － 累計合格入庫 － 不再等的數量
      */
     public record Line(
             Long id,
@@ -59,7 +62,17 @@ public record PurchaseOrderDetailResponse(
             BigDecimal baseQty,
             BigDecimal unitPriceExcludingTax,
             BigDecimal lineAmountExcludingTax,
+            BigDecimal acceptedBaseQty,
+            BigDecimal openBaseQty,
             PurchaseOrderLineStatus status
+    ) {
+    }
+
+    //這張 PO 的收貨紀錄，詳細內容另外查詢收貨單
+    public record ReceiptRef(
+            Long id,
+            String receiptNumber,
+            LocalDate receivedDate
     ) {
     }
 

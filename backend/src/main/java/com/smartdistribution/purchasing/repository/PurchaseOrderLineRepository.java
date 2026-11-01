@@ -17,19 +17,23 @@ public interface PurchaseOrderLineRepository extends JpaRepository<PurchaseOrder
 
     List<PurchaseOrderLine> findAllByPurchaseOrderIdOrderByLineNoAsc(Long purchaseOrderId);
 
+    //待收貨清單一次取回這一頁所有 PO 的明細
+    List<PurchaseOrderLine> findAllByPurchaseOrderIdInOrderByLineNoAsc(Collection<Long> purchaseOrderIds);
+
     //草稿整批取代明細時使用；直接下 DELETE，避免和新明細的行號唯一約束衝突
     @Modifying(flushAutomatically = true)
     @Query("DELETE FROM PurchaseOrderLine line WHERE line.purchaseOrder.id = :purchaseOrderId")
     void deleteAllByPurchaseOrderId(@Param("purchaseOrderId") Long purchaseOrderId);
 
     /**
-     * 關聯這些 SO 明細、PO 狀態在指定範圍內的訂購量與已取消量，依 SO 明細加總
+     * 關聯這些 SO 明細、PO 狀態在指定範圍內的訂購量、合格入庫量與已取消量，依 SO 明細加總
      * 修改或核准某張 PO 時，用 excludedPurchaseOrderId 排除它自己；不需要排除時傳 0
      */
     @Query("""
             SELECT new com.smartdistribution.purchasing.repository.SalesOrderLineQuantityProjection(
                 line.salesOrderLineId,
                 SUM(line.baseQty),
+                SUM(line.acceptedBaseQty),
                 SUM(line.cancelledBaseQty)
             )
             FROM PurchaseOrderLine line

@@ -374,7 +374,8 @@ class IdentityApiIntegrationTest {
                 "SO_CANCELLATION_APPROVE",
                 "PO_VIEW",
                 "PO_DOCUMENT_VIEW",
-                "PO_APPROVE"
+                "PO_APPROVE",
+                "GOODS_RECEIPT_VIEW"
         );
 
         mockMvc.perform(get("/api/v1/users")

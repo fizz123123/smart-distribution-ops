@@ -76,6 +76,10 @@ public class PurchaseOrderLine {
     @Column(name = "line_amount_excluding_tax", precision = 15, scale = 2)
     private BigDecimal lineAmountExcludingTax;
 
+    //累計合格入庫的基準數量；每一次收貨的明細另外保存在 goods_receipt_line
+    @Column(name = "accepted_base_qty", nullable = false, precision = 15, scale = 3)
+    private BigDecimal acceptedBaseQty;
+
     //取消或短收結案而不再等的基準數量
     @Column(name = "cancelled_base_qty", nullable = false, precision = 15, scale = 3)
     private BigDecimal cancelledBaseQty;
@@ -101,6 +105,7 @@ public class PurchaseOrderLine {
         this.quantity = quantity;
         this.unit = unit;
         this.unitPriceExcludingTax = unitPriceExcludingTax;
+        this.acceptedBaseQty = BigDecimal.ZERO;
         this.cancelledBaseQty = BigDecimal.ZERO;
         this.status = PurchaseOrderLineStatus.OPEN;
         applyConversion(conversionFactor);
@@ -108,6 +113,24 @@ public class PurchaseOrderLine {
 
     public boolean isLinkedToSalesOrder() {
         return salesOrderLineId != null;
+    }
+
+    public boolean isOpen() {
+        return status == PurchaseOrderLineStatus.OPEN;
+    }
+
+    //未結量 ＝ 訂購量 － 累計合格入庫 － 不再等的數量（基準單位）
+    public BigDecimal openBaseQty() {
+        return baseQty.subtract(acceptedBaseQty).subtract(cancelledBaseQty);
+    }
+
+    //合格入庫後累加；累計合格量達到訂購量時明細完成。損壞與規格不符不算，未結量會留著等補貨
+    public void receive(BigDecimal acceptedBaseQty) {
+        this.acceptedBaseQty = this.acceptedBaseQty.add(acceptedBaseQty);
+
+        if (openBaseQty().signum() <= 0) {
+            this.status = PurchaseOrderLineStatus.COMPLETED;
+        }
     }
 
     //送審時用最新的換算倍率重算基準數量與小計

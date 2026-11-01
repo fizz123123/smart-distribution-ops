@@ -4,9 +4,14 @@ import com.smartdistribution.purchasing.entity.PurchaseOrder;
 import com.smartdistribution.purchasing.entity.PurchaseOrderStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
+import java.util.Collection;
+import java.util.Optional;
 
 public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Long> {
 
@@ -24,4 +29,11 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Lo
             @Param("supplierId") Long supplierId,
             Pageable pageable
     );
+
+    //收貨先鎖定 PO 表頭：兩個倉管同時收同一張 PO 會依序執行，未結量才不會被重複計算
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT purchaseOrder FROM PurchaseOrder purchaseOrder WHERE purchaseOrder.id = :id")
+    Optional<PurchaseOrder> findByIdForUpdate(@Param("id") Long id);
+
+    Page<PurchaseOrder> findAllByStatusIn(Collection<PurchaseOrderStatus> statuses, Pageable pageable);
 }

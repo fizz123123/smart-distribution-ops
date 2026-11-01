@@ -67,6 +67,15 @@ abstract class PurchaseOrderTestSupport extends SalesOrderTestSupport {
                     "DELETE FROM approval_request WHERE target_type = 'PURCHASE_ORDER' AND target_id = ?",
                     purchaseOrderId
             );
+            jdbcTemplate.update(
+                    """
+                    DELETE line FROM goods_receipt_line line
+                    JOIN goods_receipt receipt ON receipt.id = line.goods_receipt_id
+                    WHERE receipt.purchase_order_id = ?
+                    """,
+                    purchaseOrderId
+            );
+            jdbcTemplate.update("DELETE FROM goods_receipt WHERE purchase_order_id = ?", purchaseOrderId);
             jdbcTemplate.update("DELETE FROM purchase_order_line WHERE purchase_order_id = ?", purchaseOrderId);
             jdbcTemplate.update("DELETE FROM purchase_order WHERE id = ?", purchaseOrderId);
         }
@@ -201,6 +210,42 @@ abstract class PurchaseOrderTestSupport extends SalesOrderTestSupport {
     ResultActions getPo(String token, Long purchaseOrderId) throws Exception {
         return mockMvc.perform(get("/api/v1/purchase-orders/{id}", purchaseOrderId)
                 .header("Authorization", bearer(token)));
+    }
+
+    //建立、送審並核准，回傳 PO ID
+    Long createApprovedPo(String purchasing, String purchasingManager, String body) throws Exception {
+        Long purchaseOrderId = createSubmittedPo(purchasing, body);
+        approvePo(purchasingManager, purchaseOrderId).andExpect(status().isOk());
+
+        return purchaseOrderId;
+    }
+
+    Long findPoLineId(Long purchaseOrderId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT id FROM purchase_order_line WHERE purchase_order_id = ? ORDER BY line_no LIMIT 1",
+                Long.class,
+                purchaseOrderId
+        );
+    }
+
+    // ===== 收貨 =====
+
+    String receiptLine(Long purchaseOrderLineId, String received, String accepted, String damaged, String reason) {
+        return """
+                {"purchaseOrderLineId": %d, "receivedQuantity": %s, "acceptedQuantity": %s,
+                 "damagedQuantity": %s, "nonconformingQuantity": 0, "exceptionReason": %s}
+                """.formatted(
+                purchaseOrderLineId, received, accepted, damaged, reason == null ? "null" : "\"" + reason + "\""
+        );
+    }
+
+    ResultActions postReceipt(String token, Long purchaseOrderId, String lines) throws Exception {
+        return mockMvc.perform(post("/api/v1/purchase-orders/{id}/goods-receipts", purchaseOrderId)
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"receivedDate": "2026-11-05", "lines": [%s]}
+                        """.formatted(lines)));
     }
 
     record PurchaseOrderVersion(Long id, Long version) {
