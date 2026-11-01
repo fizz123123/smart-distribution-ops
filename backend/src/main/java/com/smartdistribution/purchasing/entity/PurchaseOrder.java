@@ -202,14 +202,11 @@ public class PurchaseOrder extends TimestampedEntity {
     //建立與修改共用：草稿可以自由編輯的欄位
     private void applyDraftFields(LocalDate expectedArrivalDate, String remark) {
         this.expectedArrivalDate = expectedArrivalDate;
-        this.remark = blankToNull(remark);
+        this.remark = normalizeOptional(remark);
     }
 
     //空白或只有空格的備註視為沒填，有內容就去掉前後空白
-    private static String blankToNull(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        return value.strip();
+    private static String normalizeOptional(String value) {
+        return value == null || value.isBlank() ? null : value.strip();
     }
 }

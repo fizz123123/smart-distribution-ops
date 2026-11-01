@@ -85,7 +85,7 @@ public class PurchaseOrderAssembler {
                         .toList()
         );
 
-        //一般補庫明細沒有來源；先判斷再取值，不可變的 Map 不接受用 null 查詢
+        //一般補庫沒有來源 SO
         List<Line> lineResponses = lines.stream()
                 .map(line -> toLine(line, line.isLinkedToSalesOrder() ? sources.get(line.getSalesOrderLineId()) : null))
                 .toList();

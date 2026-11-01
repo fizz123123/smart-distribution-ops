@@ -215,7 +215,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         purchaseOrderLineRepository.findAllByPurchaseOrderIdOrderByLineNoAsc(purchaseOrderId)
                 .forEach(PurchaseOrderLine::cancel);
 
-        documentService.voidDocument(DocumentType.PURCHASE_ORDER, purchaseOrderId, actorId, request.reason().strip());
+        documentService.voidDocument(DocumentType.PURCHASE_ORDER, purchaseOrderId, actorId, purchaseOrder.getCancelReason());
         purchaseOrderRepository.flush();
 
         return purchaseOrderAssembler.toDetail(purchaseOrder);

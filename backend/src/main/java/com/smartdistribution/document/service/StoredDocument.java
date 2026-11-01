@@ -7,7 +7,6 @@ package com.smartdistribution.document.service;
  */
 public record StoredDocument(
         String fileName,
-        byte[] content,
-        boolean voided
+        byte[] content
 ) {
 }

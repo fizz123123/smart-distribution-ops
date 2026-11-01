@@ -33,7 +33,7 @@ public class DocumentServiceImpl implements DocumentService {
 
     @Override
     @Transactional
-    public DocumentFile store(
+    public void store(
             DocumentType documentType,
             Long sourceId,
             String documentNumber,
@@ -50,20 +50,16 @@ public class DocumentServiceImpl implements DocumentService {
                 + "/" + documentNumber + ".pdf";
 
         //先登記再寫檔：登記違反唯一約束時不會留下檔案；寫檔失敗時登記隨交易回滾
-        DocumentFile documentFile = documentFileRepository.saveAndFlush(
-                new DocumentFile(
-                        documentType,
-                        sourceId,
-                        documentNumber,
-                        storageKey,
-                        pdf.length,
-                        sha256(pdf),
-                        actorId
-                )
-        );
+        documentFileRepository.saveAndFlush(new DocumentFile(
+                documentType,
+                sourceId,
+                documentNumber,
+                storageKey,
+                pdf.length,
+                sha256(pdf),
+                actorId
+        ));
         documentStorage.save(storageKey, pdf);
-
-        return documentFile;
     }
 
     @Override
@@ -89,7 +85,7 @@ public class DocumentServiceImpl implements DocumentService {
                 ? documentFile.getDocumentNumber() + "-voided.pdf"
                 : documentFile.getDocumentNumber() + ".pdf";
 
-        return new StoredDocument(fileName, content, documentFile.isVoided());
+        return new StoredDocument(fileName, content);
     }
 
     @Override
@@ -106,9 +102,7 @@ public class DocumentServiceImpl implements DocumentService {
 
     private static String sha256(byte[] content) {
         try {
-            String hashedFile = HexFormat
-                    .of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
-            return hashedFile;
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is not available", exception);
         }

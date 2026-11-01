@@ -51,14 +51,16 @@ public class PurchaseOrderApprovalHandler implements ApprovalHandler {
     }
 
     //顯示名稱範例：PO-000001 SUP-000004 大同管材 未稅 360 元
+    //查看核准申請詳情時也會呼叫這裡；退回後修改的 PO 已清掉送審金額，此時不組金額，避免格式化 null 失敗
     @Override
     public ApprovalTarget loadTarget(Long targetId) {
         PurchaseOrder purchaseOrder = findPurchaseOrder(targetId);
         Supplier supplier = purchaseOrderMasterData.findSupplier(purchaseOrder.getSupplierId());
 
-        String label = purchaseOrder.getPoNumber() + " "
-                + supplier.getSupplierCode() + " " + supplier.getName()
-                + " 未稅 " + NumberFormat.getIntegerInstance(Locale.TAIWAN).format(purchaseOrder.getUntaxedAmount()) + " 元";
+        String label = purchaseOrder.getPoNumber() + " " + supplier.getSupplierCode() + " " + supplier.getName();
+        if (purchaseOrder.getUntaxedAmount() != null) {
+            label += " 未稅 " + NumberFormat.getIntegerInstance(Locale.TAIWAN).format(purchaseOrder.getUntaxedAmount()) + " 元";
+        }
 
         List<String> warnings = purchaseOrder.getStatus() == PurchaseOrderStatus.PENDING_APPROVAL
                 ? buildWarnings(purchaseOrder, findLines(targetId))
@@ -148,7 +150,7 @@ public class PurchaseOrderApprovalHandler implements ApprovalHandler {
         List<String> warnings = new ArrayList<>();
 
         for (PurchaseOrderLine line : lines) {
-            //一般補庫明細沒有來源；先跳過再取值，不可變的 Map 不接受用 null 查詢
+            //一般補庫沒有來源 SO，不會有需求變少的問題
             if (!line.isLinkedToSalesOrder()) {
                 continue;
             }

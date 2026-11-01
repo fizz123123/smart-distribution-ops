@@ -1,6 +1,5 @@
 package com.smartdistribution.document.service;
 
-import com.smartdistribution.document.entity.DocumentFile;
 import com.smartdistribution.document.entity.DocumentType;
 
 /**
@@ -12,7 +11,7 @@ public interface DocumentService {
      * 儲存 PDF 並登記成這張單據的正式文件；同一張單據只能有一份
      * 必須在呼叫端的交易內呼叫，交易回滾時登記資料一併回滾
      */
-    DocumentFile store(DocumentType documentType, Long sourceId, String documentNumber, byte[] pdf, Long actorId);
+    void store(DocumentType documentType, Long sourceId, String documentNumber, byte[] pdf, Long actorId);
 
     /**
      * 讀取正式文件；會重算檔案雜湊並和產生時的比對，不一致時不給下載

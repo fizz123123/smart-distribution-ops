@@ -22,7 +22,7 @@ public class LocalDocumentStorage implements DocumentStorage {
 
     @Override
     public void save(String storageKey, byte[] content) {
-        Path target = resolve(storageKey);
+        Path target = rootDir.resolve(storageKey);
 
         try {
             Files.createDirectories(target.getParent());
@@ -35,20 +35,9 @@ public class LocalDocumentStorage implements DocumentStorage {
     @Override
     public byte[] read(String storageKey) {
         try {
-            return Files.readAllBytes(resolve(storageKey));
+            return Files.readAllBytes(rootDir.resolve(storageKey));
         } catch (IOException exception) {
             throw new UncheckedIOException("無法讀取正式文件：" + storageKey, exception);
         }
-    }
-
-    //storageKey 由系統產生，這裡再確認一次不會跑出存放資料夾之外
-    private Path resolve(String storageKey) {
-        Path target = rootDir.resolve(storageKey).normalize();
-
-        if (!target.startsWith(rootDir)) {
-            throw new IllegalArgumentException("不合法的文件位置：" + storageKey);
-        }
-
-        return target;
     }
 }

@@ -4,6 +4,7 @@ import com.smartdistribution.document.config.DocumentProperties;
 import com.smartdistribution.document.entity.DocumentFile;
 import com.smartdistribution.document.entity.DocumentStatus;
 import com.smartdistribution.document.entity.DocumentType;
+import com.smartdistribution.document.repository.DocumentFileRepository;
 import com.smartdistribution.document.service.DocumentService;
 import com.smartdistribution.document.service.StoredDocument;
 import com.smartdistribution.shared.exception.BusinessException;
@@ -43,6 +44,9 @@ class DocumentServiceIntegrationTest {
     DocumentProperties documentProperties;
 
     @Autowired
+    DocumentFileRepository documentFileRepository;
+
+    @Autowired
     JdbcTemplate jdbcTemplate;
 
     @AfterEach
@@ -56,8 +60,9 @@ class DocumentServiceIntegrationTest {
         String number = testNumber();
         byte[] pdf = "%PDF-test-content".getBytes(StandardCharsets.US_ASCII);
 
-        DocumentFile stored = documentService.store(DocumentType.PURCHASE_ORDER, sourceId, number, pdf, ACTOR_ID);
+        documentService.store(DocumentType.PURCHASE_ORDER, sourceId, number, pdf, ACTOR_ID);
 
+        DocumentFile stored = findStored(sourceId);
         assertThat(stored.getStatus()).isEqualTo(DocumentStatus.ACTIVE);
         assertThat(stored.getStorageKey()).startsWith("purchase-orders/").endsWith("/" + number + ".pdf");
         assertThat(stored.getFileSize()).isEqualTo(pdf.length);
@@ -68,7 +73,6 @@ class DocumentServiceIntegrationTest {
         StoredDocument loaded = documentService.load(DocumentType.PURCHASE_ORDER, sourceId);
         assertThat(loaded.fileName()).isEqualTo(number + ".pdf");
         assertThat(loaded.content()).isEqualTo(pdf);
-        assertThat(loaded.voided()).isFalse();
     }
 
     @Test
@@ -95,7 +99,6 @@ class DocumentServiceIntegrationTest {
         documentService.voidDocument(DocumentType.PURCHASE_ORDER, sourceId, ACTOR_ID, "供應商停產");
 
         StoredDocument loaded = documentService.load(DocumentType.PURCHASE_ORDER, sourceId);
-        assertThat(loaded.voided()).isTrue();
         assertThat(loaded.fileName()).isEqualTo(number + "-voided.pdf");
         assertThat(loaded.content()).isEqualTo(pdf);
 
@@ -109,7 +112,8 @@ class DocumentServiceIntegrationTest {
     void changedFileIsRejectedOnLoad() throws Exception {
         Long sourceId = randomSourceId();
         byte[] pdf = "%PDF-original".getBytes(StandardCharsets.US_ASCII);
-        DocumentFile stored = documentService.store(DocumentType.PURCHASE_ORDER, sourceId, testNumber(), pdf, ACTOR_ID);
+        documentService.store(DocumentType.PURCHASE_ORDER, sourceId, testNumber(), pdf, ACTOR_ID);
+        DocumentFile stored = findStored(sourceId);
 
         //模擬有人直接到存放位置換掉檔案
         Files.write(
@@ -132,6 +136,10 @@ class DocumentServiceIntegrationTest {
     }
 
     //用很大的隨機 ID，避免和真正的單據撞在一起
+    private DocumentFile findStored(Long sourceId) {
+        return documentFileRepository.findByDocumentTypeAndSourceId(DocumentType.PURCHASE_ORDER, sourceId).orElseThrow();
+    }
+
     private Long randomSourceId() {
         return ThreadLocalRandom.current().nextLong(9_000_000_000L, 9_999_999_999L);
     }

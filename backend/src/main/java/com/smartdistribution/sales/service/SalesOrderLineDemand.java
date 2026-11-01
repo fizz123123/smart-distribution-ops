@@ -14,7 +14,6 @@ public record SalesOrderLineDemand(
         Long salesOrderId,
         String salesOrderNumber,
         Integer lineNo,
-        String customerItemCode,
         Long companyItemId,
         boolean approved,
         BigDecimal remainingQty,

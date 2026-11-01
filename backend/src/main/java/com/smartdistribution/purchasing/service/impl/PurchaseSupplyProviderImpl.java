@@ -4,7 +4,7 @@ import com.smartdistribution.purchasing.service.PurchaseOrderQuantities;
 import com.smartdistribution.sales.service.PurchaseSupply;
 import com.smartdistribution.sales.service.PurchaseSupplyProvider;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -17,7 +17,7 @@ import java.util.Set;
 /**
  * 銷售模組定義、採購模組實作：提供 SO 詳情顯示的已規劃未下單與採購在途
  */
-@Component
+@Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class PurchaseSupplyProviderImpl implements PurchaseSupplyProvider {

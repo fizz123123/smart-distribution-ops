@@ -35,10 +35,10 @@ public record GoodsReceiptResponse(
             String itemCode,
             String itemName,
             UnitOfMeasure unit,
-            BigDecimal receivedQty,
-            BigDecimal acceptedQty,
-            BigDecimal damagedQty,
-            BigDecimal nonconformingQty,
+            BigDecimal receivedQuantity,
+            BigDecimal acceptedQuantity,
+            BigDecimal damagedQuantity,
+            BigDecimal nonconformingQuantity,
             BigDecimal acceptedBaseQty,
             String exceptionReason
     ) {

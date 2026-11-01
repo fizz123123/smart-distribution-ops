@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -16,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -166,5 +168,34 @@ class PurchaseOrderApprovalApiIntegrationTest extends PurchaseOrderTestSupport {
         //營運主管可以替代核准
         approvePo(manager, purchaseOrderId).andExpect(status().isOk());
         getPo(manager, purchaseOrderId).andExpect(jsonPath("$.status").value("APPROVED"));
+    }
+
+    @Test
+    void oldApprovalRequestCanStillBeViewedAfterReturnedPoIsEdited() throws Exception {
+        String purchasing = login(createUser("purchasing", "PURCHASING"));
+        String purchasingManager = login(createUser("purchasing-manager", "PURCHASING_MANAGER"));
+        Supplier supplier = createActiveSupplier();
+        CompanyItem item = createActiveItem(UnitOfMeasure.PCS);
+
+        Long purchaseOrderId = createSubmittedPo(purchasing, poBody(supplier, poLine(item, null, "5", "50")));
+        Long approvalRequestId = findPendingPoApprovalId(purchaseOrderId);
+
+        mockMvc.perform(post("/api/v1/approval-requests/{id}/return", approvalRequestId)
+                        .header("Authorization", bearer(purchasingManager))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"comment": "請重新議價"}
+                                """))
+                .andExpect(status().isOk());
+
+        //退回後修改會清掉送審金額
+        PurchaseOrderVersion returned = new PurchaseOrderVersion(purchaseOrderId, poVersion(purchasing, purchaseOrderId));
+        updatePo(purchasing, returned, supplier, poLine(item, null, "5", "45")).andExpect(status().isOk());
+
+        //顯示名稱是送審當下保存的，仍是第一次送審的金額；重點是查詢不會因為金額已清空而失敗
+        mockMvc.perform(get("/api/v1/approval-requests/{id}", approvalRequestId)
+                        .header("Authorization", bearer(purchasingManager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.request.targetLabel", containsString("未稅 250 元")));
     }
 }

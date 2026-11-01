@@ -127,13 +127,11 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
             receiptLines.add(receiptLine);
             checked.purchaseOrderLine().receive(checked.acceptedBaseQty());
         }
-        goodsReceiptLineRepository.flush();
 
         inventoryService.receiveForPurchaseOrder(toInventoryLines(receiptLines), actorId);
 
         boolean allLinesDone = purchaseOrderLines.values().stream().noneMatch(PurchaseOrderLine::isOpen);
         purchaseOrder.recordReceipt(allLinesDone);
-        purchaseOrderRepository.flush();
 
         return goodsReceiptAssembler.toResponse(receipt);
     }
@@ -188,7 +186,7 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
                     purchaseOrderLine,
                     quantities,
                     PurchaseOrderAmounts.baseQty(line.acceptedQuantity(), purchaseOrderLine.getConversionFactor()),
-                    blankToNull(line.exceptionReason())
+                    line.exceptionReason()
             ));
         }
 
@@ -220,7 +218,7 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
             );
         }
 
-        if (exceptionQty.signum() > 0 && blankToNull(exceptionReason) == null) {
+        if (exceptionQty.signum() > 0 && (exceptionReason == null || exceptionReason.isBlank())) {
             throw new BusinessException(
                     ErrorCode.GOODS_RECEIPT_QUANTITY_INVALID,
                     prefix + "有損壞或規格不符時，請填寫原因。"
@@ -247,7 +245,7 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
             }
 
             PurchaseOrderLine purchaseOrderLine = receiptLine.getPurchaseOrderLine();
-            //一般補庫沒有來源；先判斷再取值，不可變的 Map 不接受用 null 查詢
+            //一般補庫沒有來源 SO，剩餘需求視為 0
             SalesOrderLineDemand demand = purchaseOrderLine.isLinkedToSalesOrder()
                     ? demands.get(purchaseOrderLine.getSalesOrderLineId())
                     : null;
@@ -256,19 +254,12 @@ public class GoodsReceiptServiceImpl implements GoodsReceiptService {
                     receiptLine.getId(),
                     purchaseOrderLine.getCompanyItemId(),
                     receiptLine.getAcceptedBaseQty(),
-                    demand == null ? null : demand.salesOrderLineId(),
+                    purchaseOrderLine.getSalesOrderLineId(),
                     demand == null ? BigDecimal.ZERO : demand.remainingQty()
             ));
         }
 
         return inventoryLines;
-    }
-
-    private static String blankToNull(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        return value.strip();
     }
 
     /**

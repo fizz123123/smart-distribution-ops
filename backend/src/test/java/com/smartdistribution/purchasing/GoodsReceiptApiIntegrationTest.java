@@ -238,7 +238,7 @@ class GoodsReceiptApiIntegrationTest extends PurchaseOrderTestSupport {
                         .param("size", "100")
                         .param("sort", "id,desc"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath(thisOrder + ".lines[0].openQty").value(3))
+                .andExpect(jsonPath(thisOrder + ".lines[0].openQuantity").value(3))
                 .andExpect(jsonPath(thisOrder + ".lines[0].unitPriceExcludingTax").doesNotExist());
 
         //倉管看不到 PO 本身（有單價）

@@ -71,7 +71,12 @@ public class GoodsReceiptLine {
         this.damagedQty = quantities.damaged();
         this.nonconformingQty = quantities.nonconforming();
         this.acceptedBaseQty = acceptedBaseQty;
-        this.exceptionReason = exceptionReason;
+        this.exceptionReason = normalizeOptional(exceptionReason);
+    }
+
+    //空白或只有空格的原因視為沒填，有內容就去掉前後空白
+    private static String normalizeOptional(String value) {
+        return value == null || value.isBlank() ? null : value.strip();
     }
 
     /**

@@ -53,7 +53,6 @@ public class SalesOrderDemandServiceImpl implements SalesOrderDemandService {
                     salesOrder.getId(),
                     salesOrder.getSoNumber(),
                     line.getLineNo(),
-                    line.getCustomerItemCode(),
                     line.getCompanyItemId(),
                     approved,
                     remainingQty,

@@ -23,7 +23,7 @@ public record OpenPurchaseOrderResponse(
     /**
      * 數量以 PO 明細的單位表示，倉管照這個單位點貨
      *
-     * @param openQty 還能收的數量；為 0 的明細已收齊或不再等
+     * @param openQuantity 還能收的數量；為 0 的明細已收齊或不再等
      */
     public record Line(
             Long purchaseOrderLineId,
@@ -33,8 +33,8 @@ public record OpenPurchaseOrderResponse(
             String itemName,
             UnitOfMeasure unit,
             BigDecimal quantity,
-            BigDecimal acceptedQty,
-            BigDecimal openQty
+            BigDecimal acceptedQuantity,
+            BigDecimal openQuantity
     ) {
     }
 }
