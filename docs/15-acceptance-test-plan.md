@@ -2,7 +2,7 @@
 
 > 文件版本：v1.0  
 > 建立日期：2026-10-06  
-> 最後更新：2026-10-28  
+> 最後更新：2026-11-01  
 > 文件定位：定義本次專題的驗收範圍、代表性測試資料、核心案例、預期結果、證據及整體通過條件，作為功能驗收與展示前檢查依據。
 
 ---
@@ -162,6 +162,17 @@
 | AT-035 | HIGH | 一般補庫 PO 入庫 | 增加一般可用庫存，不自動改配給既有缺料 SO |
 | AT-036 | HIGH | PO 取消未到貨數量或短收結案 | 正確重算在途量，來源 SO 未補足部分重新列為尚待規劃 |
 
+AT-032 的 PDF 以自動化測試驗證：核准後 `document_file` 只有一筆；下載 API 回傳 `application/pdf`，檔名為 PO 編號，內容以 `%PDF-` 開頭；同一張 PO 再次產生時回 `DOCUMENT_ALREADY_EXISTS`。版面與中文字型以人工開啟 PDF 確認。部署到 S3 之前，PDF 存在本機，下載 API 直接回傳檔案（D-061）。
+
+各案例對應的自動化測試：
+
+| 案例 | 測試類別 |
+| --- | --- |
+| AT-030、AT-031 | `PurchaseOrderApiIntegrationTest` |
+| AT-032 | `PurchaseOrderApprovalApiIntegrationTest`、`DocumentServiceIntegrationTest` |
+| AT-033～AT-035 | `GoodsReceiptApiIntegrationTest` |
+| AT-036 | `PurchaseOrderCloseApiIntegrationTest` |
+
 ## 10. 出貨履約
 
 | 編號 | 等級 | 情境 | 預期結果 |
@@ -234,7 +245,7 @@
 |---|---|---|---|
 | AT-090 | HIGH | PO 核准或 DO 進入 READY | 各產生一份正式 PDF 並保存至 S3，資料庫保存文件中繼資料 |
 | AT-091 | HIGH | 有權限使用者下載正式 PDF | 後端產生約 3 分鐘有效的 Presigned URL，瀏覽器可下載 |
-| AT-092 | CRITICAL | 無權限、URL 已逾期或文件已作廢 | 無法取得或使用下載連結；URL 不寫入資料庫及應用程式紀錄 |
+| AT-092 | CRITICAL | 無權限、URL 已逾期或文件已作廢 | 無權限或 URL 逾期時無法取得或使用下載連結；已作廢的文件仍可下載，檔名標示 `-voided`（D-061）；URL 不寫入資料庫及應用程式紀錄 |
 | AT-093 | HIGH | 從 CloudFront 前端操作 API | 前端至後端使用 HTTPS，CORS 與 JWT 正常；RDS 與 S3 不對外公開 |
 | AT-094 | HIGH | LINE webhook 呼叫後端 | 經 HTTPS ALB 入口並驗證簽章；金鑰由環境變數或 Secrets Manager 提供 |
 

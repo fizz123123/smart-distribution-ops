@@ -2,7 +2,7 @@
 
 > 文件版本：v1.0  
 > 建立日期：2026-10-05  
-> 最後更新：2026-10-28  
+> 最後更新：2026-11-01  
 > 文件定位：將產品需求、業務流程、角色權限、領域規則及邏輯資料模型轉為可實作的狀態、操作、前置條件與結果，作為畫面、API、後端服務及測試案例的共同參考。
 
 ---
@@ -184,10 +184,10 @@ stateDiagram-v2
     PENDING_APPROVAL --> RETURNED: 主管退回
     PENDING_APPROVAL --> APPROVED: 核准、產生 PDF 並下單
     APPROVED --> PARTIALLY_RECEIVED: 部分合格入庫
-    APPROVED --> CLOSED: 全數完成或結案
+    APPROVED --> CLOSED: 一次全數合格入庫
     APPROVED --> CANCELLED: 尚未收貨，由採購主管取消
     PARTIALLY_RECEIVED --> PARTIALLY_RECEIVED: 再次部分收貨
-    PARTIALLY_RECEIVED --> CLOSED: 全數完成或短收結案
+    PARTIALLY_RECEIVED --> CLOSED: 收齊或短收結案
     DRAFT --> CANCELLED: 放棄草稿
     RETURNED --> CANCELLED: 放棄草稿
 ```
@@ -198,22 +198,31 @@ PO 表頭狀態反映整張 PO 的核准及收貨結果；每筆明細另以 `OP
 
 | 操作 | 執行角色 | 來源狀態 | 前置條件 | 目標狀態與結果 | 主要失敗原因 |
 | --- | --- | --- | --- | --- | --- |
-| 由 SO 缺料建立草稿 | PURCHASING | 無 | 來源 SO 已核准；指定數量仍為尚待規劃供應量 | `DRAFT`；明細關聯一筆 SO 明細 | SO 未核准、需求已被其他 PO 規劃、供應商停用 |
-| 建立一般補庫草稿 | PURCHASING | 無 | 公司料號可採購；供應商已啟用 | `DRAFT`；明細不關聯 SO | 無權限、主檔停用 |
+| 建立草稿 | PURCHASING | 無 | 供應商與公司料號已啟用；明細有關聯 SO 明細時，來源 SO 已核准、料號相同，且數量不超過尚待規劃供應量 | `DRAFT`；有關聯的明細計入來源 SO 的已規劃未下單，沒有關聯的明細為一般補庫（D-062） | 無權限、主檔停用、來源 SO 未核准、需求已被其他 PO 規劃 |
 | 編輯草稿 | PURCHASING | `DRAFT / RETURNED` | 未有待處理申請 | 維持原狀態 | 已送審、版本衝突 |
-| 送審 | PURCHASING | `DRAFT / RETURNED` | 供應商、商品、數量、單位、未稅採購單價與預計到貨日完整 | `PENDING_APPROVAL` | 欄位缺漏、供應商停用、來源 SO 需求不足 |
+| 送審 | PURCHASING | `DRAFT / RETURNED` | 供應商、商品、數量、單位、未稅採購單價與預計到貨日完整；重新檢查主檔與來源 SO 的尚待規劃量 | `PENDING_APPROVAL`；保存未稅總額 | 欄位缺漏、主檔停用、來源 SO 需求不足 |
 | 退回 | PURCHASING_MANAGER 或替代核准者 | `PENDING_APPROVAL` | 申請仍待處理 | `RETURNED` | 無權限、申請已處理 |
-| 核准並下單 | PURCHASING_MANAGER 或替代核准者 | `PENDING_APPROVAL` | 通過自我核准；來源 SO 需求仍有效 | `APPROVED`；產生唯一正式 PO PDF，未到貨量列為採購在途 | 自我核准、來源需求變動、正式編號或 PDF 產生失敗 |
+| 核准並下單 | PURCHASING_MANAGER 或替代核准者 | `PENDING_APPROVAL` | 通過自我核准；供應商與公司料號仍啟用。來源 SO 需求變少或單價和最近一次核准單價不同時，只列為提示，不擋核准（D-063） | `APPROVED`；產生唯一正式 PO PDF，未到貨量列為採購在途 | 自我核准、主檔停用、PDF 產生失敗 |
 | 放棄草稿 | PURCHASING | `DRAFT / RETURNED` | 尚未核准 | `CANCELLED`；解除草稿對尚待規劃量的占用 | 已進入核准或已有收貨 |
-| 取消已核准 PO | PURCHASING_MANAGER | `APPROVED` | 尚未有任何已過帳收貨；必填原因 | `CANCELLED`；PO 與正式 PDF 標記取消／作廢，未到貨量移出在途，來源 SO 重新計算尚待規劃量 | 已有收貨、無權限、缺少原因 |
-| 短收結案 | PURCHASING_MANAGER | `PARTIALLY_RECEIVED` | 供應商不再交付剩餘數量；必填原因 | 未到貨餘量轉為取消量，明細轉為 `CLOSED_SHORT`；全部明細完成後 PO 轉為 `CLOSED`，來源 SO 重新計算尚待規劃量 | 無權限、缺少原因、PO 已結案 |
+| 取消已核准 PO | PURCHASING_MANAGER | `APPROVED` | 尚未有任何已過帳收貨；必填原因；版本相符 | `CANCELLED`；所有明細轉為 `CANCELLED`，不再等的數量等於基準數量；正式 PDF 作廢；未到貨量移出在途，來源 SO 重新計算尚待規劃量（D-069） | 已有收貨（`PO_HAS_RECEIPTS`）、無權限、缺少原因、版本衝突 |
+| 短收結案 | PURCHASING_MANAGER | `PARTIALLY_RECEIVED` | 供應商不再交付剩餘數量；必填原因；版本相符 | 還沒收齊的明細轉為 `CLOSED_SHORT`，剩下的未結量轉為不再等的數量；PO 轉為 `CLOSED`；PDF 不作廢；來源 SO 重新計算尚待規劃量（D-069） | 尚未收貨（應改用取消）、PO 已結案、無權限、缺少原因、版本衝突 |
 
 ### 6.3 收貨與入庫
 
 | 操作 | 執行角色 | 前置條件 | 成功結果 | 主要失敗原因 |
 | --- | --- | --- | --- | --- |
-| 建立並過帳收貨 | WAREHOUSE | PO 已核准且明細仍有未結數量；實收拆分為合格、損壞及規格不符 | 建立 `POSTED` 收貨紀錄；只有合格數量增加實體庫存；關聯 PO 的合格數量優先預留給來源 SO | PO 未核准、實收超過可收數量、數量合計不一致、併發衝突 |
-| 更新 PO 收貨進度 | 系統 | 收貨成功過帳 | 部分收貨時 PO 轉為 `PARTIALLY_RECEIVED`；全部明細完成時轉為 `CLOSED` | 無 |
+| 建立並過帳收貨 | WAREHOUSE | PO 為 `APPROVED / PARTIALLY_RECEIVED`；每筆收貨明細屬於這張 PO、尚未結案且只出現一次；數量使用 PO 明細的單位且小數位符合；實收 ＝ 合格 ＋ 損壞 ＋ 規格不符；有異常數量時填寫原因；實收不超過未結量 | 建立收貨紀錄，建立即過帳；只有合格數量增加實體庫存並建立收貨異動；PO 明細累加合格入庫量；關聯 PO 的合格數量先補足來源 SO 的預留，其餘成為一般庫存 | PO 狀態不允許、明細不正確、數量合計不一致或缺少原因、實收超過未結量 |
+| 更新 PO 收貨進度 | 系統 | 收貨成功過帳 | 合格入庫量達到基準數量的明細轉為 `COMPLETED`；所有明細都不再是 `OPEN` 時 PO 轉為 `CLOSED`，否則轉為 `PARTIALLY_RECEIVED` | 無 |
+
+補足預留的數量在收貨當下用來源 SO 的最新需求計算（D-063）：
+
+```text
+補足量 ＝ min(本次合格量, max(0, SO 剩餘需求 － 目前預留))
+```
+
+例如 SO 訂購 5、已預留 2：到貨合格 3 時補 3；客戶已先取消 2 個（剩餘需求 3）時只補 1，其餘 2 成為一般庫存。一般補庫 PO 沒有來源 SO，合格數量全部成為一般庫存。
+
+損壞與規格不符不算收到，PO 明細的未結量會保留，等供應商補貨或短收結案（D-068）。
 
 過帳前，系統須顯示 PO、品項、實收、合格、損壞及規格不符數量供倉管再次確認。收貨過帳後不得修改或刪除，本次交付版本也不提供收貨沖銷；庫存調整不得用來偽裝更正 PO 收貨進度。損壞及規格不符數量只保留於驗收紀錄，不進入可出貨庫存。
 
