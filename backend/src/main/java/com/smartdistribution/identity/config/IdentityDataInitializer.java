@@ -99,7 +99,10 @@ public class IdentityDataInitializer implements ApplicationRunner {
             new PermissionSeed("PO", "CLOSE"),
             new PermissionSeed("PO_DOCUMENT", "VIEW"),
             new PermissionSeed("GOODS_RECEIPT", "VIEW"),
-            new PermissionSeed("GOODS_RECEIPT", "POST")
+            new PermissionSeed("GOODS_RECEIPT", "POST"),
+            new PermissionSeed("DO", "VIEW"),
+            new PermissionSeed("DO", "CREATE"),
+            new PermissionSeed("DO", "VOID")
     );
 
     private static final List<String> APP_ADMIN_PERMISSIONS = List.of(
@@ -129,7 +132,9 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "SO_UPDATE",
             "SO_SUBMIT",
             "SO_CANCELLATION_CREATE",
-            "SO_CANCELLATION_SUBMIT"
+            "SO_CANCELLATION_SUBMIT",
+            "DO_VIEW",
+            "DO_CREATE"
     );
 
     //業務主管包含業務的全部權限（啟動時一併指派，對照見 RoleInclusions），這裡只列主管額外的權限
@@ -179,7 +184,9 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "INVENTORY_TRANSACTION_VIEW",
             "INVENTORY_RESERVATION_VIEW",
             "GOODS_RECEIPT_VIEW",
-            "GOODS_RECEIPT_POST"
+            "GOODS_RECEIPT_POST",
+            "DO_VIEW",
+            "DO_VOID"
     );
 
     //倉管主管包含倉管的全部權限，這裡只列主管額外的權限
@@ -213,7 +220,8 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "PO_VIEW",
             "PO_DOCUMENT_VIEW",
             "PO_APPROVE",
-            "GOODS_RECEIPT_VIEW"
+            "GOODS_RECEIPT_VIEW",
+            "DO_VIEW"
     );
 
     private final RoleRepository roleRepository;

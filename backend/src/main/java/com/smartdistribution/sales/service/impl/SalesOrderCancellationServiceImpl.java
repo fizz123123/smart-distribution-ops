@@ -21,6 +21,7 @@ import com.smartdistribution.sales.repository.SalesOrderRepository;
 import com.smartdistribution.sales.service.SalesOrderAmounts;
 import com.smartdistribution.sales.service.SalesOrderCancellationService;
 import com.smartdistribution.sales.service.SalesOrderQuantities;
+import com.smartdistribution.sales.service.ShipmentQuantity;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import com.smartdistribution.shared.security.currentuser.CurrentUserProvider;
@@ -178,7 +179,7 @@ public class SalesOrderCancellationServiceImpl implements SalesOrderCancellation
 
     /**
      * 每筆取消明細要是這張 SO 的明細、不重複、小數位符合訂購單位，
-     * 而且換算後的基準數量不超過可取消量（有效訂購量 － 已出貨量）
+     * 而且換算後的基準數量不超過可取消量（剩餘需求 － 進行中 DO 數量）
      */
     private List<DraftLine> validateLines(SalesOrder salesOrder, List<CancellationLineRequest> requests) {
         Map<Long, SalesOrderLine> salesOrderLines = salesOrderLineRepository
@@ -186,6 +187,7 @@ public class SalesOrderCancellationServiceImpl implements SalesOrderCancellation
                 .stream()
                 .collect(Collectors.toMap(SalesOrderLine::getId, Function.identity()));
         Map<Long, BigDecimal> cancelledQtyByLine = salesOrderQuantities.findCancelledQty(salesOrderLines.keySet());
+        Map<Long, ShipmentQuantity> shipmentsByLine = salesOrderQuantities.findShipments(salesOrderLines.keySet());
         Set<Long> seenLineIds = new HashSet<>();
 
         return requests.stream()
@@ -210,7 +212,7 @@ public class SalesOrderCancellationServiceImpl implements SalesOrderCancellation
                     }
 
                     BigDecimal baseQty = SalesOrderAmounts.baseQty(request.quantity(), line.getConversionFactor());
-                    salesOrderQuantities.ensureWithinCancellableQty(line, baseQty, cancelledQtyByLine);
+                    salesOrderQuantities.ensureWithinCancellableQty(line, baseQty, cancelledQtyByLine, shipmentsByLine);
 
                     return new DraftLine(line, request.quantity(), baseQty);
                 })
@@ -218,12 +220,14 @@ public class SalesOrderCancellationServiceImpl implements SalesOrderCancellation
     }
 
     private void ensureLinesWithinCancellableQty(List<SalesOrderCancellationLine> lines) {
-        Map<Long, BigDecimal> cancelledQtyByLine = salesOrderQuantities.findCancelledQty(
-                lines.stream().map(line -> line.getSalesOrderLine().getId()).toList()
-        );
+        List<Long> salesOrderLineIds = lines.stream().map(line -> line.getSalesOrderLine().getId()).toList();
+        Map<Long, BigDecimal> cancelledQtyByLine = salesOrderQuantities.findCancelledQty(salesOrderLineIds);
+        Map<Long, ShipmentQuantity> shipmentsByLine = salesOrderQuantities.findShipments(salesOrderLineIds);
 
         for (SalesOrderCancellationLine line : lines) {
-            salesOrderQuantities.ensureWithinCancellableQty(line.getSalesOrderLine(), line.getBaseQty(), cancelledQtyByLine);
+            salesOrderQuantities.ensureWithinCancellableQty(
+                    line.getSalesOrderLine(), line.getBaseQty(), cancelledQtyByLine, shipmentsByLine
+            );
         }
     }
 
