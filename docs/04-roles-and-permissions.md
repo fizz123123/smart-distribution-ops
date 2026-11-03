@@ -2,7 +2,7 @@
 
 > 文件版本：v1.0  
 > 建立日期：2026-09-29  
-> 最後更新：2026-11-01  
+> 最後更新：2026-11-03  
 > 文件定位：定義系統角色、兼任原則、核准責任與資料查看邊界。
 
 ## 角色模型
@@ -54,7 +54,7 @@ APP_ADMIN 不因管理帳號而自動取得業務資料、交易或核准權限�
 | 採購單 PO | PURCHASING | PURCHASING_MANAGER 或具相應權限的 MANAGER | 核准後才產生正式 PO PDF、向供應商下單並列入採購在途；取消尚未收貨的已核准 PO 或短收結案由 PURCHASING_MANAGER 直接執行並留存原因（D-069） |
 | PO 收貨 | WAREHOUSE | 不另設核准 | PO 已核准且有未結數量；建立即過帳，只有合格數量入庫；過帳後不得修改或沖銷（D-068） |
 | 安全庫存政策 | PURCHASING_MANAGER 或具相應細部權限者直接設定 | 不另設核准 | 以庫存基準單位保存；修改須留下前後值、操作者與時間，其他相關角色只能查看 |
-| 出貨單 DO | SALES 通知出貨、系統建立 | 不另設主管核准 | SO 已核准，且預計出貨量均已預留；由 WAREHOUSE 確認不高於預計量的實際出貨量，完成揀貨與 PDF 後轉為 `READY`，交車時過帳 |
+| 出貨單 DO | SALES 通知出貨、系統建立 | 不另設主管核准 | SO 已核准，且預計出貨量均已預留；DO 草稿不提供修改，SALES 可撤回自己通知的草稿；由 WAREHOUSE 回報不高於預計量的實際出貨量（可為 0），完成揀貨與 PDF 後轉為 `READY`，交車時過帳；WAREHOUSE 可作廢 `DRAFT`、`READY`（D-070、D-071） |
 | 簡化應收 | 系統依已過帳 DO 建立 | FINANCE 確認 | 一張 DO 對一筆應收；外部發票資料填妥後轉為正式應收 |
 | 未出貨餘量取消 | SALES | SALES_MANAGER 或具相應權限的 MANAGER | 同一張 SO 同時只能有一張未完成的申請；核准後先取消未預留部分，預留超過剩餘需求時才釋放（D-054）；全部明細都沒有餘量時 SO 結案 |
 | 庫存例外 | WAREHOUSE_MANAGER 或具相應細部權限者 | 不另設核准 | 直接過帳具原因且可追溯的調整；調減不得超過可用庫存，侵蝕預留時拒絕；更正以相反方向的新調整處理 |
@@ -74,6 +74,15 @@ APP_ADMIN 不因管理帳號而自動取得業務資料、交易或核准權限�
 | `GOODS_RECEIPT_POST` | WAREHOUSE、WAREHOUSE_MANAGER | 過帳收貨 |
 
 WAREHOUSE 沒有 `PO_VIEW`，看不到 PO 採購單價；驗收所需的 PO 與未結數量由待收貨清單提供。
+
+## 出貨權限
+
+| 權限 | 預設角色 | 用途 |
+| --- | --- | --- |
+| `DO_VIEW` | SALES、SALES_MANAGER、WAREHOUSE、WAREHOUSE_MANAGER、MANAGER | 查看 DO 清單與詳情；回應不含價格 |
+| `DO_CREATE` | SALES、SALES_MANAGER | 通知出貨；撤回自己通知的 `DRAFT` |
+| `DO_READY`、`DO_POST`、`DO_VOID` | WAREHOUSE、WAREHOUSE_MANAGER | 完成揀貨、出貨過帳、作廢 `DRAFT` 或 `READY` |
+| `DO_DOCUMENT_VIEW` | SALES、SALES_MANAGER、WAREHOUSE、WAREHOUSE_MANAGER、MANAGER | 下載出貨單 PDF |
 
 ## 分析資料查看範圍
 

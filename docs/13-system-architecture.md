@@ -2,7 +2,7 @@
 
 > 文件版本：v1.0  
 > 建立日期：2026-10-05  
-> 最後更新：2026-11-01  
+> 最後更新：2026-11-03  
 > 文件定位：說明系統元件、部署方式、後端模組邊界、外部整合、安全責任與主要資料流，作為開發、部署及簡報架構圖的共同參考。
 
 ---
@@ -181,10 +181,10 @@ smart-distribution-documents
 | `identity` | 登入、使用者、角色、權限、JWT、密碼設定連結與寄信、閒置帳號停用排程 |
 | `masterdata` | 客戶、供應商、公司料號、客戶料號、價格、單位與付款條件 |
 | `approval` | 共用送審、核准與退回紀錄；各目標模組實作核准處理器，自行執行核准或退回後的效果 |
-| `sales` | SO、價格快照、核准後供應狀態及餘量取消；採購數量透過 `PurchaseSupplyProvider` 介面取得，不依賴 `purchasing`（D-066） |
+| `sales` | SO、價格快照、核准後供應狀態及餘量取消；採購數量透過 `PurchaseSupplyProvider`、出貨數量透過 `ShipmentQuantityProvider` 取得，不依賴 `purchasing`、`fulfillment`（D-066、D-075） |
 | `purchasing` | PO、關聯 SO 需求、採購在途、驗收入庫、取消與短收結案 |
 | `inventory` | 庫存餘額、異動、預留、調整及一致性檢查；收貨入庫與補足預留由 `purchasing` 呼叫庫存服務完成 |
-| `fulfillment` | DO、揀貨、正式出貨單及出貨過帳 |
+| `fulfillment` | DO 通知、揀貨、三聯出貨單及出貨過帳；透過 `SalesOrderDeliveryService` 讀 SO，過帳時呼叫庫存服務扣庫存與使用預留 |
 | `finance` | 客戶應收、外部發票資料、收款及核銷；不含供應商應付與付款 |
 | `analytics` | 儀表板指標、風險規則、趨勢及來源下鑽 |
 | `ai` | OpenAI Client、LINE 解析 DTO、營運摘要輸入輸出及防護 |
@@ -216,7 +216,7 @@ com.smartdistribution
 ├── inventory
 ├── document
 ├── audit
-├── fulfillment         （尚未實作）
+├── fulfillment         （同 sales 的分層，沒有 handler）
 ├── finance             （尚未實作）
 ├── analytics           （尚未實作）
 ├── ai                  （尚未實作）
@@ -227,7 +227,7 @@ com.smartdistribution
     ├── security
     ├── exception
     ├── persistence
-    └── web
+    └── web（request：共用的 VersionRequest、ReasonRequest；response：PageResponse）
 ```
 
 共用規則：
@@ -255,9 +255,11 @@ com.smartdistribution
 | `Issuer` | 產生並發出某個東西 | 會 | `PasswordTokenIssuer` |
 | `Provider` | 由別的模組實作的介面，用來讓模組依賴只有一個方向 | 由實作決定 | `PurchaseSupplyProvider`（sales 定義、purchasing 實作） |
 | `PdfLayout` | 某種單據的 PDF 版面，呼叫 `document` 模組的 `PdfRenderer` 產生 | 會（查料號名稱） | `PurchaseOrderPdfLayout` |
-| 沒有後綴的 record | 模組之間傳遞的資料，不是 API 的 DTO | 不會 | `ReservationLine`、`SalesOrderLineDemand`、`PurchaseSupply` |
+| 沒有後綴的 record | 模組之間傳遞的資料，不是 API 的 DTO；只服務一個介面時寫成該介面的巢狀 record | 不會 | `InventoryService.ReservationLine`、`SalesOrderDemandService.SalesOrderLineDemand`、`ShipmentQuantityProvider.ShipmentQuantity` |
 
 其他套件沿用 Spring 慣例：`Controller`、`Repository`、`Assembler`（需要查詢其他資料才能組出的回應）、`Mapper`（單純的欄位轉換）、`ApprovalHandler`（核准處理器）、`Projection`（查詢結果）。新增輔助類別時，先從上表挑一個符合的後綴；都不符合時，再新增後綴並補進本表。
+
+只帶版本號、或只帶「原因＋版本號」的 request，不再各模組各寫一份，統一使用 `shared/web/request` 的 `VersionRequest`、`ReasonRequest`。request 還有其他欄位時，才在模組的 `dto/request` 另建。
 
 ### 5.4 跨模組交易
 
