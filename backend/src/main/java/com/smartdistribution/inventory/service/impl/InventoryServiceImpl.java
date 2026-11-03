@@ -13,10 +13,13 @@ import com.smartdistribution.inventory.repository.InventoryReservationRepository
 import com.smartdistribution.inventory.repository.InventoryTransactionRepository;
 import com.smartdistribution.inventory.repository.QuantityByKeyProjection;
 import com.smartdistribution.inventory.service.InventoryBalanceLocks;
+import com.smartdistribution.inventory.service.DeliveryLine;
 import com.smartdistribution.inventory.service.InventoryService;
 import com.smartdistribution.inventory.service.ReceiptLine;
 import com.smartdistribution.inventory.service.ReservationDemand;
 import com.smartdistribution.inventory.service.ReservationLine;
+import com.smartdistribution.shared.exception.BusinessException;
+import com.smartdistribution.shared.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -195,6 +198,52 @@ public class InventoryServiceImpl implements InventoryService {
                         now
                 ));
             }
+        }
+    }
+
+    @Override
+    @Transactional
+    public void consumeForDelivery(List<DeliveryLine> lines, Long actorId) {
+        //出庫也會改變實體數量與預留，和其他寫入一樣先依料號順序鎖定
+        Map<Long, InventoryBalance> balances = inventoryBalanceLocks.lockInItemOrder(
+                lines.stream().map(DeliveryLine::companyItemId).toList()
+        );
+
+        Map<Long, InventoryReservation> reservations = inventoryReservationRepository
+                .findAllBySalesOrderLineIdIn(lines.stream().map(DeliveryLine::salesOrderLineId).toList())
+                .stream()
+                .collect(Collectors.toMap(InventoryReservation::getSalesOrderLineId, reservation -> reservation));
+
+        Instant now = Instant.now();
+
+        for (DeliveryLine line : lines) {
+            InventoryReservation reservation = reservations.get(line.salesOrderLineId());
+
+            //DO 只能用已預留的數量；正常流程不會不足，這是庫存的最後一道保護
+            if (reservation == null || reservation.getOpenQty().compareTo(line.shippedBaseQty()) < 0) {
+                throw new BusinessException(ErrorCode.DO_RESERVATION_INSUFFICIENT);
+            }
+
+            balances.get(line.companyItemId()).change(line.shippedBaseQty().negate());
+            inventoryTransactionRepository.save(new InventoryTransaction(
+                    line.companyItemId(),
+                    line.shippedBaseQty().negate(),
+                    InventoryTransactionType.DELIVERY,
+                    line.deliveryOrderLineId(),
+                    actorId,
+                    now
+            ));
+
+            reservation.decrease(line.shippedBaseQty());
+            inventoryReservationEventRepository.save(new InventoryReservationEvent(
+                    reservation,
+                    ReservationEventType.CONSUME,
+                    line.shippedBaseQty(),
+                    ReservationSourceType.DO_POSTING,
+                    line.deliveryOrderLineId(),
+                    actorId,
+                    now
+            ));
         }
     }
 

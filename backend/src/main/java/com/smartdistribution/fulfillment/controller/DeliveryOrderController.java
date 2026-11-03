@@ -1,8 +1,11 @@
 package com.smartdistribution.fulfillment.controller;
 
+import com.smartdistribution.document.service.StoredDocument;
 import com.smartdistribution.fulfillment.dto.request.CreateDeliveryOrderRequest;
 import com.smartdistribution.fulfillment.dto.request.DeliveryOrderReasonRequest;
 import com.smartdistribution.fulfillment.dto.request.DeliveryOrderVersionRequest;
+import com.smartdistribution.fulfillment.dto.request.PostDeliveryOrderRequest;
+import com.smartdistribution.fulfillment.dto.request.ReadyDeliveryOrderRequest;
 import com.smartdistribution.fulfillment.dto.response.DeliveryOrderDetailResponse;
 import com.smartdistribution.fulfillment.dto.response.DeliveryOrderSummaryResponse;
 import com.smartdistribution.fulfillment.entity.DeliveryOrderStatus;
@@ -13,7 +16,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -71,5 +77,34 @@ public class DeliveryOrderController {
             @Valid @RequestBody DeliveryOrderReasonRequest request
     ) {
         return ResponseEntity.ok(deliveryOrderService.voidDeliveryOrder(deliveryOrderId, request));
+    }
+
+    @PostMapping("/delivery-orders/{deliveryOrderId}/ready")
+    public ResponseEntity<DeliveryOrderDetailResponse> readyDeliveryOrder(
+            @PathVariable Long deliveryOrderId,
+            @Valid @RequestBody ReadyDeliveryOrderRequest request
+    ) {
+        return ResponseEntity.ok(deliveryOrderService.readyDeliveryOrder(deliveryOrderId, request));
+    }
+
+    @PostMapping("/delivery-orders/{deliveryOrderId}/post")
+    public ResponseEntity<DeliveryOrderDetailResponse> postDeliveryOrder(
+            @PathVariable Long deliveryOrderId,
+            @Valid @RequestBody PostDeliveryOrderRequest request
+    ) {
+        return ResponseEntity.ok(deliveryOrderService.postDeliveryOrder(deliveryOrderId, request));
+    }
+
+    @GetMapping("/delivery-orders/{deliveryOrderId}/document")
+    public ResponseEntity<byte[]> downloadDocument(@PathVariable Long deliveryOrderId) {
+        StoredDocument document = deliveryOrderService.downloadDocument(deliveryOrderId);
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(document.fileName()).build().toString()
+                )
+                .body(document.content());
     }
 }

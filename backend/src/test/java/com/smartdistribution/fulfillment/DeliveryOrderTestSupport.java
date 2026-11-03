@@ -12,6 +12,10 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.List;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -123,6 +127,45 @@ abstract class DeliveryOrderTestSupport extends SalesOrderTestSupport {
                 .content("""
                         {"reason": "%s", "version": %d}
                         """.formatted(reason, version)));
+    }
+
+    // ===== 揀貨與過帳 =====
+
+    //DO 明細 ID，依行號排序
+    List<Long> findDeliveryOrderLineIds(Long deliveryOrderId) {
+        return jdbcTemplate.queryForList(
+                "SELECT id FROM delivery_order_line WHERE delivery_order_id = ? ORDER BY line_no",
+                Long.class,
+                deliveryOrderId
+        );
+    }
+
+    String actualLine(Long deliveryOrderLineId, String quantity) {
+        return """
+                {"deliveryOrderLineId": %d, "actualQuantity": %s}
+                """.formatted(deliveryOrderLineId, quantity);
+    }
+
+    ResultActions ready(String token, Long deliveryOrderId, String lines) throws Exception {
+        return mockMvc.perform(post("/api/v1/delivery-orders/{id}/ready", deliveryOrderId)
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"lines": [%s], "version": %d}
+                        """.formatted(lines, deliveryOrderVersion(token, deliveryOrderId))));
+    }
+
+    ResultActions postShipment(String token, Long deliveryOrderId, LocalDate actualShipmentDate) throws Exception {
+        return mockMvc.perform(post("/api/v1/delivery-orders/{id}/post", deliveryOrderId)
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"actualShipmentDate": "%s", "version": %d}
+                        """.formatted(actualShipmentDate, deliveryOrderVersion(token, deliveryOrderId))));
+    }
+
+    static LocalDate today() {
+        return LocalDate.now(ZoneId.of("Asia/Taipei"));
     }
 
     /**

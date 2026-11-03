@@ -1,9 +1,15 @@
 package com.smartdistribution.fulfillment.service.impl;
 
+import com.smartdistribution.document.entity.DocumentType;
+import com.smartdistribution.document.service.DocumentService;
+import com.smartdistribution.document.service.StoredDocument;
+import com.smartdistribution.fulfillment.dto.request.ActualQuantityRequest;
 import com.smartdistribution.fulfillment.dto.request.CreateDeliveryOrderRequest;
 import com.smartdistribution.fulfillment.dto.request.DeliveryOrderLineRequest;
 import com.smartdistribution.fulfillment.dto.request.DeliveryOrderReasonRequest;
 import com.smartdistribution.fulfillment.dto.request.DeliveryOrderVersionRequest;
+import com.smartdistribution.fulfillment.dto.request.PostDeliveryOrderRequest;
+import com.smartdistribution.fulfillment.dto.request.ReadyDeliveryOrderRequest;
 import com.smartdistribution.fulfillment.dto.response.DeliveryOrderDetailResponse;
 import com.smartdistribution.fulfillment.dto.response.DeliveryOrderSummaryResponse;
 import com.smartdistribution.fulfillment.entity.DeliveryOrder;
@@ -12,9 +18,14 @@ import com.smartdistribution.fulfillment.entity.DeliveryOrderStatus;
 import com.smartdistribution.fulfillment.mapper.DeliveryOrderAssembler;
 import com.smartdistribution.fulfillment.repository.DeliveryOrderLineRepository;
 import com.smartdistribution.fulfillment.repository.DeliveryOrderRepository;
+import com.smartdistribution.fulfillment.service.DeliveryOrderMasterData;
+import com.smartdistribution.fulfillment.service.DeliveryOrderPdfLayout;
 import com.smartdistribution.fulfillment.service.DeliveryOrderQuantities;
 import com.smartdistribution.fulfillment.service.DeliveryOrderService;
+import com.smartdistribution.inventory.service.DeliveryLine;
 import com.smartdistribution.inventory.service.InventoryService;
+import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
+import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.sales.service.SalesOrderAmounts;
 import com.smartdistribution.sales.service.SalesOrderDeliveryService;
 import com.smartdistribution.sales.service.SalesOrderForDelivery;
@@ -24,6 +35,7 @@ import com.smartdistribution.shared.exception.ErrorCode;
 import com.smartdistribution.shared.security.currentuser.CurrentUserProvider;
 import com.smartdistribution.shared.web.response.PageResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -31,6 +43,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -40,17 +54,23 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class DeliveryOrderServiceImpl implements DeliveryOrderService {
 
+    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
+
     private final DeliveryOrderRepository deliveryOrderRepository;
     private final DeliveryOrderLineRepository deliveryOrderLineRepository;
     private final DeliveryOrderQuantities deliveryOrderQuantities;
+    private final DeliveryOrderMasterData deliveryOrderMasterData;
+    private final DeliveryOrderPdfLayout deliveryOrderPdfLayout;
     private final DeliveryOrderAssembler deliveryOrderAssembler;
     private final SalesOrderDeliveryService salesOrderDeliveryService;
     private final InventoryService inventoryService;
+    private final DocumentService documentService;
     private final CurrentUserProvider currentUserProvider;
 
     @Override
@@ -78,11 +98,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
     @Transactional
     @PreAuthorize("hasAuthority('DO_CREATE')")
     public DeliveryOrderDetailResponse createDeliveryOrder(Long salesOrderId, CreateDeliveryOrderRequest request) {
-        SalesOrderForDelivery salesOrder = salesOrderDeliveryService.findForDelivery(List.of(salesOrderId))
-                .get(salesOrderId);
-        if (salesOrder == null) {
-            throw new BusinessException(ErrorCode.SALES_ORDER_NOT_FOUND);
-        }
+        SalesOrderForDelivery salesOrder = findSalesOrder(salesOrderId);
         if (!salesOrder.approved()) {
             throw new BusinessException(ErrorCode.DO_SALES_ORDER_NOT_APPROVED);
         }
@@ -142,10 +158,160 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         DeliveryOrder deliveryOrder = findDeliveryOrderById(deliveryOrderId);
         verifyVersion(deliveryOrder, request.version());
 
-        deliveryOrder.voidOrder(request.reason(), currentUserProvider.getCurrentUserId(), Instant.now());
+        //已完成揀貨的才有出貨單；作廢前先記下狀態
+        boolean hadDocument = deliveryOrder.isReady();
+        Long actorId = currentUserProvider.getCurrentUserId();
+
+        deliveryOrder.voidOrder(request.reason(), actorId, Instant.now());
+        if (hadDocument) {
+            documentService.voidDocument(DocumentType.DELIVERY_ORDER, deliveryOrderId, actorId, deliveryOrder.getVoidReason());
+        }
         deliveryOrderRepository.flush();
 
         return deliveryOrderAssembler.toDetail(deliveryOrder);
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize("hasAuthority('DO_READY')")
+    public DeliveryOrderDetailResponse readyDeliveryOrder(Long deliveryOrderId, ReadyDeliveryOrderRequest request) {
+        DeliveryOrder deliveryOrder = findDeliveryOrderById(deliveryOrderId);
+        verifyVersion(deliveryOrder, request.version());
+
+        List<DeliveryOrderLine> lines = deliveryOrderLineRepository.findAllByDeliveryOrderIdOrderByLineNoAsc(deliveryOrderId);
+        recordActualQuantities(lines, request.lines());
+
+        deliveryOrder.markReady(currentUserProvider.getCurrentUserId(), Instant.now());
+
+        //出貨單依實際量產生，交給司機與客戶的就是這一份
+        SalesOrderForDelivery salesOrder = findSalesOrder(deliveryOrder.getSalesOrderId());
+        Customer customer = deliveryOrderMasterData.findCustomers(List.of(salesOrder.customerId()))
+                .get(salesOrder.customerId());
+        Map<Long, CompanyItem> items = deliveryOrderMasterData.findCompanyItems(
+                lines.stream().map(DeliveryOrderLine::getCompanyItemId).collect(Collectors.toSet())
+        );
+        byte[] pdf = deliveryOrderPdfLayout.render(deliveryOrder, salesOrder, customer, lines, items);
+        documentService.store(
+                DocumentType.DELIVERY_ORDER,
+                deliveryOrderId,
+                deliveryOrder.getDoNumber(),
+                pdf,
+                currentUserProvider.getCurrentUserId()
+        );
+        deliveryOrderRepository.flush();
+
+        return deliveryOrderAssembler.toDetail(deliveryOrder);
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize("hasAuthority('DO_POST')")
+    public DeliveryOrderDetailResponse postDeliveryOrder(Long deliveryOrderId, PostDeliveryOrderRequest request) {
+        //先鎖 DO 表頭，再由庫存依料號順序鎖餘額；同一張 DO 同時送兩次，第二次會在這裡等，之後因狀態不符被擋下
+        DeliveryOrder deliveryOrder = deliveryOrderRepository.findByIdForUpdate(deliveryOrderId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.DELIVERY_ORDER_NOT_FOUND));
+        verifyVersion(deliveryOrder, request.version());
+
+        if (!deliveryOrder.isReady()) {
+            throw new BusinessException(ErrorCode.DO_STATUS_CONFLICT);
+        }
+        if (request.actualShipmentDate().isAfter(LocalDate.now(TAIPEI))) {
+            throw new BusinessException(ErrorCode.DO_SHIPMENT_DATE_INVALID);
+        }
+
+        Long actorId = currentUserProvider.getCurrentUserId();
+        List<DeliveryLine> shippedLines = deliveryOrderLineRepository
+                .findAllByDeliveryOrderIdOrderByLineNoAsc(deliveryOrderId)
+                .stream()
+                .filter(DeliveryOrderLine::isShipped)
+                .map(line -> new DeliveryLine(
+                        line.getId(),
+                        line.getCompanyItemId(),
+                        line.getSalesOrderLineId(),
+                        line.getActualBaseQty()
+                ))
+                .toList();
+        inventoryService.consumeForDelivery(shippedLines, actorId);
+
+        deliveryOrder.post(request.actualShipmentDate(), actorId, Instant.now());
+        //SO 結案要算已出貨量，所以先把 DO 的新狀態寫進資料庫
+        deliveryOrderRepository.flush();
+        salesOrderDeliveryService.closeIfFulfilled(deliveryOrder.getSalesOrderId());
+
+        return deliveryOrderAssembler.toDetail(deliveryOrder);
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('DO_DOCUMENT_VIEW')")
+    public StoredDocument downloadDocument(Long deliveryOrderId) {
+        DeliveryOrder deliveryOrder = findDeliveryOrderById(deliveryOrderId);
+        StoredDocument document = documentService.load(DocumentType.DELIVERY_ORDER, deliveryOrderId);
+
+        //下載紀錄寫在應用程式 log；traceId 由 log 設定帶出
+        log.info(
+                "下載正式文件：使用者 {}，{}，檔名 {}",
+                currentUserProvider.getCurrentUserId(),
+                deliveryOrder.getDoNumber(),
+                document.fileName()
+        );
+
+        return document;
+    }
+
+    /**
+     * 完成揀貨的數量檢查：DO 上每一筆都要回報一次；0 ≤ 實際量 ≤ 預計量、小數位符合單位；至少一筆大於 0
+     */
+    private void recordActualQuantities(List<DeliveryOrderLine> lines, List<ActualQuantityRequest> requests) {
+        Map<Long, DeliveryOrderLine> linesById = lines.stream()
+                .collect(Collectors.toMap(DeliveryOrderLine::getId, Function.identity()));
+        Set<Long> reportedLineIds = new HashSet<>();
+
+        for (ActualQuantityRequest request : requests) {
+            DeliveryOrderLine line = linesById.get(request.deliveryOrderLineId());
+            if (line == null || !reportedLineIds.add(line.getId())) {
+                throw new BusinessException(
+                        ErrorCode.DO_ACTUAL_QUANTITY_INVALID,
+                        "回報的明細不屬於這張 DO，或同一筆回報了兩次。"
+                );
+            }
+
+            String prefix = "第 " + line.getLineNo() + " 行：";
+
+            int allowedScale = line.getUnit().getDecimalPlaces();
+            if (request.actualQuantity().stripTrailingZeros().scale() > allowedScale) {
+                throw new BusinessException(
+                        ErrorCode.DO_ACTUAL_QUANTITY_INVALID,
+                        prefix + "「" + line.getUnit().getDisplayName() + "」最多 " + allowedScale + " 位小數。"
+                );
+            }
+
+            if (request.actualQuantity().compareTo(line.getPlannedQuantity()) > 0) {
+                throw new BusinessException(
+                        ErrorCode.DO_ACTUAL_QUANTITY_INVALID,
+                        prefix + "實際量不能超過通知的 "
+                                + line.getPlannedQuantity().stripTrailingZeros().toPlainString() + "。"
+                );
+            }
+
+            line.recordActual(request.actualQuantity());
+        }
+
+        if (reportedLineIds.size() != lines.size()) {
+            throw new BusinessException(ErrorCode.DO_ACTUAL_QUANTITY_INVALID, "DO 上的每一筆都要回報實際量，沒有找到就填 0。");
+        }
+
+        if (lines.stream().noneMatch(DeliveryOrderLine::isShipped)) {
+            throw new BusinessException(ErrorCode.DO_ACTUAL_QUANTITY_INVALID, "至少要有一筆出貨；都不出請作廢這張 DO。");
+        }
+    }
+
+    private SalesOrderForDelivery findSalesOrder(Long salesOrderId) {
+        SalesOrderForDelivery salesOrder = salesOrderDeliveryService.findForDelivery(List.of(salesOrderId))
+                .get(salesOrderId);
+        if (salesOrder == null) {
+            throw new BusinessException(ErrorCode.SALES_ORDER_NOT_FOUND);
+        }
+        return salesOrder;
     }
 
     /**

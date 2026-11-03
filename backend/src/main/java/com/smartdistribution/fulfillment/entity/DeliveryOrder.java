@@ -49,11 +49,29 @@ public class DeliveryOrder extends TimestampedEntity {
     @Column(name = "planned_shipment_date", nullable = false)
     private LocalDate plannedShipmentDate;
 
+    //倉管交給司機、過帳時填寫；應收的到期日也用這個日期算
+    @Column(name = "actual_shipment_date")
+    private LocalDate actualShipmentDate;
+
     @Column(length = 500)
     private String remark;
 
     @Column(name = "created_by", nullable = false)
     private Long createdBy;
+
+    //完成揀貨時寫入
+    @Column(name = "ready_by")
+    private Long readyBy;
+
+    @Column(name = "ready_at")
+    private Instant readyAt;
+
+    //出貨過帳時寫入
+    @Column(name = "posted_by")
+    private Long postedBy;
+
+    @Column(name = "posted_at")
+    private Instant postedAt;
 
     //撤回或作廢時寫入
     @Column(name = "void_reason", length = 500)
@@ -85,11 +103,32 @@ public class DeliveryOrder extends TimestampedEntity {
         return createdBy.equals(userId);
     }
 
+    public boolean isReady() {
+        return status == DeliveryOrderStatus.READY;
+    }
+
+    //倉管完成揀貨，實際量已經寫到明細上；之後依實際量產生出貨單
+    public void markReady(Long actorId, Instant at) {
+        ensureStatus(DeliveryOrderStatus.DRAFT);
+
+        this.readyBy = actorId;
+        this.readyAt = at;
+        this.status = DeliveryOrderStatus.READY;
+    }
+
+    //交給司機並過帳；同一張 DO 只能過帳一次
+    public void post(LocalDate actualShipmentDate, Long actorId, Instant at) {
+        ensureStatus(DeliveryOrderStatus.READY);
+
+        this.actualShipmentDate = actualShipmentDate;
+        this.postedBy = actorId;
+        this.postedAt = at;
+        this.status = DeliveryOrderStatus.POSTED;
+    }
+
     //業務撤回自己的出貨通知：只有倉管還沒揀貨的草稿可以撤回
     public void withdraw(Long actorId, Instant at) {
-        if (status != DeliveryOrderStatus.DRAFT) {
-            throw new BusinessException(ErrorCode.DO_STATUS_CONFLICT);
-        }
+        ensureStatus(DeliveryOrderStatus.DRAFT);
 
         markVoided(WITHDRAW_REASON, actorId, at);
     }
@@ -101,6 +140,12 @@ public class DeliveryOrder extends TimestampedEntity {
         }
 
         markVoided(reason.strip(), actorId, at);
+    }
+
+    private void ensureStatus(DeliveryOrderStatus expected) {
+        if (status != expected) {
+            throw new BusinessException(ErrorCode.DO_STATUS_CONFLICT);
+        }
     }
 
     private void markVoided(String reason, Long actorId, Instant at) {

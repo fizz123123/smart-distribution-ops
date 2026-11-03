@@ -92,4 +92,15 @@ public class DeliveryOrderLine {
         this.plannedQuantity = plannedQuantity;
         this.plannedBaseQty = SalesOrderAmounts.baseQty(plannedQuantity, conversionFactor);
     }
+
+    //倉管回報實際找到多少；少於預計量的差額不使用預留，仍留給這張 SO
+    public void recordActual(BigDecimal actualQuantity) {
+        this.actualQuantity = actualQuantity;
+        this.actualBaseQty = SalesOrderAmounts.baseQty(actualQuantity, conversionFactor);
+    }
+
+    //實際量是 0 的明細這次不出，不印在出貨單上，也不扣庫存
+    public boolean isShipped() {
+        return actualBaseQty != null && actualBaseQty.signum() > 0;
+    }
 }

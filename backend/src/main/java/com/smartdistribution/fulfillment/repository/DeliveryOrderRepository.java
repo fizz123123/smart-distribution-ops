@@ -4,9 +4,13 @@ import com.smartdistribution.fulfillment.entity.DeliveryOrder;
 import com.smartdistribution.fulfillment.entity.DeliveryOrderStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
+import java.util.Optional;
 
 public interface DeliveryOrderRepository extends JpaRepository<DeliveryOrder, Long> {
 
@@ -24,4 +28,9 @@ public interface DeliveryOrderRepository extends JpaRepository<DeliveryOrder, Lo
             @Param("salesOrderId") Long salesOrderId,
             Pageable pageable
     );
+
+    //過帳先鎖定 DO 表頭：同一張 DO 同時送兩次過帳時，第二次會等第一次完成，再因為狀態已是 POSTED 被擋下
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT deliveryOrder FROM DeliveryOrder deliveryOrder WHERE deliveryOrder.id = :id")
+    Optional<DeliveryOrder> findByIdForUpdate(@Param("id") Long id);
 }

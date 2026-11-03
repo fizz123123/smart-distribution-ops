@@ -20,8 +20,11 @@ public record DeliveryOrderDetailResponse(
         CustomerRef customer,
         Delivery delivery,
         LocalDate plannedShipmentDate,
+        LocalDate actualShipmentDate,
         String remark,
         UserRef createdBy,
+        Handling picked,
+        Handling posted,
         Voidance voidance,
         Instant createdAt,
         Instant updatedAt,
@@ -55,6 +58,13 @@ public record DeliveryOrderDetailResponse(
     public record UserRef(
             Long id,
             String name
+    ) {
+    }
+
+    //完成揀貨或過帳的操作者與時間；還沒發生時是 null；有 picked 就代表出貨單已產生
+    public record Handling(
+            UserRef by,
+            Instant at
     ) {
     }
 

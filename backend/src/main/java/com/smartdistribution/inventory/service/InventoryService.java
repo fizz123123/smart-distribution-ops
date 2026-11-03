@@ -49,6 +49,14 @@ public interface InventoryService {
     void receiveForPurchaseOrder(List<ReceiptLine> lines, Long actorId);
 
     /**
+     * DO 過帳時呼叫：鎖定相關料號的餘額列，實體數量與預留同時減少實際出貨量，
+     * 寫入 DELIVERY 異動與 CONSUME 事件（來源 DO_POSTING）
+     *
+     * <p>預留不足時拒絕；實體數量一定 ≥ 預留總量，所以預留夠就代表實體夠
+     */
+    void consumeForDelivery(List<DeliveryLine> lines, Long actorId);
+
+    /**
      * @return SO 明細 ID → 目前有效預留；沒有預留列的明細不會出現在結果中
      */
     Map<Long, BigDecimal> findOpenQtyBySalesOrderLines(Collection<Long> salesOrderLineIds);

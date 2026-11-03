@@ -8,5 +8,6 @@ public enum InventoryTransactionType {
     OPENING_BALANCE,    //source_id → inventory_adjustment
     ADJUSTMENT,         //source_id → inventory_adjustment
     ADJUSTMENT_REVERSAL, //source_id → inventory_adjustment（反向更正的那一張）
-    GOODS_RECEIPT        //source_id → goods_receipt_line（PO 驗收的合格數量）
+    GOODS_RECEIPT,       //source_id → goods_receipt_line（PO 驗收的合格數量）
+    DELIVERY             //source_id → delivery_order_line（DO 過帳的實際出貨量）
 }

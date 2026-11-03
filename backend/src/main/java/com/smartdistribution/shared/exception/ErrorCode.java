@@ -355,6 +355,18 @@ public enum ErrorCode {
             HttpStatus.FORBIDDEN,
             "只能撤回自己通知的出貨。"
     ),
+    DO_ACTUAL_QUANTITY_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "實際出貨量不正確：每筆明細都要回報一次，介於 0 和預計量之間，而且至少一筆大於 0。"
+    ),
+    DO_SHIPMENT_DATE_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "實際出貨日不能晚於今天。"
+    ),
+    DO_RESERVATION_INSUFFICIENT(
+            HttpStatus.CONFLICT,
+            "預留數量不足，無法出貨過帳。"
+    ),
 
     // Document
     DOCUMENT_NOT_FOUND(

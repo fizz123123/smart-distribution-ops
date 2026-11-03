@@ -60,6 +60,7 @@ public class DeliveryOrderAssembler {
                     customer == null ? null : customer.getCustomerCode(),
                     customer == null ? null : customer.getName(),
                     deliveryOrder.getPlannedShipmentDate(),
+                    deliveryOrder.getActualShipmentDate(),
                     userNames.get(deliveryOrder.getCreatedBy()),
                     deliveryOrder.getCreatedAt()
             );
@@ -103,8 +104,17 @@ public class DeliveryOrderAssembler {
                         salesOrder.contactPhone()
                 ),
                 deliveryOrder.getPlannedShipmentDate(),
+                deliveryOrder.getActualShipmentDate(),
                 deliveryOrder.getRemark(),
                 userRef(deliveryOrder.getCreatedBy()),
+                deliveryOrder.getReadyAt() == null ? null : new DeliveryOrderDetailResponse.Handling(
+                        userRef(deliveryOrder.getReadyBy()),
+                        deliveryOrder.getReadyAt()
+                ),
+                deliveryOrder.getPostedAt() == null ? null : new DeliveryOrderDetailResponse.Handling(
+                        userRef(deliveryOrder.getPostedBy()),
+                        deliveryOrder.getPostedAt()
+                ),
                 deliveryOrder.getVoidedAt() == null ? null : new DeliveryOrderDetailResponse.Voidance(
                         deliveryOrder.getVoidReason(),
                         userRef(deliveryOrder.getVoidedBy()),

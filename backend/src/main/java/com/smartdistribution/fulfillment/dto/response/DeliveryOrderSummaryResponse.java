@@ -14,6 +14,7 @@ public record DeliveryOrderSummaryResponse(
         String customerCode,
         String customerName,
         LocalDate plannedShipmentDate,
+        LocalDate actualShipmentDate,
         String createdByName,
         Instant createdAt
 ) {
