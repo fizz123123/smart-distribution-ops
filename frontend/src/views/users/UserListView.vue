@@ -20,8 +20,11 @@ async function loadUsers() {
 
 // 新增成功後直接進詳情頁
 function handleSaved(saved, { roleError } = {}) {
-  if (roleError) notify.error(`已建立 ${saved.name}，但角色沒有存成功：${roleError.message}`)
-  else notify.success(`已建立使用者 ${saved.name}`)
+  if (roleError) {
+    notify.error(`${saved.name}的帳號已建立，但角色沒有存成功：${roleError.message}`)
+  } else {
+    notify.success(`${saved.name}的帳號已建立，啟用連結已寄出。`)
+  }
   router.push({ name: 'userDetail', params: { id: saved.id } })
 }
 </script>

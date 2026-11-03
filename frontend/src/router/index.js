@@ -24,6 +24,13 @@ const routes = [
     meta: { title: '登入', public: true },
   },
   {
+    // 信中連結：首次設定密碼（啟用）與重設密碼共用，不需登入
+    path: '/set-password',
+    name: 'setPassword',
+    component: () => import('@/views/SetPasswordView.vue'),
+    meta: { title: '設定密碼', public: true },
+  },
+  {
     path: '/',
     component: AppLayout,
     children: [

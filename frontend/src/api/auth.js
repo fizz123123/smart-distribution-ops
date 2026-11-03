@@ -11,3 +11,8 @@ export async function fetchCurrentUser() {
   const { data } = await http.get('/users/me')
   return data
 }
+
+// POST /api/v1/auth/password：用信中連結的 token 設定密碼（啟用與重設共用，不需登入）
+export async function setPassword(token, newPassword) {
+  await http.post('/auth/password', { token, newPassword })
+}
