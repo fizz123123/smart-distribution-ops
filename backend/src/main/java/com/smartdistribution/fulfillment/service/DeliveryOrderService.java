@@ -2,13 +2,13 @@ package com.smartdistribution.fulfillment.service;
 
 import com.smartdistribution.document.service.StoredDocument;
 import com.smartdistribution.fulfillment.dto.request.CreateDeliveryOrderRequest;
-import com.smartdistribution.fulfillment.dto.request.DeliveryOrderReasonRequest;
-import com.smartdistribution.fulfillment.dto.request.DeliveryOrderVersionRequest;
 import com.smartdistribution.fulfillment.dto.request.PostDeliveryOrderRequest;
 import com.smartdistribution.fulfillment.dto.request.ReadyDeliveryOrderRequest;
 import com.smartdistribution.fulfillment.dto.response.DeliveryOrderDetailResponse;
 import com.smartdistribution.fulfillment.dto.response.DeliveryOrderSummaryResponse;
 import com.smartdistribution.fulfillment.entity.DeliveryOrderStatus;
+import com.smartdistribution.shared.web.request.ReasonRequest;
+import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 
@@ -31,12 +31,12 @@ public interface DeliveryOrderService {
     /**
      * 業務撤回自己的出貨通知；只有倉管還沒揀貨的草稿可以撤回
      */
-    DeliveryOrderDetailResponse withdrawDeliveryOrder(Long deliveryOrderId, DeliveryOrderVersionRequest request);
+    DeliveryOrderDetailResponse withdrawDeliveryOrder(Long deliveryOrderId, VersionRequest request);
 
     /**
      * 倉管作廢草稿或已完成揀貨的 DO；已完成揀貨的出貨單一併作廢，不動庫存；已過帳的不能作廢
      */
-    DeliveryOrderDetailResponse voidDeliveryOrder(Long deliveryOrderId, DeliveryOrderReasonRequest request);
+    DeliveryOrderDetailResponse voidDeliveryOrder(Long deliveryOrderId, ReasonRequest request);
 
     /**
      * 完成揀貨：倉管回報每一筆實際找到多少（可為 0，至少一筆大於 0），依實際量產生三聯出貨單

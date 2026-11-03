@@ -6,8 +6,6 @@ import com.smartdistribution.document.service.StoredDocument;
 import com.smartdistribution.fulfillment.dto.request.ActualQuantityRequest;
 import com.smartdistribution.fulfillment.dto.request.CreateDeliveryOrderRequest;
 import com.smartdistribution.fulfillment.dto.request.DeliveryOrderLineRequest;
-import com.smartdistribution.fulfillment.dto.request.DeliveryOrderReasonRequest;
-import com.smartdistribution.fulfillment.dto.request.DeliveryOrderVersionRequest;
 import com.smartdistribution.fulfillment.dto.request.PostDeliveryOrderRequest;
 import com.smartdistribution.fulfillment.dto.request.ReadyDeliveryOrderRequest;
 import com.smartdistribution.fulfillment.dto.response.DeliveryOrderDetailResponse;
@@ -22,17 +20,19 @@ import com.smartdistribution.fulfillment.service.DeliveryOrderMasterData;
 import com.smartdistribution.fulfillment.service.DeliveryOrderPdfLayout;
 import com.smartdistribution.fulfillment.service.DeliveryOrderQuantities;
 import com.smartdistribution.fulfillment.service.DeliveryOrderService;
-import com.smartdistribution.inventory.service.DeliveryLine;
+import com.smartdistribution.inventory.service.InventoryService.DeliveryLine;
 import com.smartdistribution.inventory.service.InventoryService;
 import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.sales.service.SalesOrderAmounts;
+import com.smartdistribution.sales.service.SalesOrderDeliveryService.SalesOrderForDelivery;
 import com.smartdistribution.sales.service.SalesOrderDeliveryService;
-import com.smartdistribution.sales.service.SalesOrderForDelivery;
-import com.smartdistribution.sales.service.ShipmentQuantity;
+import com.smartdistribution.sales.service.ShipmentQuantityProvider.ShipmentQuantity;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import com.smartdistribution.shared.security.currentuser.CurrentUserProvider;
+import com.smartdistribution.shared.web.request.ReasonRequest;
+import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -136,7 +136,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
     @Override
     @Transactional
     @PreAuthorize("hasAuthority('DO_CREATE')")
-    public DeliveryOrderDetailResponse withdrawDeliveryOrder(Long deliveryOrderId, DeliveryOrderVersionRequest request) {
+    public DeliveryOrderDetailResponse withdrawDeliveryOrder(Long deliveryOrderId, VersionRequest request) {
         DeliveryOrder deliveryOrder = findDeliveryOrderById(deliveryOrderId);
         verifyVersion(deliveryOrder, request.version());
 
@@ -154,7 +154,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
     @Override
     @Transactional
     @PreAuthorize("hasAuthority('DO_VOID')")
-    public DeliveryOrderDetailResponse voidDeliveryOrder(Long deliveryOrderId, DeliveryOrderReasonRequest request) {
+    public DeliveryOrderDetailResponse voidDeliveryOrder(Long deliveryOrderId, ReasonRequest request) {
         DeliveryOrder deliveryOrder = findDeliveryOrderById(deliveryOrderId);
         verifyVersion(deliveryOrder, request.version());
 

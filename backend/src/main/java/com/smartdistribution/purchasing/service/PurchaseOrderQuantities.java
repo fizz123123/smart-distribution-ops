@@ -3,7 +3,7 @@ package com.smartdistribution.purchasing.service;
 import com.smartdistribution.purchasing.entity.PurchaseOrderStatus;
 import com.smartdistribution.purchasing.repository.PurchaseOrderLineRepository;
 import com.smartdistribution.purchasing.repository.SalesOrderLineQuantityProjection;
-import com.smartdistribution.sales.service.SalesOrderLineDemand;
+import com.smartdistribution.sales.service.SalesOrderDemandService.SalesOrderLineDemand;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 

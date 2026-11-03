@@ -1,13 +1,12 @@
 package com.smartdistribution.sales.controller;
 
-import com.smartdistribution.sales.dto.request.CancelSalesOrderRequest;
 import com.smartdistribution.sales.dto.request.CreateSalesOrderRequest;
-import com.smartdistribution.sales.dto.request.SubmitSalesOrderRequest;
 import com.smartdistribution.sales.dto.request.UpdateSalesOrderRequest;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderSummaryResponse;
 import com.smartdistribution.sales.entity.SalesOrderStatus;
 import com.smartdistribution.sales.service.SalesOrderService;
+import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -68,7 +67,7 @@ public class SalesOrderController {
     @PostMapping("/{salesOrderId}/submit")
     public ResponseEntity<SalesOrderDetailResponse> submitSalesOrder(
             @PathVariable Long salesOrderId,
-            @Valid @RequestBody SubmitSalesOrderRequest request
+            @Valid @RequestBody VersionRequest request
     ) {
         return ResponseEntity.ok(salesOrderService.submitSalesOrder(salesOrderId, request));
     }
@@ -76,7 +75,7 @@ public class SalesOrderController {
     @PostMapping("/{salesOrderId}/cancel")
     public ResponseEntity<SalesOrderDetailResponse> cancelSalesOrder(
             @PathVariable Long salesOrderId,
-            @Valid @RequestBody CancelSalesOrderRequest request
+            @Valid @RequestBody VersionRequest request
     ) {
         return ResponseEntity.ok(salesOrderService.cancelSalesOrder(salesOrderId, request));
     }

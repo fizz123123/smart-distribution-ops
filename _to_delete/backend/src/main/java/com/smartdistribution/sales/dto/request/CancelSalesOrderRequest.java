@@ -1,10 +1,11 @@
 package com.smartdistribution.sales.dto.request;
 
+import com.smartdistribution.shared.web.request.VersionRequest;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 
 //放棄草稿不需要原因
-public record CancelSalesOrderRequest(
+public record VersionRequest(
         @NotNull
         @PositiveOrZero
         Long version

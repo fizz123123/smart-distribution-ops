@@ -1,13 +1,13 @@
 package com.smartdistribution.masterdata.companyitem.service;
 
 import com.smartdistribution.masterdata.common.MasterDataStatus;
-import com.smartdistribution.masterdata.companyitem.dto.request.ChangeCompanyItemStatusRequest;
 import com.smartdistribution.masterdata.companyitem.dto.request.CreateCompanyItemRequest;
 import com.smartdistribution.masterdata.companyitem.dto.request.ReplaceUnitConversionsRequest;
-import com.smartdistribution.masterdata.companyitem.dto.request.SubmitCompanyItemRequest;
 import com.smartdistribution.masterdata.companyitem.dto.request.UpdateCompanyItemRequest;
 import com.smartdistribution.masterdata.companyitem.dto.response.CompanyItemDetailResponse;
 import com.smartdistribution.masterdata.companyitem.dto.response.CompanyItemSummaryResponse;
+import com.smartdistribution.shared.web.request.ReasonRequest;
+import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 
@@ -35,16 +35,16 @@ public interface CompanyItemService {
 
     CompanyItemDetailResponse submitCompanyItem(
             Long companyItemId,
-            SubmitCompanyItemRequest request
+            VersionRequest request
     );
 
     CompanyItemDetailResponse deactivateCompanyItem(
             Long companyItemId,
-            ChangeCompanyItemStatusRequest request
+            ReasonRequest request
     );
 
     CompanyItemDetailResponse activateCompanyItem(
             Long companyItemId,
-            ChangeCompanyItemStatusRequest request
+            ReasonRequest request
     );
 }

@@ -3,8 +3,8 @@ package com.smartdistribution.sales.handler;
 import com.smartdistribution.approval.entity.ApprovalTargetType;
 import com.smartdistribution.approval.handler.ApprovalHandler;
 import com.smartdistribution.approval.handler.ApprovalTarget;
+import com.smartdistribution.inventory.service.InventoryService.ReservationDemand;
 import com.smartdistribution.inventory.service.InventoryService;
-import com.smartdistribution.inventory.service.ReservationDemand;
 import com.smartdistribution.sales.entity.SalesOrder;
 import com.smartdistribution.sales.entity.SalesOrderCancellation;
 import com.smartdistribution.sales.entity.SalesOrderCancellationLine;
@@ -14,7 +14,7 @@ import com.smartdistribution.sales.repository.SalesOrderCancellationLineReposito
 import com.smartdistribution.sales.repository.SalesOrderCancellationRepository;
 import com.smartdistribution.sales.repository.SalesOrderLineRepository;
 import com.smartdistribution.sales.service.SalesOrderQuantities;
-import com.smartdistribution.sales.service.ShipmentQuantity;
+import com.smartdistribution.sales.service.ShipmentQuantityProvider.ShipmentQuantity;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;

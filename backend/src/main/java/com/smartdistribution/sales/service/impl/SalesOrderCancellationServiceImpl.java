@@ -4,9 +4,7 @@ import com.smartdistribution.approval.entity.ApprovalTargetType;
 import com.smartdistribution.approval.service.ApprovalService;
 import com.smartdistribution.sales.dto.request.CancellationLineRequest;
 import com.smartdistribution.sales.dto.request.CreateSalesOrderCancellationRequest;
-import com.smartdistribution.sales.dto.request.SubmitSalesOrderCancellationRequest;
 import com.smartdistribution.sales.dto.request.UpdateSalesOrderCancellationRequest;
-import com.smartdistribution.sales.dto.request.WithdrawSalesOrderCancellationRequest;
 import com.smartdistribution.sales.dto.response.SalesOrderCancellationResponse;
 import com.smartdistribution.sales.entity.SalesOrder;
 import com.smartdistribution.sales.entity.SalesOrderCancellation;
@@ -21,10 +19,11 @@ import com.smartdistribution.sales.repository.SalesOrderRepository;
 import com.smartdistribution.sales.service.SalesOrderAmounts;
 import com.smartdistribution.sales.service.SalesOrderCancellationService;
 import com.smartdistribution.sales.service.SalesOrderQuantities;
-import com.smartdistribution.sales.service.ShipmentQuantity;
+import com.smartdistribution.sales.service.ShipmentQuantityProvider.ShipmentQuantity;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import com.smartdistribution.shared.security.currentuser.CurrentUserProvider;
+import com.smartdistribution.shared.web.request.VersionRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -137,7 +136,7 @@ public class SalesOrderCancellationServiceImpl implements SalesOrderCancellation
     @PreAuthorize("hasAuthority('SO_CANCELLATION_SUBMIT')")
     public SalesOrderCancellationResponse submitCancellation(
             Long cancellationId,
-            SubmitSalesOrderCancellationRequest request
+            VersionRequest request
     ) {
         SalesOrderCancellation cancellation = findCancellationById(cancellationId);
         verifyVersion(cancellation, request.version());
@@ -166,7 +165,7 @@ public class SalesOrderCancellationServiceImpl implements SalesOrderCancellation
     @PreAuthorize("hasAuthority('SO_CANCELLATION_CREATE')")
     public SalesOrderCancellationResponse withdrawCancellation(
             Long cancellationId,
-            WithdrawSalesOrderCancellationRequest request
+            VersionRequest request
     ) {
         SalesOrderCancellation cancellation = findCancellationById(cancellationId);
         verifyVersion(cancellation, request.version());

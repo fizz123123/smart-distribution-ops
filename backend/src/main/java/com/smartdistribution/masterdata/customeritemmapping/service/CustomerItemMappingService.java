@@ -1,11 +1,11 @@
 package com.smartdistribution.masterdata.customeritemmapping.service;
 
 import com.smartdistribution.masterdata.common.MasterDataStatus;
-import com.smartdistribution.masterdata.customeritemmapping.dto.request.ChangeCustomerItemMappingStatusRequest;
 import com.smartdistribution.masterdata.customeritemmapping.dto.request.CreateCustomerItemMappingRequest;
-import com.smartdistribution.masterdata.customeritemmapping.dto.request.SubmitCustomerItemMappingRequest;
 import com.smartdistribution.masterdata.customeritemmapping.dto.request.UpdateCustomerItemMappingRequest;
 import com.smartdistribution.masterdata.customeritemmapping.dto.response.CustomerItemMappingResponse;
+import com.smartdistribution.shared.web.request.ReasonRequest;
+import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 
@@ -29,16 +29,16 @@ public interface CustomerItemMappingService {
 
     CustomerItemMappingResponse submitMapping(
             Long mappingId,
-            SubmitCustomerItemMappingRequest request
+            VersionRequest request
     );
 
     CustomerItemMappingResponse deactivateMapping(
             Long mappingId,
-            ChangeCustomerItemMappingStatusRequest request
+            ReasonRequest request
     );
 
     CustomerItemMappingResponse activateMapping(
             Long mappingId,
-            ChangeCustomerItemMappingStatusRequest request
+            ReasonRequest request
     );
 }

@@ -9,8 +9,6 @@ import com.smartdistribution.masterdata.common.MasterDataStatus;
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
 import com.smartdistribution.masterdata.supplier.entity.Supplier;
 import com.smartdistribution.purchasing.dto.request.CreatePurchaseOrderRequest;
-import com.smartdistribution.purchasing.dto.request.PurchaseOrderReasonRequest;
-import com.smartdistribution.purchasing.dto.request.PurchaseOrderVersionRequest;
 import com.smartdistribution.purchasing.dto.request.UpdatePurchaseOrderRequest;
 import com.smartdistribution.purchasing.dto.response.LastPriceResponse;
 import com.smartdistribution.purchasing.dto.response.PurchaseOrderDetailResponse;
@@ -22,15 +20,17 @@ import com.smartdistribution.purchasing.mapper.PurchaseOrderAssembler;
 import com.smartdistribution.purchasing.repository.PurchaseOrderLineRepository;
 import com.smartdistribution.purchasing.repository.PurchaseOrderRepository;
 import com.smartdistribution.purchasing.service.PurchaseOrderAmounts;
-import com.smartdistribution.purchasing.service.PurchaseOrderLineValidator;
 import com.smartdistribution.purchasing.service.PurchaseOrderLineValidator.CheckedLine;
 import com.smartdistribution.purchasing.service.PurchaseOrderLineValidator.LineInput;
+import com.smartdistribution.purchasing.service.PurchaseOrderLineValidator;
 import com.smartdistribution.purchasing.service.PurchaseOrderMasterData;
 import com.smartdistribution.purchasing.service.PurchaseOrderQuantities;
 import com.smartdistribution.purchasing.service.PurchaseOrderService;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import com.smartdistribution.shared.security.currentuser.CurrentUserProvider;
+import com.smartdistribution.shared.web.request.ReasonRequest;
+import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -148,7 +148,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     @Override
     @Transactional
     @PreAuthorize("hasAuthority('PO_SUBMIT')")
-    public PurchaseOrderDetailResponse submitPurchaseOrder(Long purchaseOrderId, PurchaseOrderVersionRequest request) {
+    public PurchaseOrderDetailResponse submitPurchaseOrder(Long purchaseOrderId, VersionRequest request) {
         PurchaseOrder purchaseOrder = findPurchaseOrderById(purchaseOrderId);
         verifyVersion(purchaseOrder, request.version());
 
@@ -192,7 +192,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     @Override
     @Transactional
     @PreAuthorize("hasAuthority('PO_UPDATE')")
-    public PurchaseOrderDetailResponse cancelDraft(Long purchaseOrderId, PurchaseOrderVersionRequest request) {
+    public PurchaseOrderDetailResponse cancelDraft(Long purchaseOrderId, VersionRequest request) {
         PurchaseOrder purchaseOrder = findPurchaseOrderById(purchaseOrderId);
         verifyVersion(purchaseOrder, request.version());
 
@@ -205,7 +205,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     @Override
     @Transactional
     @PreAuthorize("hasAuthority('PO_CLOSE')")
-    public PurchaseOrderDetailResponse cancelApproved(Long purchaseOrderId, PurchaseOrderReasonRequest request) {
+    public PurchaseOrderDetailResponse cancelApproved(Long purchaseOrderId, ReasonRequest request) {
         //和收貨一樣先鎖 PO 表頭，避免取消的同時有人在收貨
         PurchaseOrder purchaseOrder = findPurchaseOrderForUpdate(purchaseOrderId);
         verifyVersion(purchaseOrder, request.version());
@@ -224,7 +224,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     @Override
     @Transactional
     @PreAuthorize("hasAuthority('PO_CLOSE')")
-    public PurchaseOrderDetailResponse closeShort(Long purchaseOrderId, PurchaseOrderReasonRequest request) {
+    public PurchaseOrderDetailResponse closeShort(Long purchaseOrderId, ReasonRequest request) {
         PurchaseOrder purchaseOrder = findPurchaseOrderForUpdate(purchaseOrderId);
         verifyVersion(purchaseOrder, request.version());
 

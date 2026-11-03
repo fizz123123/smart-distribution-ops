@@ -141,10 +141,11 @@ class DeliveryOrderPostingApiIntegrationTest extends DeliveryOrderTestSupport {
         PdfReader reader = new PdfReader(pdf);
         try {
             assertThat(reader.getNumberOfPages()).isEqualTo(3);
+            //表格內的文字可能被斷成好幾行，比對前先拿掉所有空白與換行
             PdfTextExtractor extractor = new PdfTextExtractor(reader);
-            assertThat(extractor.getTextFromPage(1)).contains("存根聯", first.getItemCode()).doesNotContain(second.getItemCode());
-            assertThat(extractor.getTextFromPage(2)).contains("客戶聯");
-            assertThat(extractor.getTextFromPage(3)).contains("簽收聯", "收貨人簽名");
+            assertThat(pageText(extractor, 1)).contains("存根聯", first.getItemCode()).doesNotContain(second.getItemCode());
+            assertThat(pageText(extractor, 2)).contains("客戶聯");
+            assertThat(pageText(extractor, 3)).contains("簽收聯", "收貨人簽名");
         } finally {
             reader.close();
         }
@@ -158,6 +159,10 @@ class DeliveryOrderPostingApiIntegrationTest extends DeliveryOrderTestSupport {
         getOrder(salesManager, salesOrderId).andExpect(jsonPath("$.status").value("APPROVED"));
 
         assertConsistent(warehouseManager, first, second);
+    }
+
+    private static String pageText(PdfTextExtractor extractor, int page) throws Exception {
+        return extractor.getTextFromPage(page).replaceAll("\\s", "");
     }
 
     @Test

@@ -9,9 +9,7 @@ import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.companyitem.repository.CompanyItemRepository;
 import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.masterdata.customer.repository.CustomerRepository;
-import com.smartdistribution.masterdata.customeritemmapping.dto.request.ChangeCustomerItemMappingStatusRequest;
 import com.smartdistribution.masterdata.customeritemmapping.dto.request.CreateCustomerItemMappingRequest;
-import com.smartdistribution.masterdata.customeritemmapping.dto.request.SubmitCustomerItemMappingRequest;
 import com.smartdistribution.masterdata.customeritemmapping.dto.request.UpdateCustomerItemMappingRequest;
 import com.smartdistribution.masterdata.customeritemmapping.dto.response.CustomerItemMappingResponse;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
@@ -21,6 +19,8 @@ import com.smartdistribution.masterdata.customeritemmapping.service.CustomerItem
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import com.smartdistribution.shared.security.currentuser.CurrentUserProvider;
+import com.smartdistribution.shared.web.request.ReasonRequest;
+import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -143,7 +143,7 @@ public class CustomerItemMappingServiceImpl implements CustomerItemMappingServic
     @PreAuthorize("hasAuthority('CUSTOMER_ITEM_MAPPING_SUBMIT')")
     public CustomerItemMappingResponse submitMapping(
             Long mappingId,
-            SubmitCustomerItemMappingRequest request
+            VersionRequest request
     ) {
         CustomerItemMapping mapping = findMappingById(mappingId);
         verifyVersion(mapping, request.version());
@@ -165,7 +165,7 @@ public class CustomerItemMappingServiceImpl implements CustomerItemMappingServic
     @PreAuthorize("hasAuthority('CUSTOMER_ITEM_MAPPING_STATUS_MANAGE')")
     public CustomerItemMappingResponse deactivateMapping(
             Long mappingId,
-            ChangeCustomerItemMappingStatusRequest request
+            ReasonRequest request
     ) {
         CustomerItemMapping mapping = findMappingById(mappingId);
         verifyVersion(mapping, request.version());
@@ -189,7 +189,7 @@ public class CustomerItemMappingServiceImpl implements CustomerItemMappingServic
     @PreAuthorize("hasAuthority('CUSTOMER_ITEM_MAPPING_STATUS_MANAGE')")
     public CustomerItemMappingResponse activateMapping(
             Long mappingId,
-            ChangeCustomerItemMappingStatusRequest request
+            ReasonRequest request
     ) {
         CustomerItemMapping mapping = findMappingById(mappingId);
         verifyVersion(mapping, request.version());

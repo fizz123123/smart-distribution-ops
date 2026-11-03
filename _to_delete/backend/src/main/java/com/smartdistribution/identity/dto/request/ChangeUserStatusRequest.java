@@ -1,11 +1,12 @@
-package com.smartdistribution.masterdata.customeritemmapping.dto.request;
+package com.smartdistribution.identity.dto.request;
 
+import com.smartdistribution.shared.web.request.ReasonRequest;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
-public record ChangeCustomerItemMappingStatusRequest(
+public record ReasonRequest(
         @NotBlank
         @Size(max = 500)
         String reason,

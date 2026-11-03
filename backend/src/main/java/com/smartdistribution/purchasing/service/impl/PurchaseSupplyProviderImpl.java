@@ -1,7 +1,7 @@
 package com.smartdistribution.purchasing.service.impl;
 
 import com.smartdistribution.purchasing.service.PurchaseOrderQuantities;
-import com.smartdistribution.sales.service.PurchaseSupply;
+import com.smartdistribution.sales.service.PurchaseSupplyProvider.PurchaseSupply;
 import com.smartdistribution.sales.service.PurchaseSupplyProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

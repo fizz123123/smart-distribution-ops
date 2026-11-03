@@ -1,9 +1,10 @@
-package com.smartdistribution.masterdata.companyitem.dto.request;
+package com.smartdistribution.sales.dto.request;
 
+import com.smartdistribution.shared.web.request.VersionRequest;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 
-public record SubmitCompanyItemRequest(
+public record VersionRequest(
         @NotNull
         @PositiveOrZero
         Long version

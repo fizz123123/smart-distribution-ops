@@ -1,7 +1,7 @@
 package com.smartdistribution.fulfillment.service.impl;
 
 import com.smartdistribution.fulfillment.service.DeliveryOrderQuantities;
-import com.smartdistribution.sales.service.ShipmentQuantity;
+import com.smartdistribution.sales.service.ShipmentQuantityProvider.ShipmentQuantity;
 import com.smartdistribution.sales.service.ShipmentQuantityProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

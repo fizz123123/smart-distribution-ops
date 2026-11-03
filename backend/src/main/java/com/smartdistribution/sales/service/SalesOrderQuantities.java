@@ -4,6 +4,7 @@ import com.smartdistribution.sales.entity.SalesOrderCancellationStatus;
 import com.smartdistribution.sales.entity.SalesOrderLine;
 import com.smartdistribution.sales.repository.CancelledQuantityProjection;
 import com.smartdistribution.sales.repository.SalesOrderCancellationLineRepository;
+import com.smartdistribution.sales.service.ShipmentQuantityProvider.ShipmentQuantity;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;

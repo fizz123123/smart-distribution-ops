@@ -13,11 +13,11 @@ import com.smartdistribution.inventory.repository.InventoryReservationRepository
 import com.smartdistribution.inventory.repository.InventoryTransactionRepository;
 import com.smartdistribution.inventory.repository.QuantityByKeyProjection;
 import com.smartdistribution.inventory.service.InventoryBalanceLocks;
-import com.smartdistribution.inventory.service.DeliveryLine;
+import com.smartdistribution.inventory.service.InventoryService.DeliveryLine;
+import com.smartdistribution.inventory.service.InventoryService.ReceiptLine;
+import com.smartdistribution.inventory.service.InventoryService.ReservationDemand;
+import com.smartdistribution.inventory.service.InventoryService.ReservationLine;
 import com.smartdistribution.inventory.service.InventoryService;
-import com.smartdistribution.inventory.service.ReceiptLine;
-import com.smartdistribution.inventory.service.ReservationDemand;
-import com.smartdistribution.inventory.service.ReservationLine;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;

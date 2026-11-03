@@ -2,12 +2,12 @@ package com.smartdistribution.masterdata.customer.controller;
 
 import com.smartdistribution.masterdata.common.MasterDataStatus;
 import com.smartdistribution.masterdata.customer.dto.request.ChangeCustomerPaymentTermRequest;
-import com.smartdistribution.masterdata.customer.dto.request.ChangeCustomerStatusRequest;
 import com.smartdistribution.masterdata.customer.dto.request.CreateCustomerRequest;
-import com.smartdistribution.masterdata.customer.dto.request.SubmitCustomerRequest;
 import com.smartdistribution.masterdata.customer.dto.request.UpdateCustomerRequest;
 import com.smartdistribution.masterdata.customer.dto.response.CustomerResponse;
 import com.smartdistribution.masterdata.customer.service.CustomerService;
+import com.smartdistribution.shared.web.request.ReasonRequest;
+import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -76,7 +76,7 @@ public class CustomerController {
     @PostMapping("/{customerId}/submit")
     public ResponseEntity<CustomerResponse> submitCustomer(
             @PathVariable Long customerId,
-            @Valid @RequestBody SubmitCustomerRequest request
+            @Valid @RequestBody VersionRequest request
     ) {
         CustomerResponse response = customerService.submitCustomer(customerId, request);
 
@@ -86,7 +86,7 @@ public class CustomerController {
     @PostMapping("/{customerId}/deactivate")
     public ResponseEntity<CustomerResponse> deactivateCustomer(
             @PathVariable Long customerId,
-            @Valid @RequestBody ChangeCustomerStatusRequest request
+            @Valid @RequestBody ReasonRequest request
     ) {
         CustomerResponse response = customerService.deactivateCustomer(customerId, request);
 
@@ -96,7 +96,7 @@ public class CustomerController {
     @PostMapping("/{customerId}/activate")
     public ResponseEntity<CustomerResponse> activateCustomer(
             @PathVariable Long customerId,
-            @Valid @RequestBody ChangeCustomerStatusRequest request
+            @Valid @RequestBody ReasonRequest request
     ) {
         CustomerResponse response = customerService.activateCustomer(customerId, request);
 

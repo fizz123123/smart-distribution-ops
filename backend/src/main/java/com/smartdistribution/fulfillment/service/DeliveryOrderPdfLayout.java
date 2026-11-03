@@ -11,7 +11,7 @@ import com.smartdistribution.fulfillment.entity.DeliveryOrderLine;
 import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.sales.entity.DeliveryMethod;
-import com.smartdistribution.sales.service.SalesOrderForDelivery;
+import com.smartdistribution.sales.service.SalesOrderDeliveryService.SalesOrderForDelivery;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -124,7 +124,8 @@ public class DeliveryOrderPdfLayout {
         Map<Long, SalesOrderForDelivery.Line> salesOrderLines = salesOrder.lines()
                 .stream()
                 .collect(Collectors.toMap(SalesOrderForDelivery.Line::id, Function.identity()));
-        PdfPTable table = pdfRenderer.table(new float[]{0.6f, 1.6f, 3f, 1.6f, 1f, 0.8f});
+        //料號與客戶料號給足寬度，印出來不會在中間斷行
+        PdfPTable table = pdfRenderer.table(new float[]{0.6f, 2.2f, 2.6f, 2.2f, 0.9f, 0.7f});
 
         addRow(table, header, "項次", "料號", "品名", "客戶料號", "數量", "單位");
 

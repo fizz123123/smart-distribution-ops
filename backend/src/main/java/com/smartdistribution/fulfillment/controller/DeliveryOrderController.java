@@ -2,14 +2,14 @@ package com.smartdistribution.fulfillment.controller;
 
 import com.smartdistribution.document.service.StoredDocument;
 import com.smartdistribution.fulfillment.dto.request.CreateDeliveryOrderRequest;
-import com.smartdistribution.fulfillment.dto.request.DeliveryOrderReasonRequest;
-import com.smartdistribution.fulfillment.dto.request.DeliveryOrderVersionRequest;
 import com.smartdistribution.fulfillment.dto.request.PostDeliveryOrderRequest;
 import com.smartdistribution.fulfillment.dto.request.ReadyDeliveryOrderRequest;
 import com.smartdistribution.fulfillment.dto.response.DeliveryOrderDetailResponse;
 import com.smartdistribution.fulfillment.dto.response.DeliveryOrderSummaryResponse;
 import com.smartdistribution.fulfillment.entity.DeliveryOrderStatus;
 import com.smartdistribution.fulfillment.service.DeliveryOrderService;
+import com.smartdistribution.shared.web.request.ReasonRequest;
+import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -66,7 +66,7 @@ public class DeliveryOrderController {
     @PostMapping("/delivery-orders/{deliveryOrderId}/withdraw")
     public ResponseEntity<DeliveryOrderDetailResponse> withdrawDeliveryOrder(
             @PathVariable Long deliveryOrderId,
-            @Valid @RequestBody DeliveryOrderVersionRequest request
+            @Valid @RequestBody VersionRequest request
     ) {
         return ResponseEntity.ok(deliveryOrderService.withdrawDeliveryOrder(deliveryOrderId, request));
     }
@@ -74,7 +74,7 @@ public class DeliveryOrderController {
     @PostMapping("/delivery-orders/{deliveryOrderId}/void")
     public ResponseEntity<DeliveryOrderDetailResponse> voidDeliveryOrder(
             @PathVariable Long deliveryOrderId,
-            @Valid @RequestBody DeliveryOrderReasonRequest request
+            @Valid @RequestBody ReasonRequest request
     ) {
         return ResponseEntity.ok(deliveryOrderService.voidDeliveryOrder(deliveryOrderId, request));
     }

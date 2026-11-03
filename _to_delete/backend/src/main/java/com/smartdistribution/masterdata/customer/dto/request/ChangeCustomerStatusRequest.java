@@ -1,11 +1,12 @@
 package com.smartdistribution.masterdata.customer.dto.request;
 
+import com.smartdistribution.shared.web.request.ReasonRequest;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
-public record ChangeCustomerStatusRequest(
+public record ReasonRequest(
         @NotBlank
         @Size(max = 500)
         String reason,

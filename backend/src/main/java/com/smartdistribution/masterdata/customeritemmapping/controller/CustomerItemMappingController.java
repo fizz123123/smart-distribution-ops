@@ -1,12 +1,12 @@
 package com.smartdistribution.masterdata.customeritemmapping.controller;
 
 import com.smartdistribution.masterdata.common.MasterDataStatus;
-import com.smartdistribution.masterdata.customeritemmapping.dto.request.ChangeCustomerItemMappingStatusRequest;
 import com.smartdistribution.masterdata.customeritemmapping.dto.request.CreateCustomerItemMappingRequest;
-import com.smartdistribution.masterdata.customeritemmapping.dto.request.SubmitCustomerItemMappingRequest;
 import com.smartdistribution.masterdata.customeritemmapping.dto.request.UpdateCustomerItemMappingRequest;
 import com.smartdistribution.masterdata.customeritemmapping.dto.response.CustomerItemMappingResponse;
 import com.smartdistribution.masterdata.customeritemmapping.service.CustomerItemMappingService;
+import com.smartdistribution.shared.web.request.ReasonRequest;
+import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -77,7 +77,7 @@ public class CustomerItemMappingController {
     @PostMapping("/{mappingId}/submit")
     public ResponseEntity<CustomerItemMappingResponse> submitMapping(
             @PathVariable Long mappingId,
-            @Valid @RequestBody SubmitCustomerItemMappingRequest request
+            @Valid @RequestBody VersionRequest request
     ) {
         CustomerItemMappingResponse response =
                 customerItemMappingService.submitMapping(mappingId, request);
@@ -88,7 +88,7 @@ public class CustomerItemMappingController {
     @PostMapping("/{mappingId}/deactivate")
     public ResponseEntity<CustomerItemMappingResponse> deactivateMapping(
             @PathVariable Long mappingId,
-            @Valid @RequestBody ChangeCustomerItemMappingStatusRequest request
+            @Valid @RequestBody ReasonRequest request
     ) {
         CustomerItemMappingResponse response =
                 customerItemMappingService.deactivateMapping(mappingId, request);
@@ -99,7 +99,7 @@ public class CustomerItemMappingController {
     @PostMapping("/{mappingId}/activate")
     public ResponseEntity<CustomerItemMappingResponse> activateMapping(
             @PathVariable Long mappingId,
-            @Valid @RequestBody ChangeCustomerItemMappingStatusRequest request
+            @Valid @RequestBody ReasonRequest request
     ) {
         CustomerItemMappingResponse response =
                 customerItemMappingService.activateMapping(mappingId, request);
