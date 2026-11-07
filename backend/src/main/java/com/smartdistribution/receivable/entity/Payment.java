@@ -94,7 +94,7 @@ public class Payment extends TimestampedEntity {
         this.receivedDate = receivedDate;
         this.amount = amount;
         this.method = method;
-        this.referenceNumber = referenceNumber == null || referenceNumber.isBlank() ? null : referenceNumber.strip();
+        this.referenceNumber = normalizeOptional(referenceNumber);
         this.createdBy = createdBy;
         this.status = PaymentStatus.CONFIRMED;
     }
@@ -113,5 +113,10 @@ public class Payment extends TimestampedEntity {
         this.voidedBy = actorId;
         this.voidedAt = at;
         this.status = PaymentStatus.VOIDED;
+    }
+
+    //空白或只有空格的參考號碼視為沒填，有內容就去掉前後空白
+    private static String normalizeOptional(String value) {
+        return value == null || value.isBlank() ? null : value.strip();
     }
 }

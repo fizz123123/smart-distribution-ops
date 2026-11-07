@@ -168,8 +168,8 @@ public class Receivable extends TimestampedEntity {
         }
     }
 
-    //還能收款：已確認而且還沒收清
-    public boolean isPayable() {
+    //已確認而且還有未收餘額，才能再收款
+    public boolean hasBalance() {
         return status == ReceivableStatus.OPEN || status == ReceivableStatus.PARTIALLY_PAID;
     }
 

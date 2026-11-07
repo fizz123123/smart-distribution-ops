@@ -2,7 +2,7 @@ package com.smartdistribution.receivable.controller;
 
 import com.smartdistribution.receivable.dto.request.ConfirmReceivableRequest;
 import com.smartdistribution.receivable.dto.request.CorrectExternalInvoiceRequest;
-import com.smartdistribution.receivable.dto.response.PayableReceivableResponse;
+import com.smartdistribution.receivable.dto.response.OutstandingReceivableResponse;
 import com.smartdistribution.receivable.dto.response.ReceivableDetailResponse;
 import com.smartdistribution.receivable.dto.response.ReceivableSummaryResponse;
 import com.smartdistribution.receivable.entity.ReceivableStatus;
@@ -52,8 +52,8 @@ public class ReceivableController {
 
     //登錄收款時用：掛在客戶底下，表達「這個客戶還欠哪些」
     @GetMapping("/customers/{customerId}/open-receivables")
-    public ResponseEntity<List<PayableReceivableResponse>> findPayableReceivables(@PathVariable Long customerId) {
-        return ResponseEntity.ok(receivableService.findPayableReceivables(customerId));
+    public ResponseEntity<List<OutstandingReceivableResponse>> findOutstandingReceivables(@PathVariable Long customerId) {
+        return ResponseEntity.ok(receivableService.findOutstandingReceivables(customerId));
     }
 
     @PostMapping("/receivables/{receivableId}/confirm")

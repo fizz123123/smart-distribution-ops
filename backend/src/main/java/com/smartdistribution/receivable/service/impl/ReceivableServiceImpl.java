@@ -4,7 +4,7 @@ import com.smartdistribution.audit.entity.AuditActionType;
 import com.smartdistribution.audit.service.AuditService;
 import com.smartdistribution.receivable.dto.request.ConfirmReceivableRequest;
 import com.smartdistribution.receivable.dto.request.CorrectExternalInvoiceRequest;
-import com.smartdistribution.receivable.dto.response.PayableReceivableResponse;
+import com.smartdistribution.receivable.dto.response.OutstandingReceivableResponse;
 import com.smartdistribution.receivable.dto.response.ReceivableDetailResponse;
 import com.smartdistribution.receivable.dto.response.ReceivableSummaryResponse;
 import com.smartdistribution.receivable.entity.Receivable;
@@ -93,8 +93,8 @@ public class ReceivableServiceImpl implements ReceivableService {
 
     @Override
     @PreAuthorize("hasAuthority('RECEIVABLE_VIEW')")
-    public List<PayableReceivableResponse> findPayableReceivables(Long customerId) {
-        return receivableAssembler.toPayables(receivableRepository.findPayableByCustomerId(customerId));
+    public List<OutstandingReceivableResponse> findOutstandingReceivables(Long customerId) {
+        return receivableAssembler.toOutstandings(receivableRepository.findOutstandingByCustomerId(customerId));
     }
 
     @Override

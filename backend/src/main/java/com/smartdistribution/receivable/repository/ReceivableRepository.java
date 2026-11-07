@@ -28,7 +28,7 @@ public interface ReceivableRepository extends JpaRepository<Receivable, Long> {
     @Query("SELECT receivable FROM Receivable receivable WHERE receivable.id IN :ids ORDER BY receivable.id")
     List<Receivable> findAllByIdInForUpdate(@Param("ids") Collection<Long> ids);
 
-    //登錄收款時給財務選：這個客戶還沒收清的正式應收，先到期的排前面
+    //登錄收款時給財務選：這個客戶已確認、還有未收餘額的應收，先到期的排前面
     @Query("""
             SELECT receivable
             FROM Receivable receivable
@@ -39,7 +39,7 @@ public interface ReceivableRepository extends JpaRepository<Receivable, Long> {
               )
             ORDER BY receivable.dueDate, receivable.id
             """)
-    List<Receivable> findPayableByCustomerId(@Param("customerId") Long customerId);
+    List<Receivable> findOutstandingByCustomerId(@Param("customerId") Long customerId);
 
     /**
      * 關鍵字比對應收編號、DO 編號、SO 編號、發票號碼

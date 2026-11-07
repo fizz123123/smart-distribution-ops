@@ -34,11 +34,8 @@ public class ReceivableBalances {
                 .collect(Collectors.toMap(PaidAmountProjection::receivableId, PaidAmountProjection::paidAmount));
     }
 
-    public static BigDecimal paidAmount(Receivable receivable, Map<Long, BigDecimal> paidAmounts) {
-        return paidAmounts.getOrDefault(receivable.getId(), BigDecimal.ZERO);
-    }
-
+    //未收餘額 ＝ 含稅總額 － 已收金額；paidAmounts 是 findPaidAmounts 的結果
     public static BigDecimal balance(Receivable receivable, Map<Long, BigDecimal> paidAmounts) {
-        return receivable.getTotalAmount().subtract(paidAmount(receivable, paidAmounts));
+        return receivable.getTotalAmount().subtract(paidAmounts.getOrDefault(receivable.getId(), BigDecimal.ZERO));
     }
 }

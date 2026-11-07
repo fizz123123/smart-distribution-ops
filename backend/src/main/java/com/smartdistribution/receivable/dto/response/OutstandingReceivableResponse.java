@@ -6,9 +6,9 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
- * 登錄收款時列出的應收：已確認、還沒收清；畫面可以依到期日順序預先分配
+ * 登錄收款時列出的未收應收：已確認、還有未收餘額；畫面可以依到期日順序預先分配
  */
-public record PayableReceivableResponse(
+public record OutstandingReceivableResponse(
         Long id,
         String receivableNumber,
         String doNumber,

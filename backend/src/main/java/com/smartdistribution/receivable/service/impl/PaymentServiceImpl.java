@@ -79,37 +79,22 @@ public class PaymentServiceImpl implements PaymentService {
         checkRequest(request);
 
         //先鎖應收再查重送：同一筆收款幾乎同時送兩次時，第二次會等第一次提交，再查到它
-        List<Long> receivableIds = request.allocations().stream().map(PaymentAllocationRequest::receivableId).toList();
-        List<Receivable> receivables = receivableRepository.findAllByIdInForUpdate(receivableIds);
+        List<Receivable> receivables = receivableRepository.findAllByIdInForUpdate(
+                request.allocations().stream().map(PaymentAllocationRequest::receivableId).toList()
+        );
 
         Optional<Payment> existing = paymentRepository.findByClientRequestId(request.clientRequestId());
         if (existing.isPresent()) {
             return new ConfirmedPayment(paymentAssembler.toDetail(existing.get()), false);
         }
 
-        if (receivables.size() != receivableIds.size()) {
-            throw new BusinessException(ErrorCode.RECEIVABLE_NOT_FOUND);
-        }
-
-        Map<Long, BigDecimal> paidAmounts = receivableBalances.findPaidAmounts(receivableIds);
         Map<Long, BigDecimal> allocatedByReceivable = request.allocations()
                 .stream()
                 .collect(Collectors.toMap(
                         PaymentAllocationRequest::receivableId,
                         PaymentAllocationRequest::allocatedAmount
                 ));
-
-        for (Receivable receivable : receivables) {
-            checkPayable(receivable, request.customerId());
-
-            BigDecimal balance = ReceivableBalances.balance(receivable, paidAmounts);
-            if (allocatedByReceivable.get(receivable.getId()).compareTo(balance) > 0) {
-                throw new BusinessException(
-                        ErrorCode.PAYMENT_AMOUNT_EXCEEDS_BALANCE,
-                        receivable.getReceivableNumber() + " 最多還能核銷 " + balance.toPlainString() + "。"
-                );
-            }
-        }
+        checkAllocations(receivables, allocatedByReceivable, request.customerId());
 
         Payment payment = new Payment(
                 request.clientRequestId(),
@@ -126,12 +111,11 @@ public class PaymentServiceImpl implements PaymentService {
         payment.assignNumber();
 
         for (Receivable receivable : receivables) {
-            BigDecimal allocated = allocatedByReceivable.get(receivable.getId());
-
-            paymentAllocationRepository.save(new PaymentAllocation(payment, receivable, allocated));
-            receivable.updatePaymentStatus(ReceivableBalances.paidAmount(receivable, paidAmounts).add(allocated));
+            paymentAllocationRepository.save(
+                    new PaymentAllocation(payment, receivable, allocatedByReceivable.get(receivable.getId()))
+            );
         }
-        paymentRepository.flush();
+        refreshStatuses(receivables);
 
         return new ConfirmedPayment(paymentAssembler.toDetail(payment), true);
     }
@@ -143,25 +127,17 @@ public class PaymentServiceImpl implements PaymentService {
         //先鎖收款表頭，再依 ID 鎖應收，和確認收款鎖應收的順序相同
         Payment payment = paymentRepository.findByIdForUpdate(paymentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
-        if (!Objects.equals(payment.getVersion(), request.version())) {
-            throw new BusinessException(ErrorCode.VERSION_CONFLICT);
-        }
+        verifyVersion(payment, request.version());
 
-        List<Long> receivableIds = paymentAllocationRepository.findAllByPaymentIdOrderByIdAsc(paymentId)
-                .stream()
-                .map(allocation -> allocation.getReceivable().getId())
-                .toList();
-        List<Receivable> receivables = receivableRepository.findAllByIdInForUpdate(receivableIds);
+        List<Receivable> receivables = receivableRepository.findAllByIdInForUpdate(
+                paymentAllocationRepository.findAllByPaymentIdOrderByIdAsc(paymentId)
+                        .stream()
+                        .map(allocation -> allocation.getReceivable().getId())
+                        .toList()
+        );
 
         payment.voidPayment(request.reason(), currentUserProvider.getCurrentUserId(), Instant.now());
-        //已收金額只算 CONFIRMED 的收款，所以先把作廢寫進資料庫再重算
-        paymentRepository.flush();
-
-        Map<Long, BigDecimal> paidAmounts = receivableBalances.findPaidAmounts(receivableIds);
-        for (Receivable receivable : receivables) {
-            receivable.updatePaymentStatus(ReceivableBalances.paidAmount(receivable, paidAmounts));
-        }
-        paymentRepository.flush();
+        refreshStatuses(receivables);
 
         return paymentAssembler.toDetail(payment);
     }
@@ -193,18 +169,63 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
-    //應收要屬於這個客戶、已確認，而且還沒收清
-    private static void checkPayable(Receivable receivable, Long customerId) {
-        String number = receivable.getReceivableNumber();
+    /**
+     * 鎖定之後才做的檢查，讀到的是最新的應收狀態與已收金額：
+     * 每筆應收都存在、屬於這個客戶、已確認且還有未收餘額，分配不超過未收餘額
+     */
+    private void checkAllocations(
+            List<Receivable> receivables,
+            Map<Long, BigDecimal> allocatedByReceivable,
+            Long customerId
+    ) {
+        if (receivables.size() != allocatedByReceivable.size()) {
+            throw new BusinessException(ErrorCode.RECEIVABLE_NOT_FOUND);
+        }
 
-        if (!receivable.getCustomerId().equals(customerId)) {
-            throw new BusinessException(ErrorCode.PAYMENT_RECEIVABLE_INVALID, number + " 不是這個客戶的應收。");
+        Map<Long, BigDecimal> paidAmounts = receivableBalances.findPaidAmounts(allocatedByReceivable.keySet());
+
+        for (Receivable receivable : receivables) {
+            String number = receivable.getReceivableNumber();
+
+            if (!receivable.getCustomerId().equals(customerId)) {
+                throw new BusinessException(ErrorCode.PAYMENT_RECEIVABLE_INVALID, number + " 不是這個客戶的應收。");
+            }
+            if (!receivable.isConfirmed()) {
+                throw new BusinessException(ErrorCode.PAYMENT_RECEIVABLE_INVALID, number + " 還沒確認，不能收款。");
+            }
+            if (!receivable.hasBalance()) {
+                throw new BusinessException(ErrorCode.PAYMENT_RECEIVABLE_INVALID, number + " 已經收清。");
+            }
+
+            BigDecimal balance = ReceivableBalances.balance(receivable, paidAmounts);
+            if (allocatedByReceivable.get(receivable.getId()).compareTo(balance) > 0) {
+                throw new BusinessException(
+                        ErrorCode.PAYMENT_AMOUNT_EXCEEDS_BALANCE,
+                        number + " 最多還能核銷 " + balance.toPlainString() + "。"
+                );
+            }
         }
-        if (!receivable.isConfirmed()) {
-            throw new BusinessException(ErrorCode.PAYMENT_RECEIVABLE_INVALID, number + " 還沒確認，不能收款。");
+    }
+
+    /**
+     * 收款與作廢收款共用：先把這次的變更寫進資料庫，再依核銷明細重新加總已收金額，重設應收狀態
+     * 狀態永遠由核銷明細算出來，不在記憶體裡另外加減
+     */
+    private void refreshStatuses(List<Receivable> receivables) {
+        paymentRepository.flush();
+
+        Map<Long, BigDecimal> paidAmounts = receivableBalances.findPaidAmounts(
+                receivables.stream().map(Receivable::getId).toList()
+        );
+        for (Receivable receivable : receivables) {
+            receivable.updatePaymentStatus(paidAmounts.getOrDefault(receivable.getId(), BigDecimal.ZERO));
         }
-        if (!receivable.isPayable()) {
-            throw new BusinessException(ErrorCode.PAYMENT_RECEIVABLE_INVALID, number + " 已經收清。");
+        paymentRepository.flush();
+    }
+
+    private void verifyVersion(Payment payment, Long expectedVersion) {
+        if (!Objects.equals(payment.getVersion(), expectedVersion)) {
+            throw new BusinessException(ErrorCode.VERSION_CONFLICT);
         }
     }
 

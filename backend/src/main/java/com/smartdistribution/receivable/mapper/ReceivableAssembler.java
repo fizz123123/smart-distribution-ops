@@ -3,7 +3,7 @@ package com.smartdistribution.receivable.mapper;
 import com.smartdistribution.identity.service.UserDirectoryService;
 import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.customer.entity.Customer;
-import com.smartdistribution.receivable.dto.response.PayableReceivableResponse;
+import com.smartdistribution.receivable.dto.response.OutstandingReceivableResponse;
 import com.smartdistribution.receivable.dto.response.ReceivableDetailResponse;
 import com.smartdistribution.receivable.dto.response.ReceivableSummaryResponse;
 import com.smartdistribution.receivable.entity.Receivable;
@@ -71,14 +71,14 @@ public class ReceivableAssembler {
         });
     }
 
-    public List<PayableReceivableResponse> toPayables(List<Receivable> receivables) {
+    public List<OutstandingReceivableResponse> toOutstandings(List<Receivable> receivables) {
         Map<Long, BigDecimal> paidAmounts = receivableBalances.findPaidAmounts(
                 receivables.stream().map(Receivable::getId).toList()
         );
         LocalDate today = LocalDate.now(TAIPEI);
 
         return receivables.stream()
-                .map(receivable -> new PayableReceivableResponse(
+                .map(receivable -> new OutstandingReceivableResponse(
                         receivable.getId(),
                         receivable.getReceivableNumber(),
                         receivable.getDoNumber(),
@@ -86,7 +86,7 @@ public class ReceivableAssembler {
                         receivable.getDueDate(),
                         receivable.dueStatus(today),
                         receivable.getTotalAmount(),
-                        ReceivableBalances.paidAmount(receivable, paidAmounts),
+                        paidAmounts.getOrDefault(receivable.getId(), BigDecimal.ZERO),
                         ReceivableBalances.balance(receivable, paidAmounts)
                 ))
                 .toList();
@@ -125,7 +125,7 @@ public class ReceivableAssembler {
                 receivable.getUntaxedAmount(),
                 receivable.getTaxAmount(),
                 receivable.getTotalAmount(),
-                ReceivableBalances.paidAmount(receivable, paidAmounts),
+                paidAmounts.getOrDefault(receivable.getId(), BigDecimal.ZERO),
                 ReceivableBalances.balance(receivable, paidAmounts),
                 receivable.getExternalInvoiceNumber() == null ? null : new ReceivableDetailResponse.ExternalInvoice(
                         receivable.getExternalInvoiceNumber(),
