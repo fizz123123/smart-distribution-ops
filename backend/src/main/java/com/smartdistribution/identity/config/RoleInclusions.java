@@ -14,7 +14,8 @@ public final class RoleInclusions {
     private static final Map<String, List<String>> INCLUDED_ROLES = Map.of(
             "SALES_MANAGER", List.of("SALES"),
             "PURCHASING_MANAGER", List.of("PURCHASING"),
-            "WAREHOUSE_MANAGER", List.of("WAREHOUSE")
+            "WAREHOUSE_MANAGER", List.of("WAREHOUSE"),
+            "FINANCE_MANAGER", List.of("FINANCE")
     );
 
     private RoleInclusions() {

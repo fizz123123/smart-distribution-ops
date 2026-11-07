@@ -45,7 +45,7 @@ public interface DeliveryOrderService {
     DeliveryOrderDetailResponse readyDeliveryOrder(Long deliveryOrderId, ReadyDeliveryOrderRequest request);
 
     /**
-     * 出貨過帳：交給司機時執行；依實際量扣減實體庫存並使用預留，全部出完時 SO 結案
+     * 出貨過帳：交給司機時執行；依實際量扣減實體庫存並使用預留、建立應收草稿，全部出完時 SO 結案
      */
     DeliveryOrderDetailResponse postDeliveryOrder(Long deliveryOrderId, PostDeliveryOrderRequest request);
 

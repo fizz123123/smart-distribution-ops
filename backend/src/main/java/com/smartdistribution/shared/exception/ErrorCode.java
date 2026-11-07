@@ -368,6 +368,16 @@ public enum ErrorCode {
             "預留數量不足，無法出貨過帳。"
     ),
 
+    // Receivable
+    RECEIVABLE_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "找不到指定的應收。"
+    ),
+    RECEIVABLE_ALREADY_EXISTS(
+            HttpStatus.CONFLICT,
+            "這張出貨單已經有應收，不能再建立一次。"
+    ),
+
     // Document
     DOCUMENT_NOT_FOUND(
             HttpStatus.NOT_FOUND,

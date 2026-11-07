@@ -23,18 +23,31 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * DO 整合測試共用的資料準備與清理；客戶、料號、SO 與帳號沿用 SO 測試的工具
  */
-abstract class DeliveryOrderTestSupport extends SalesOrderTestSupport {
+public abstract class DeliveryOrderTestSupport extends SalesOrderTestSupport {
 
     //SO 測試的清理（父類別）只認得 SO；DO 只存 SO 的 ID，沒有外鍵，先後都可以
     @BeforeEach
     @AfterEach
-    void cleanDeliveryOrders() {
+    protected void cleanDeliveryOrders() {
         String testOrders = """
                 SELECT so.id FROM sales_order so
                 JOIN customer customer ON customer.id = so.customer_id
                 WHERE customer.name LIKE ?
                 """;
 
+        //DO 過帳會建立應收；應收只存 SO 與 DO 的 ID，沒有外鍵，和 DO 一起清掉
+        jdbcTemplate.update(
+                """
+                DELETE line FROM receivable_line line
+                JOIN receivable receivable ON receivable.id = line.receivable_id
+                WHERE receivable.sales_order_id IN (%s)
+                """.formatted(testOrders),
+                CUSTOMER_NAME_PREFIX + "%"
+        );
+        jdbcTemplate.update(
+                "DELETE FROM receivable WHERE sales_order_id IN (%s)".formatted(testOrders),
+                CUSTOMER_NAME_PREFIX + "%"
+        );
         jdbcTemplate.update(
                 """
                 DELETE FROM document_file
@@ -61,7 +74,7 @@ abstract class DeliveryOrderTestSupport extends SalesOrderTestSupport {
      * 建立一張已核准的 SO：料號期初庫存 stock 個，訂購 ordered 個
      * 例如 stock 3、ordered 5 → 預留 3
      */
-    ApprovedOrder createApprovedOrder(String warehouseManager, String salesManager, String stock, String ordered)
+    protected ApprovedOrder createApprovedOrder(String warehouseManager, String salesManager, String stock, String ordered)
             throws Exception {
         String sales = login(createUser("do-sales", "SALES"));
         Customer customer = createActiveCustomer(PaymentTerm.NET_30);
@@ -78,13 +91,13 @@ abstract class DeliveryOrderTestSupport extends SalesOrderTestSupport {
 
     // ===== DO =====
 
-    String doLine(Long salesOrderLineId, String quantity) {
+    protected String doLine(Long salesOrderLineId, String quantity) {
         return """
                 {"salesOrderLineId": %d, "plannedQuantity": %s}
                 """.formatted(salesOrderLineId, quantity);
     }
 
-    ResultActions notifyShipment(String token, Long salesOrderId, String lines) throws Exception {
+    protected ResultActions notifyShipment(String token, Long salesOrderId, String lines) throws Exception {
         return mockMvc.perform(post("/api/v1/sales-orders/{id}/delivery-orders", salesOrderId)
                 .header("Authorization", bearer(token))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -94,7 +107,7 @@ abstract class DeliveryOrderTestSupport extends SalesOrderTestSupport {
     }
 
     //通知出貨並回傳 DO ID
-    Long createDeliveryOrder(String token, Long salesOrderId, String lines) throws Exception {
+    protected Long createDeliveryOrder(String token, Long salesOrderId, String lines) throws Exception {
         MvcResult result = notifyShipment(token, salesOrderId, lines)
                 .andExpect(status().isCreated())
                 .andReturn();
@@ -102,16 +115,16 @@ abstract class DeliveryOrderTestSupport extends SalesOrderTestSupport {
         return readLong(result, "$.id");
     }
 
-    ResultActions getDeliveryOrder(String token, Long deliveryOrderId) throws Exception {
+    protected ResultActions getDeliveryOrder(String token, Long deliveryOrderId) throws Exception {
         return mockMvc.perform(get("/api/v1/delivery-orders/{id}", deliveryOrderId)
                 .header("Authorization", bearer(token)));
     }
 
-    Long deliveryOrderVersion(String token, Long deliveryOrderId) throws Exception {
+    protected Long deliveryOrderVersion(String token, Long deliveryOrderId) throws Exception {
         return readLong(getDeliveryOrder(token, deliveryOrderId).andExpect(status().isOk()).andReturn(), "$.version");
     }
 
-    ResultActions withdraw(String token, Long deliveryOrderId, Long version) throws Exception {
+    protected ResultActions withdraw(String token, Long deliveryOrderId, Long version) throws Exception {
         return mockMvc.perform(post("/api/v1/delivery-orders/{id}/withdraw", deliveryOrderId)
                 .header("Authorization", bearer(token))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -120,7 +133,7 @@ abstract class DeliveryOrderTestSupport extends SalesOrderTestSupport {
                         """.formatted(version)));
     }
 
-    ResultActions voidOrder(String token, Long deliveryOrderId, String reason, Long version) throws Exception {
+    protected ResultActions voidOrder(String token, Long deliveryOrderId, String reason, Long version) throws Exception {
         return mockMvc.perform(post("/api/v1/delivery-orders/{id}/void", deliveryOrderId)
                 .header("Authorization", bearer(token))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -132,7 +145,7 @@ abstract class DeliveryOrderTestSupport extends SalesOrderTestSupport {
     // ===== 揀貨與過帳 =====
 
     //DO 明細 ID，依行號排序
-    List<Long> findDeliveryOrderLineIds(Long deliveryOrderId) {
+    protected List<Long> findDeliveryOrderLineIds(Long deliveryOrderId) {
         return jdbcTemplate.queryForList(
                 "SELECT id FROM delivery_order_line WHERE delivery_order_id = ? ORDER BY line_no",
                 Long.class,
@@ -140,13 +153,13 @@ abstract class DeliveryOrderTestSupport extends SalesOrderTestSupport {
         );
     }
 
-    String actualLine(Long deliveryOrderLineId, String quantity) {
+    protected String actualLine(Long deliveryOrderLineId, String quantity) {
         return """
                 {"deliveryOrderLineId": %d, "actualQuantity": %s}
                 """.formatted(deliveryOrderLineId, quantity);
     }
 
-    ResultActions ready(String token, Long deliveryOrderId, String lines) throws Exception {
+    protected ResultActions ready(String token, Long deliveryOrderId, String lines) throws Exception {
         return mockMvc.perform(post("/api/v1/delivery-orders/{id}/ready", deliveryOrderId)
                 .header("Authorization", bearer(token))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -155,7 +168,7 @@ abstract class DeliveryOrderTestSupport extends SalesOrderTestSupport {
                         """.formatted(lines, deliveryOrderVersion(token, deliveryOrderId))));
     }
 
-    ResultActions postShipment(String token, Long deliveryOrderId, LocalDate actualShipmentDate) throws Exception {
+    protected ResultActions postShipment(String token, Long deliveryOrderId, LocalDate actualShipmentDate) throws Exception {
         return mockMvc.perform(post("/api/v1/delivery-orders/{id}/post", deliveryOrderId)
                 .header("Authorization", bearer(token))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -164,13 +177,13 @@ abstract class DeliveryOrderTestSupport extends SalesOrderTestSupport {
                         """.formatted(actualShipmentDate, deliveryOrderVersion(token, deliveryOrderId))));
     }
 
-    static LocalDate today() {
+    protected static LocalDate today() {
         return LocalDate.now(ZoneId.of("Asia/Taipei"));
     }
 
     /**
      * @param salesToken 建立這張 SO 的業務，通知出貨與申請取消都用它
      */
-    record ApprovedOrder(Long salesOrderId, Long salesOrderLineId, CompanyItem item, String salesToken) {
+    protected record ApprovedOrder(Long salesOrderId, Long salesOrderLineId, CompanyItem item, String salesToken) {
     }
 }

@@ -377,7 +377,8 @@ class IdentityApiIntegrationTest {
                 "PO_APPROVE",
                 "GOODS_RECEIPT_VIEW",
                 "DO_VIEW",
-                "DO_DOCUMENT_VIEW"
+                "DO_DOCUMENT_VIEW",
+                "RECEIVABLE_VIEW"
         );
 
         mockMvc.perform(get("/api/v1/users")
@@ -654,7 +655,7 @@ class IdentityApiIntegrationTest {
     @Test
     void managerRolesContainAllPermissionsOfIncludedStaffRoles() {
         //RoleInclusions 說主管包含職員，初始化程式就必須真的把職員的權限都給主管
-        for (String managerRole : List.of("SALES_MANAGER", "PURCHASING_MANAGER", "WAREHOUSE_MANAGER")) {
+        for (String managerRole : List.of("SALES_MANAGER", "PURCHASING_MANAGER", "WAREHOUSE_MANAGER", "FINANCE_MANAGER")) {
             for (String staffRole : RoleInclusions.includedRoleCodesOf(managerRole)) {
                 assertThat(permissionCodesOf(managerRole))
                         .as("%s 應包含 %s 的全部權限", managerRole, staffRole)
