@@ -2,7 +2,7 @@
 
 > 文件版本：v1.0  
 > 建立日期：2026-10-04  
-> 最後更新：2026-11-03  
+> 最後更新：2026-11-07  
 > 文件定位：依已確認的產品需求、業務流程、領域規則與決策紀錄，定義核心資料實體、關係、責任與一致性限制。
 
 ---
@@ -226,6 +226,7 @@ DO 建立、修改及過帳時，還須鎖定相關預留與有效 DO 明細，�
 erDiagram
     CUSTOMER ||--o{ RECEIVABLE : owes
     DELIVERY_ORDER ||--o| RECEIVABLE : generates_after_posting
+    RECEIVABLE ||--|{ RECEIVABLE_LINE : contains
     CUSTOMER ||--o{ PAYMENT : makes
     PAYMENT ||--|{ PAYMENT_ALLOCATION : allocates
     RECEIVABLE ||--o{ PAYMENT_ALLOCATION : settled_by
@@ -233,7 +234,8 @@ erDiagram
 
 | 實體 | 主要資料 | 關係與限制 |
 | --- | --- | --- |
-| `receivable` | 應收編號、DO、客戶、狀態、未稅金額、稅額、含稅總額、付款條件、到期日、外部發票號碼與日期 | 每張已過帳 DO 恰有一筆；正式應收的外部發票號碼不得重複；財務主管只能更正外部發票號碼或日期，更正前後值與原因由稽核紀錄保存 |
+| `receivable` | 應收編號、DO、DO 編號快照、SO、SO 編號快照、客戶、狀態、未稅金額、稅額、含稅總額、付款條件、實際出貨日、到期日、外部發票號碼與日期、確認者與確認時間 | 每張已過帳 DO 恰有一筆；正式應收的外部發票號碼不得重複；財務主管只能更正外部發票號碼或日期，更正前後值與原因由稽核紀錄保存 |
+| `receivable_line` | 應收、行號、DO 明細、SO 明細、公司料號、客戶料號、出貨量、單位、SO 未稅單價、小計 | 每筆實際出貨量大於 0 的 DO 明細一筆；建立當下的快照，之後不修改（D-076） |
 | `payment` | 客戶、client request ID、收款日期、含稅收款金額、方式、外部參考號碼、狀態、建立及作廢資料 | 一筆代表一筆實際入帳；`client_request_id` 唯一，用於防止網路重試造成重複收款；確認後不直接修改 |
 | `payment_allocation` | 收款、應收、核銷金額 | 同一收款只能核銷同一客戶的正式應收；金額大於零且不得超過未收餘額 |
 

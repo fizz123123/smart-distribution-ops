@@ -105,7 +105,13 @@ public class IdentityDataInitializer implements ApplicationRunner {
             new PermissionSeed("DO", "VOID"),
             new PermissionSeed("DO", "READY"),
             new PermissionSeed("DO", "POST"),
-            new PermissionSeed("DO_DOCUMENT", "VIEW")
+            new PermissionSeed("DO_DOCUMENT", "VIEW"),
+            new PermissionSeed("RECEIVABLE", "VIEW"),
+            new PermissionSeed("RECEIVABLE", "CONFIRM"),
+            new PermissionSeed("RECEIVABLE", "INVOICE_CORRECT"),
+            new PermissionSeed("PAYMENT", "VIEW"),
+            new PermissionSeed("PAYMENT", "CONFIRM"),
+            new PermissionSeed("PAYMENT", "VOID")
     );
 
     private static final List<String> APP_ADMIN_PERMISSIONS = List.of(
@@ -201,9 +207,20 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "INVENTORY_ADJUSTMENT_POST"
     );
 
-    private static final List<String> FINANCE_MANAGER_PERMISSIONS = List.of(
+    private static final List<String> FINANCE_PERMISSIONS = List.of(
+            //登錄收款時要選客戶
             "CUSTOMER_VIEW",
-            "CUSTOMER_PAYMENT_TERM_MANAGE"
+            "RECEIVABLE_VIEW",
+            "RECEIVABLE_CONFIRM",
+            "PAYMENT_VIEW",
+            "PAYMENT_CONFIRM"
+    );
+
+    //財務主管包含財務的全部權限，這裡只列主管額外的權限
+    private static final List<String> FINANCE_MANAGER_PERMISSIONS = List.of(
+            "CUSTOMER_PAYMENT_TERM_MANAGE",
+            "RECEIVABLE_INVOICE_CORRECT",
+            "PAYMENT_VOID"
     );
 
     //營運主管可以替代核准所有類型，主管自己建立的資料由營運主管核准
@@ -229,7 +246,9 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "PO_APPROVE",
             "GOODS_RECEIPT_VIEW",
             "DO_VIEW",
-            "DO_DOCUMENT_VIEW"
+            "DO_DOCUMENT_VIEW",
+            "RECEIVABLE_VIEW",
+            "PAYMENT_VIEW"
     );
 
     private final RoleRepository roleRepository;
@@ -304,6 +323,18 @@ public class IdentityDataInitializer implements ApplicationRunner {
                 rolesByCode.get("WAREHOUSE_MANAGER"),
                 permissionsByCode,
                 WAREHOUSE_MANAGER_PERMISSIONS
+        );
+
+        assignPermissions(
+                rolesByCode.get("FINANCE"),
+                permissionsByCode,
+                FINANCE_PERMISSIONS
+        );
+
+        assignPermissions(
+                rolesByCode.get("FINANCE_MANAGER"),
+                permissionsByCode,
+                FINANCE_PERMISSIONS
         );
 
         assignPermissions(

@@ -2,7 +2,7 @@
 
 > 文件版本：v1.0  
 > 建立日期：2026-09-29  
-> 最後更新：2026-11-03  
+> 最後更新：2026-11-07  
 > 文件定位：定義系統角色、兼任原則、核准責任與資料查看邊界。
 
 ## 角色模型
@@ -55,7 +55,7 @@ APP_ADMIN 不因管理帳號而自動取得業務資料、交易或核准權限�
 | PO 收貨 | WAREHOUSE | 不另設核准 | PO 已核准且有未結數量；建立即過帳，只有合格數量入庫；過帳後不得修改或沖銷（D-068） |
 | 安全庫存政策 | PURCHASING_MANAGER 或具相應細部權限者直接設定 | 不另設核准 | 以庫存基準單位保存；修改須留下前後值、操作者與時間，其他相關角色只能查看 |
 | 出貨單 DO | SALES 通知出貨、系統建立 | 不另設主管核准 | SO 已核准，且預計出貨量均已預留；DO 草稿不提供修改，SALES 可撤回自己通知的草稿；由 WAREHOUSE 回報不高於預計量的實際出貨量（可為 0），完成揀貨與 PDF 後轉為 `READY`，交車時過帳；WAREHOUSE 可作廢 `DRAFT`、`READY`（D-070、D-071） |
-| 簡化應收 | 系統依已過帳 DO 建立 | FINANCE 確認 | 一張 DO 對一筆應收；外部發票資料填妥後轉為正式應收 |
+| 簡化應收 | 系統依已過帳 DO 建立 | FINANCE 確認 | 一張 DO 對一筆應收；外部發票資料填妥後轉為正式應收；FINANCE_MANAGER 可更正外部發票號碼或日期（D-079） |
 | 未出貨餘量取消 | SALES | SALES_MANAGER 或具相應權限的 MANAGER | 同一張 SO 同時只能有一張未完成的申請；核准後先取消未預留部分，預留超過剩餘需求時才釋放（D-054）；全部明細都沒有餘量時 SO 結案 |
 | 庫存例外 | WAREHOUSE_MANAGER 或具相應細部權限者 | 不另設核准 | 直接過帳具原因且可追溯的調整；調減不得超過可用庫存，侵蝕預留時拒絕；更正以相反方向的新調整處理 |
 | 財務例外 | FINANCE | FINANCE_MANAGER | 不直接改寫已完成的原始交易；保留例外原因與處理紀錄 |
@@ -83,6 +83,21 @@ WAREHOUSE 沒有 `PO_VIEW`，看不到 PO 採購單價；驗收所需的 PO 與�
 | `DO_CREATE` | SALES、SALES_MANAGER | 通知出貨；撤回自己通知的 `DRAFT` |
 | `DO_READY`、`DO_POST`、`DO_VOID` | WAREHOUSE、WAREHOUSE_MANAGER | 完成揀貨、出貨過帳、作廢 `DRAFT` 或 `READY` |
 | `DO_DOCUMENT_VIEW` | SALES、SALES_MANAGER、WAREHOUSE、WAREHOUSE_MANAGER、MANAGER | 下載出貨單 PDF |
+
+## 應收與收款權限
+
+部門主管包含同部門職員的全部權限：FINANCE_MANAGER 也具有下表列給 FINANCE 的權限（D-078）。
+
+| 權限 | 預設角色 | 用途 |
+| --- | --- | --- |
+| `RECEIVABLE_VIEW` | FINANCE、MANAGER | 查看應收清單與詳情、客戶的未收應收 |
+| `RECEIVABLE_CONFIRM` | FINANCE | 填入外部發票資料，確認正式應收 |
+| `RECEIVABLE_INVOICE_CORRECT` | FINANCE_MANAGER | 更正正式應收的外部發票號碼或日期 |
+| `PAYMENT_VIEW` | FINANCE、MANAGER | 查看收款清單與詳情 |
+| `PAYMENT_CONFIRM` | FINANCE | 登錄收款並核銷 |
+| `PAYMENT_VOID` | FINANCE_MANAGER | 作廢已確認的收款 |
+
+FINANCE 另具有 `CUSTOMER_VIEW`，登錄收款時用來選客戶。MANAGER 只能查看應收與收款，不能確認、收款或作廢。
 
 ## 分析資料查看範圍
 

@@ -23,6 +23,8 @@ import com.smartdistribution.inventory.service.InventoryService.DeliveryLine;
 import com.smartdistribution.inventory.service.InventoryService;
 import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.customer.entity.Customer;
+import com.smartdistribution.receivable.service.ReceivableService.PostedDelivery;
+import com.smartdistribution.receivable.service.ReceivableService;
 import com.smartdistribution.sales.service.SalesOrderAmounts;
 import com.smartdistribution.sales.service.SalesOrderDeliveryService.SalesOrderForDelivery;
 import com.smartdistribution.sales.service.SalesOrderDeliveryService;
@@ -70,6 +72,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
     private final DeliveryOrderAssembler deliveryOrderAssembler;
     private final SalesOrderDeliveryService salesOrderDeliveryService;
     private final InventoryService inventoryService;
+    private final ReceivableService receivableService;
     private final DocumentService documentService;
     private final CurrentUserProvider currentUserProvider;
 
@@ -225,20 +228,41 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         }
 
         Long actorId = currentUserProvider.getCurrentUserId();
-        List<DeliveryLine> shippedLines = deliveryOrderLineRepository
+        List<DeliveryOrderLine> shippedLines = deliveryOrderLineRepository
                 .findAllByDeliveryOrderIdOrderByLineNoAsc(deliveryOrderId)
                 .stream()
                 .filter(DeliveryOrderLine::isShipped)
-                .map(line -> new DeliveryLine(
-                        line.getId(),
-                        line.getCompanyItemId(),
-                        line.getSalesOrderLineId(),
-                        line.getActualBaseQty()
-                ))
                 .toList();
-        inventoryService.consumeForDelivery(shippedLines, actorId);
+        inventoryService.consumeForDelivery(
+                shippedLines.stream()
+                        .map(line -> new DeliveryLine(
+                                line.getId(),
+                                line.getCompanyItemId(),
+                                line.getSalesOrderLineId(),
+                                line.getActualBaseQty()
+                        ))
+                        .toList(),
+                actorId
+        );
 
         deliveryOrder.post(request.actualShipmentDate(), actorId, Instant.now());
+
+        //應收的數量用 SO 明細的單位，也就是 DO 明細的實際量，不是基準量
+        receivableService.createForDelivery(new PostedDelivery(
+                deliveryOrder.getId(),
+                deliveryOrder.getDoNumber(),
+                deliveryOrder.getSalesOrderId(),
+                deliveryOrder.getActualShipmentDate(),
+                shippedLines.stream()
+                        .map(line -> new PostedDelivery.Line(
+                                line.getId(),
+                                line.getSalesOrderLineId(),
+                                line.getCompanyItemId(),
+                                line.getActualQuantity()
+                        ))
+                        .toList()
+        ));
+
         //SO 結案要算已出貨量，所以先把 DO 的新狀態寫進資料庫
         deliveryOrderRepository.flush();
         salesOrderDeliveryService.closeIfFulfilled(deliveryOrder.getSalesOrderId());

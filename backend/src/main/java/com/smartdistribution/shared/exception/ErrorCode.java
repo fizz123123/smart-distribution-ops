@@ -368,6 +368,50 @@ public enum ErrorCode {
             "預留數量不足，無法出貨過帳。"
     ),
 
+    // Receivable
+    RECEIVABLE_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "找不到指定的應收。"
+    ),
+    RECEIVABLE_ALREADY_EXISTS(
+            HttpStatus.CONFLICT,
+            "這張出貨單已經有應收，不能再建立一次。"
+    ),
+    RECEIVABLE_STATUS_CONFLICT(
+            HttpStatus.CONFLICT,
+            "應收目前的狀態不允許此操作，請重新載入。"
+    ),
+    RECEIVABLE_INVOICE_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "外部發票資料不正確：號碼須為 2 個英文字母加 8 位數字，日期不能晚於今天。"
+    ),
+    RECEIVABLE_INVOICE_NUMBER_DUPLICATE(
+            HttpStatus.CONFLICT,
+            "這個發票號碼已經用在其他應收。"
+    ),
+
+    // Payment
+    PAYMENT_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "找不到指定的收款。"
+    ),
+    PAYMENT_STATUS_CONFLICT(
+            HttpStatus.CONFLICT,
+            "收款已經作廢，不能再操作。"
+    ),
+    PAYMENT_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "收款資料不正確：收款日期不能晚於今天，同一筆應收只能分配一次，分配加總必須等於收款金額。"
+    ),
+    PAYMENT_RECEIVABLE_INVALID(
+            HttpStatus.CONFLICT,
+            "這筆應收不能收款：必須屬於這個客戶、已確認而且還沒收清。"
+    ),
+    PAYMENT_AMOUNT_EXCEEDS_BALANCE(
+            HttpStatus.CONFLICT,
+            "核銷金額超過應收的未收餘額。"
+    ),
+
     // Document
     DOCUMENT_NOT_FOUND(
             HttpStatus.NOT_FOUND,

@@ -2,7 +2,7 @@
 
 > 文件版本：v1.0  
 > 建立日期：2026-10-05  
-> 最後更新：2026-11-03  
+> 最後更新：2026-11-07  
 > 文件定位：依功能模組、角色權限、領域規則、資料模型及狀態轉換，定義前端畫面與後端 API 的責任邊界、主要操作、輸入輸出及錯誤處理。
 
 ---
@@ -743,7 +743,7 @@ WH-03 只顯示倉管履約所需資料，不提供非必要的客戶價格、PO
 }
 ```
 
-後端先鎖定 DO 表頭，確認 DO 為 `READY`、實際出貨日不晚於今天，再由庫存依料號順序鎖定餘額、確認預留足夠後扣庫存並使用預留。SO 每筆明細都已出貨或取消時轉為 `CLOSED`。本階段的過帳不建立應收草稿，應收階段再接上。
+後端先鎖定 DO 表頭，確認 DO 為 `READY`、實際出貨日不晚於今天，再由庫存依料號順序鎖定餘額、確認預留足夠後扣庫存並使用預留。同一交易內建立應收草稿；SO 每筆明細都已出貨或取消時轉為 `CLOSED`。應收建立失敗時整個過帳回滾（D-077）。
 
 下載出貨單時，後端驗證 `DO_DOCUMENT_VIEW` 後回傳檔案（`application/pdf`），並在應用程式 log 記錄下載（D-067）。作廢的出貨單仍可下載，檔名加上 `-voided`。部署換成 S3 後，改為回傳 `302 Redirect` 至 3 分鐘有效的 S3 Presigned URL（D-061）。
 
@@ -777,9 +777,13 @@ DO 的錯誤碼：
 
 | 操作 | Method | Path | 權限 |
 | --- | --- | --- | --- |
-| 清單／詳情 | `GET` | `/receivables`、`/receivables/{id}` | `RECEIVABLE_VIEW` |
+| 清單／詳情 | `GET` | `/receivables?keyword=&status=&customerId=&dueStatus=`、`/receivables/{id}` | `RECEIVABLE_VIEW` |
 | 確認正式應收 | `POST` | `/receivables/{id}/confirm` | `RECEIVABLE_CONFIRM` |
 | 更正外部發票資料 | `PATCH` | `/receivables/{id}/external-invoice` | `RECEIVABLE_INVOICE_CORRECT` |
+
+清單的 `keyword` 比對應收編號、DO 編號、SO 編號與發票號碼；`dueStatus` 為 `DUE_SOON` 或 `OVERDUE`，篩選時排除已收清的應收。即將到期與逾期清單建議由前端帶 `sort=dueDate,asc`，先到期的排前面。
+
+清單與詳情都回傳 `dueStatus`（即將到期、逾期，或 `null`）與未收餘額 `balance`；詳情另有已收金額 `paidAmount`、應收明細（出貨量、單價、小計）、外部發票、確認者，以及核銷紀錄（收款編號、收款狀態、收款日期、核銷金額；作廢的收款也列出）。
 
 確認 request：
 
@@ -802,7 +806,7 @@ DO 的錯誤碼：
 }
 ```
 
-更正 API 不接受金額、付款條件、到期日或來源 DO 欄位。
+更正 API 不接受金額、付款條件、到期日或來源 DO 欄位；request 帶了這些欄位也會被忽略。外部發票號碼去掉前後空白、轉大寫後必須是 2 個英文字母加 8 位數字，日期不能晚於今天（D-079）。
 
 ### 9.2 收款與核銷
 
@@ -829,14 +833,39 @@ DO 的錯誤碼：
       "allocatedAmount": 10500
     },
     {
-      "receivableId": 1,
+      "receivableId": 2,
       "allocatedAmount": 21000
     }
   ]
 }
 ```
 
-所有核銷應收必須屬於同一客戶，分配總額必須等於收款金額，且不得超過各應收未收餘額。畫面可依到期日由早到晚預先分配，但最後結果由財務確認。`clientRequestId` 由前端為每次收款操作產生且全系統唯一；同一識別碼重送時不得建立第二筆收款。
+所有核銷應收必須屬於同一客戶，分配總額必須等於收款金額，且不得超過各應收未收餘額。畫面可依到期日由早到晚預先分配，但最後結果由財務確認。`clientRequestId` 由前端為每次收款操作產生且全系統唯一；同一識別碼重送時不建立第二筆收款，回傳 `200` 與原本那筆，新建時回傳 `201`（D-080）。同一筆應收在一筆收款中只能出現一次。收款與核銷金額只接受整數元；收款日期不能晚於今天；`method` 為 `BANK_TRANSFER`、`CASH` 或 `CHECK`。
+
+`GET /customers/{id}/open-receivables` 回傳該客戶已確認、未收清的應收，依到期日、再依應收 ID 排序，附含稅總額、已收金額與未收餘額。
+
+應收與收款的錯誤碼：
+
+| 錯誤碼 | HTTP | 情境 |
+| --- | --- | --- |
+| `RECEIVABLE_NOT_FOUND` | 404 | 應收不存在 |
+| `RECEIVABLE_ALREADY_EXISTS` | 409 | 這張 DO 已經有應收；DO 過帳整個回滾 |
+| `RECEIVABLE_STATUS_CONFLICT` | 409 | 重複確認、更正草稿應收的發票 |
+| `RECEIVABLE_INVOICE_INVALID` | 400 | 發票號碼格式不符、發票日期晚於今天 |
+| `RECEIVABLE_INVOICE_NUMBER_DUPLICATE` | 409 | 發票號碼已用於其他應收 |
+| `PAYMENT_NOT_FOUND` | 404 | 收款不存在 |
+| `PAYMENT_STATUS_CONFLICT` | 409 | 收款已作廢 |
+| `PAYMENT_INVALID` | 400 | 同一筆應收分配兩次、分配加總不等於收款金額、收款日期晚於今天 |
+| `PAYMENT_RECEIVABLE_INVALID` | 409 | 應收不屬於這個客戶、尚未確認或已收清 |
+| `PAYMENT_AMOUNT_EXCEEDS_BALANCE` | 409 | 核銷超過未收餘額，訊息含最多金額 |
+
+### 9.3 應收與收款細部權限與預設角色
+
+| 權限 | 預設角色 |
+| --- | --- |
+| `RECEIVABLE_VIEW`、`PAYMENT_VIEW` | FINANCE、FINANCE_MANAGER、MANAGER |
+| `RECEIVABLE_CONFIRM`、`PAYMENT_CONFIRM` | FINANCE、FINANCE_MANAGER |
+| `RECEIVABLE_INVOICE_CORRECT`、`PAYMENT_VOID` | FINANCE_MANAGER |
 
 ## 10. 儀表板與 AI 契約
 
@@ -977,6 +1006,6 @@ POST /integrations/line/webhook
 - 查詢 API 的實際索引、最大分頁筆數及模糊搜尋策略。
 - 權限代碼的完整 seed 清單及各角色預設對應（帳號權限見 D-036，主檔權限見第 5.3 節，SO 權限見 6.3 節，PO 與收貨權限見 7.2 節，庫存權限見 7.3 節，DO 權限見 8.3 節，其餘模組實作時補齊）。
 - API 文件以 SpringDoc OpenAPI 產生的 schema 與範例。
-- LINE 確認 token 與 webhook event ID 的保存期限，以及收款 `clientRequestId` 的重送回應策略。
+- LINE 確認 token 與 webhook event ID 的保存期限。
 
 上述項目於實體資料庫、Spring Security 與整合實作時定案；若改變對外 request、response 或錯誤行為，須同步更新本文件與決策紀錄。
