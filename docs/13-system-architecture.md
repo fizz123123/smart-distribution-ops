@@ -2,7 +2,7 @@
 
 > 文件版本：v1.0  
 > 建立日期：2026-10-05  
-> 最後更新：2026-11-03  
+> 最後更新：2026-11-07  
 > 文件定位：說明系統元件、部署方式、後端模組邊界、外部整合、安全責任與主要資料流，作為開發、部署及簡報架構圖的共同參考。
 
 ---
@@ -184,8 +184,8 @@ smart-distribution-documents
 | `sales` | SO、價格快照、核准後供應狀態及餘量取消；採購數量透過 `PurchaseSupplyProvider`、出貨數量透過 `ShipmentQuantityProvider` 取得，不依賴 `purchasing`、`fulfillment`（D-066、D-075） |
 | `purchasing` | PO、關聯 SO 需求、採購在途、驗收入庫、取消與短收結案 |
 | `inventory` | 庫存餘額、異動、預留、調整及一致性檢查；收貨入庫與補足預留由 `purchasing` 呼叫庫存服務完成 |
-| `fulfillment` | DO 通知、揀貨、三聯出貨單及出貨過帳；透過 `SalesOrderDeliveryService` 讀 SO，過帳時呼叫庫存服務扣庫存與使用預留 |
-| `finance` | 客戶應收、外部發票資料、收款及核銷；不含供應商應付與付款 |
+| `fulfillment` | DO 通知、揀貨、三聯出貨單及出貨過帳；透過 `SalesOrderDeliveryService` 讀 SO，過帳時呼叫庫存服務扣庫存與使用預留，並呼叫應收服務建立應收草稿（D-077） |
+| `receivable` | 客戶應收、外部發票資料、收款及核銷；不含供應商應付與付款。透過 `SalesOrderBillingService` 取得 SO 的付款條件與單價快照；過帳時需要的 DO 資料由 `fulfillment` 傳入並存成快照，不讀出貨模組（D-076、D-077） |
 | `analytics` | 儀表板指標、風險規則、趨勢及來源下鑽 |
 | `ai` | OpenAI Client、LINE 解析 DTO、營運摘要輸入輸出及防護 |
 | `integration.line` | LINE 綁定碼、帳號綁定、Webhook、簽章、event ID 防重與確認流程 |
@@ -217,7 +217,7 @@ com.smartdistribution
 ├── document
 ├── audit
 ├── fulfillment         （同 sales 的分層，沒有 handler）
-├── finance             （尚未實作）
+├── receivable          （同 sales 的分層，沒有 handler；應收與收款在同一個模組）
 ├── analytics           （尚未實作）
 ├── ai                  （尚未實作）
 ├── integration
