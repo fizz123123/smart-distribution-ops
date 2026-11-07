@@ -36,6 +36,24 @@ public abstract class DeliveryOrderTestSupport extends SalesOrderTestSupport {
                 """;
 
         //DO 過帳會建立應收；應收只存 SO 與 DO 的 ID，沒有外鍵，和 DO 一起清掉
+        //核銷明細對應收有外鍵，所以先刪核銷與收款
+        jdbcTemplate.update(
+                """
+                DELETE allocation FROM payment_allocation allocation
+                JOIN payment payment ON payment.id = allocation.payment_id
+                JOIN customer customer ON customer.id = payment.customer_id
+                WHERE customer.name LIKE ?
+                """,
+                CUSTOMER_NAME_PREFIX + "%"
+        );
+        jdbcTemplate.update(
+                """
+                DELETE payment FROM payment payment
+                JOIN customer customer ON customer.id = payment.customer_id
+                WHERE customer.name LIKE ?
+                """,
+                CUSTOMER_NAME_PREFIX + "%"
+        );
         jdbcTemplate.update(
                 """
                 DELETE FROM audit_log

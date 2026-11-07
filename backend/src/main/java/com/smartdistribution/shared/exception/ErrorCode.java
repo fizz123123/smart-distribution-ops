@@ -390,6 +390,28 @@ public enum ErrorCode {
             "這個發票號碼已經用在其他應收。"
     ),
 
+    // Payment
+    PAYMENT_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "找不到指定的收款。"
+    ),
+    PAYMENT_STATUS_CONFLICT(
+            HttpStatus.CONFLICT,
+            "收款已經作廢，不能再操作。"
+    ),
+    PAYMENT_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "收款資料不正確：收款日期不能晚於今天，同一筆應收只能分配一次，分配加總必須等於收款金額。"
+    ),
+    PAYMENT_RECEIVABLE_INVALID(
+            HttpStatus.CONFLICT,
+            "這筆應收不能收款：必須屬於這個客戶、已確認而且還沒收清。"
+    ),
+    PAYMENT_AMOUNT_EXCEEDS_BALANCE(
+            HttpStatus.CONFLICT,
+            "核銷金額超過應收的未收餘額。"
+    ),
+
     // Document
     DOCUMENT_NOT_FOUND(
             HttpStatus.NOT_FOUND,

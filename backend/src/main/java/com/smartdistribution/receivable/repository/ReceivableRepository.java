@@ -2,19 +2,44 @@ package com.smartdistribution.receivable.repository;
 
 import com.smartdistribution.receivable.entity.Receivable;
 import com.smartdistribution.receivable.entity.ReceivableStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.List;
 
 public interface ReceivableRepository extends JpaRepository<Receivable, Long> {
 
     boolean existsByDeliveryOrderId(Long deliveryOrderId);
 
     boolean existsByExternalInvoiceNumberAndIdNot(String externalInvoiceNumber, Long id);
+
+    /**
+     * 收款與作廢收款時鎖定要核銷的應收，一律依 ID 由小到大
+     * 所有交易的取鎖順序相同，兩筆收款同時核銷同一批應收時不會互相等待造成死鎖
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT receivable FROM Receivable receivable WHERE receivable.id IN :ids ORDER BY receivable.id")
+    List<Receivable> findAllByIdInForUpdate(@Param("ids") Collection<Long> ids);
+
+    //登錄收款時給財務選：這個客戶還沒收清的正式應收，先到期的排前面
+    @Query("""
+            SELECT receivable
+            FROM Receivable receivable
+            WHERE receivable.customerId = :customerId
+              AND receivable.status IN (
+                  ReceivableStatus.OPEN,
+                  ReceivableStatus.PARTIALLY_PAID
+              )
+            ORDER BY receivable.dueDate, receivable.id
+            """)
+    List<Receivable> findPayableByCustomerId(@Param("customerId") Long customerId);
 
     /**
      * 關鍵字比對應收編號、DO 編號、SO 編號、發票號碼

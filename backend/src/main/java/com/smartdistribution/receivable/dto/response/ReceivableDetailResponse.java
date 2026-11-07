@@ -2,6 +2,7 @@ package com.smartdistribution.receivable.dto.response;
 
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
 import com.smartdistribution.masterdata.customer.entity.PaymentTerm;
+import com.smartdistribution.receivable.entity.PaymentStatus;
 import com.smartdistribution.receivable.entity.ReceivableStatus;
 import com.smartdistribution.receivable.service.DueStatus;
 
@@ -28,12 +29,15 @@ public record ReceivableDetailResponse(
         BigDecimal untaxedAmount,
         BigDecimal taxAmount,
         BigDecimal totalAmount,
+        BigDecimal paidAmount,
+        BigDecimal balance,
         ExternalInvoice externalInvoice,
         Confirmation confirmation,
         Instant createdAt,
         Instant updatedAt,
         Long version,
-        List<Line> lines
+        List<Line> lines,
+        List<Allocation> allocations
 ) {
 
     public record CustomerRef(
@@ -73,6 +77,18 @@ public record ReceivableDetailResponse(
     public record Confirmation(
             UserRef by,
             Instant at
+    ) {
+    }
+
+    /**
+     * 這筆應收被哪些收款核銷；作廢的收款也列出，但不算進已收金額
+     */
+    public record Allocation(
+            Long paymentId,
+            String paymentNumber,
+            PaymentStatus paymentStatus,
+            LocalDate receivedDate,
+            BigDecimal allocatedAmount
     ) {
     }
 

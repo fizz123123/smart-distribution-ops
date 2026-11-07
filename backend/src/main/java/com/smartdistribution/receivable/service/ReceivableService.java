@@ -2,6 +2,7 @@ package com.smartdistribution.receivable.service;
 
 import com.smartdistribution.receivable.dto.request.ConfirmReceivableRequest;
 import com.smartdistribution.receivable.dto.request.CorrectExternalInvoiceRequest;
+import com.smartdistribution.receivable.dto.response.PayableReceivableResponse;
 import com.smartdistribution.receivable.dto.response.ReceivableDetailResponse;
 import com.smartdistribution.receivable.dto.response.ReceivableSummaryResponse;
 import com.smartdistribution.receivable.entity.ReceivableStatus;
@@ -26,6 +27,11 @@ public interface ReceivableService {
     );
 
     ReceivableDetailResponse findReceivable(Long receivableId);
+
+    /**
+     * 登錄收款時列出這個客戶已確認、還沒收清的應收，先到期的排前面
+     */
+    List<PayableReceivableResponse> findPayableReceivables(Long customerId);
 
     /**
      * 財務填入外部發票號碼與日期，草稿轉為正式應收；號碼轉大寫後必須是 2 個英文字母加 8 位數字，且不能重複

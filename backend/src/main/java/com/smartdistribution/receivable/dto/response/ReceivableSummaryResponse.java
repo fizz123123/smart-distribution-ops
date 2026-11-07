@@ -21,6 +21,7 @@ public record ReceivableSummaryResponse(
         DueStatus dueStatus,
         String externalInvoiceNumber,
         BigDecimal totalAmount,
+        BigDecimal balance,
         Instant createdAt
 ) {
 }

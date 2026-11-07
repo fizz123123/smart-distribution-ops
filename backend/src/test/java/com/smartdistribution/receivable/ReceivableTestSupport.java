@@ -11,6 +11,7 @@ import org.springframework.test.web.servlet.ResultActions;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -137,6 +138,73 @@ public abstract class ReceivableTestSupport extends DeliveryOrderTestSupport {
                 .header("Authorization", bearer(token))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));
+    }
+
+    //確認成正式應收，發票號碼隨機產生
+    protected void confirmReceivable(String financeToken, Long receivableId) throws Exception {
+        confirm(financeToken, receivableId, randomInvoiceNumber(), today()).andExpect(status().isOk());
+    }
+
+    protected String allocation(Long receivableId, String amount) {
+        return """
+                {"receivableId": %d, "allocatedAmount": %s}
+                """.formatted(receivableId, amount);
+    }
+
+    protected ResultActions pay(
+            String token,
+            String clientRequestId,
+            Long customerId,
+            String amount,
+            LocalDate receivedDate,
+            String allocations
+    ) throws Exception {
+        return mockMvc.perform(post("/api/v1/payments")
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "clientRequestId": "%s",
+                          "customerId": %d,
+                          "receivedDate": "%s",
+                          "amount": %s,
+                          "method": "BANK_TRANSFER",
+                          "referenceNumber": "BANK-TEST",
+                          "allocations": [%s]
+                        }
+                        """.formatted(clientRequestId, customerId, receivedDate, amount, allocations)));
+    }
+
+    //今天收款，每次產生新的 clientRequestId，回傳收款 ID
+    protected Long payToday(String token, Long customerId, String amount, String allocations) throws Exception {
+        return readLong(
+                pay(token, UUID.randomUUID().toString(), customerId, amount, today(), allocations)
+                        .andExpect(status().isCreated())
+                        .andReturn(),
+                "$.id"
+        );
+    }
+
+    protected ResultActions getPayment(String token, Long paymentId) throws Exception {
+        return mockMvc.perform(get("/api/v1/payments/{id}", paymentId)
+                .header("Authorization", bearer(token)));
+    }
+
+    protected ResultActions voidPayment(String token, Long paymentId, String reason, Long version) throws Exception {
+        return mockMvc.perform(post("/api/v1/payments/{id}/void", paymentId)
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"reason": "%s", "version": %d}
+                        """.formatted(reason, version)));
+    }
+
+    protected int countPayments(Long customerId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM payment WHERE customer_id = ?",
+                Integer.class,
+                customerId
+        );
     }
 
     /**

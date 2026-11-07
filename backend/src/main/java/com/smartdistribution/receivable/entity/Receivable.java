@@ -151,6 +151,28 @@ public class Receivable extends TimestampedEntity {
         this.status = ReceivableStatus.OPEN;
     }
 
+    /**
+     * 確認收款或作廢收款後，依新的已收金額重設狀態：0 是 OPEN，收清是 PAID，其他是 PARTIALLY_PAID
+     */
+    public void updatePaymentStatus(BigDecimal paidAmount) {
+        if (!isConfirmed()) {
+            throw new BusinessException(ErrorCode.RECEIVABLE_STATUS_CONFLICT);
+        }
+
+        if (paidAmount.signum() == 0) {
+            this.status = ReceivableStatus.OPEN;
+        } else if (paidAmount.compareTo(totalAmount) < 0) {
+            this.status = ReceivableStatus.PARTIALLY_PAID;
+        } else {
+            this.status = ReceivableStatus.PAID;
+        }
+    }
+
+    //還能收款：已確認而且還沒收清
+    public boolean isPayable() {
+        return status == ReceivableStatus.OPEN || status == ReceivableStatus.PARTIALLY_PAID;
+    }
+
     //財務主管更正外部發票；只改號碼與日期，金額、到期日與狀態都不變
     public void correctExternalInvoice(String invoiceNumber, LocalDate invoiceDate) {
         if (!isConfirmed()) {

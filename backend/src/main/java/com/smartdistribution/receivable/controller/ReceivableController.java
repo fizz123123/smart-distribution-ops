@@ -2,6 +2,7 @@ package com.smartdistribution.receivable.controller;
 
 import com.smartdistribution.receivable.dto.request.ConfirmReceivableRequest;
 import com.smartdistribution.receivable.dto.request.CorrectExternalInvoiceRequest;
+import com.smartdistribution.receivable.dto.response.PayableReceivableResponse;
 import com.smartdistribution.receivable.dto.response.ReceivableDetailResponse;
 import com.smartdistribution.receivable.dto.response.ReceivableSummaryResponse;
 import com.smartdistribution.receivable.entity.ReceivableStatus;
@@ -23,14 +24,16 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
-@RequestMapping("/api/v1/receivables")
+@RequestMapping("/api/v1")
 @RequiredArgsConstructor
 public class ReceivableController {
 
     private final ReceivableService receivableService;
 
-    @GetMapping
+    @GetMapping("/receivables")
     public ResponseEntity<PageResponse<ReceivableSummaryResponse>> findReceivables(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) ReceivableStatus status,
@@ -42,12 +45,18 @@ public class ReceivableController {
         return ResponseEntity.ok(receivableService.findReceivables(keyword, status, customerId, dueStatus, pageable));
     }
 
-    @GetMapping("/{receivableId}")
+    @GetMapping("/receivables/{receivableId}")
     public ResponseEntity<ReceivableDetailResponse> findReceivable(@PathVariable Long receivableId) {
         return ResponseEntity.ok(receivableService.findReceivable(receivableId));
     }
 
-    @PostMapping("/{receivableId}/confirm")
+    //登錄收款時用：掛在客戶底下，表達「這個客戶還欠哪些」
+    @GetMapping("/customers/{customerId}/open-receivables")
+    public ResponseEntity<List<PayableReceivableResponse>> findPayableReceivables(@PathVariable Long customerId) {
+        return ResponseEntity.ok(receivableService.findPayableReceivables(customerId));
+    }
+
+    @PostMapping("/receivables/{receivableId}/confirm")
     public ResponseEntity<ReceivableDetailResponse> confirmReceivable(
             @PathVariable Long receivableId,
             @Valid @RequestBody ConfirmReceivableRequest request
@@ -55,7 +64,7 @@ public class ReceivableController {
         return ResponseEntity.ok(receivableService.confirmReceivable(receivableId, request));
     }
 
-    @PatchMapping("/{receivableId}/external-invoice")
+    @PatchMapping("/receivables/{receivableId}/external-invoice")
     public ResponseEntity<ReceivableDetailResponse> correctExternalInvoice(
             @PathVariable Long receivableId,
             @Valid @RequestBody CorrectExternalInvoiceRequest request
