@@ -5,5 +5,6 @@ public enum AuditTargetType {
     SUPPLIER,
     CUSTOMER,
     COMPANY_ITEM,
-    CUSTOMER_ITEM_MAPPING
+    CUSTOMER_ITEM_MAPPING,
+    RECEIVABLE
 }

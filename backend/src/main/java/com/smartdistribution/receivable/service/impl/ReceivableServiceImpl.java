@@ -1,5 +1,9 @@
 package com.smartdistribution.receivable.service.impl;
 
+import com.smartdistribution.audit.entity.AuditActionType;
+import com.smartdistribution.audit.service.AuditService;
+import com.smartdistribution.receivable.dto.request.ConfirmReceivableRequest;
+import com.smartdistribution.receivable.dto.request.CorrectExternalInvoiceRequest;
 import com.smartdistribution.receivable.dto.response.ReceivableDetailResponse;
 import com.smartdistribution.receivable.dto.response.ReceivableSummaryResponse;
 import com.smartdistribution.receivable.entity.Receivable;
@@ -8,6 +12,7 @@ import com.smartdistribution.receivable.entity.ReceivableStatus;
 import com.smartdistribution.receivable.mapper.ReceivableAssembler;
 import com.smartdistribution.receivable.repository.ReceivableLineRepository;
 import com.smartdistribution.receivable.repository.ReceivableRepository;
+import com.smartdistribution.receivable.service.DueStatus;
 import com.smartdistribution.receivable.service.ReceivableService;
 import com.smartdistribution.sales.entity.SalesOrder;
 import com.smartdistribution.sales.service.SalesOrderAmounts;
@@ -15,6 +20,7 @@ import com.smartdistribution.sales.service.SalesOrderBillingService.SalesOrderFo
 import com.smartdistribution.sales.service.SalesOrderBillingService;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
+import com.smartdistribution.shared.security.currentuser.CurrentUserProvider;
 import com.smartdistribution.shared.web.response.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -23,9 +29,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -33,10 +45,17 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class ReceivableServiceImpl implements ReceivableService {
 
+    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
+
+    //台灣統一發票號碼：2 個英文字母加 8 位數字
+    private static final Pattern INVOICE_NUMBER = Pattern.compile("[A-Z]{2}\\d{8}");
+
     private final ReceivableRepository receivableRepository;
     private final ReceivableLineRepository receivableLineRepository;
     private final ReceivableAssembler receivableAssembler;
     private final SalesOrderBillingService salesOrderBillingService;
+    private final AuditService auditService;
+    private final CurrentUserProvider currentUserProvider;
 
     @Override
     @PreAuthorize("hasAuthority('RECEIVABLE_VIEW')")
@@ -44,13 +63,25 @@ public class ReceivableServiceImpl implements ReceivableService {
             String keyword,
             ReceivableStatus status,
             Long customerId,
+            DueStatus dueStatus,
             Pageable pageable
     ) {
         String normalizedKeyword = keyword == null || keyword.isBlank() ? null : keyword.strip();
 
-        return PageResponse.from(receivableAssembler.toSummaries(
-                receivableRepository.search(normalizedKeyword, status, customerId, pageable)
-        ));
+        //依到期狀態篩選時，只看還沒收清的
+        LocalDate today = LocalDate.now(TAIPEI);
+        LocalDate dueFrom = dueStatus == null ? null : dueStatus.from(today);
+        LocalDate dueTo = dueStatus == null ? null : dueStatus.to(today);
+
+        return PageResponse.from(receivableAssembler.toSummaries(receivableRepository.search(
+                normalizedKeyword,
+                status,
+                customerId,
+                dueFrom,
+                dueTo,
+                dueStatus != null,
+                pageable
+        )));
     }
 
     @Override
@@ -115,6 +146,89 @@ public class ReceivableServiceImpl implements ReceivableService {
                     salesOrderLine.unitPriceExcludingTax(),
                     lineAmounts.get(index)
             ));
+        }
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize("hasAuthority('RECEIVABLE_CONFIRM')")
+    public ReceivableDetailResponse confirmReceivable(Long receivableId, ConfirmReceivableRequest request) {
+        Receivable receivable = findReceivableById(receivableId);
+        verifyVersion(receivable, request.version());
+
+        //先擋狀態，已確認的不必再檢查發票
+        if (receivable.isConfirmed()) {
+            throw new BusinessException(ErrorCode.RECEIVABLE_STATUS_CONFLICT);
+        }
+
+        String invoiceNumber = checkInvoice(receivableId, request.externalInvoiceNumber(), request.externalInvoiceDate());
+        receivable.confirm(invoiceNumber, request.externalInvoiceDate(), currentUserProvider.getCurrentUserId(), Instant.now());
+        receivableRepository.flush();
+
+        return receivableAssembler.toDetail(receivable);
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize("hasAuthority('RECEIVABLE_INVOICE_CORRECT')")
+    public ReceivableDetailResponse correctExternalInvoice(Long receivableId, CorrectExternalInvoiceRequest request) {
+        Receivable receivable = findReceivableById(receivableId);
+        verifyVersion(receivable, request.version());
+
+        //草稿還沒有發票，請直接確認
+        if (!receivable.isConfirmed()) {
+            throw new BusinessException(ErrorCode.RECEIVABLE_STATUS_CONFLICT);
+        }
+
+        String invoiceNumber = checkInvoice(receivableId, request.externalInvoiceNumber(), request.externalInvoiceDate());
+        String beforeData = invoiceSnapshot(receivable);
+
+        receivable.correctExternalInvoice(invoiceNumber, request.externalInvoiceDate());
+        receivableRepository.flush();
+
+        auditService.record(
+                currentUserProvider.getCurrentUserId(),
+                AuditActionType.RECEIVABLE_INVOICE_CORRECT,
+                receivableId,
+                "更正 " + receivable.getReceivableNumber() + " 的外部發票",
+                beforeData,
+                invoiceSnapshot(receivable),
+                request.reason().strip()
+        );
+
+        return receivableAssembler.toDetail(receivable);
+    }
+
+    /**
+     * 發票號碼去掉空白、轉大寫後檢查格式；日期不能晚於今天；號碼不能和其他應收重複
+     * 要在改寫應收之前檢查：查重複時會先把待寫入的資料送進資料庫，改了再查會撞到 unique
+     *
+     * @return 整理過的發票號碼
+     */
+    private String checkInvoice(Long receivableId, String rawNumber, LocalDate invoiceDate) {
+        String invoiceNumber = rawNumber.strip().toUpperCase(Locale.ROOT);
+
+        if (!INVOICE_NUMBER.matcher(invoiceNumber).matches()) {
+            throw new BusinessException(ErrorCode.RECEIVABLE_INVOICE_INVALID, "發票號碼須為 2 個英文字母加 8 位數字，例如 AB12345678。");
+        }
+        if (invoiceDate.isAfter(LocalDate.now(TAIPEI))) {
+            throw new BusinessException(ErrorCode.RECEIVABLE_INVOICE_INVALID, "發票日期不能晚於今天。");
+        }
+        if (receivableRepository.existsByExternalInvoiceNumberAndIdNot(invoiceNumber, receivableId)) {
+            throw new BusinessException(ErrorCode.RECEIVABLE_INVOICE_NUMBER_DUPLICATE);
+        }
+
+        return invoiceNumber;
+    }
+
+    private static String invoiceSnapshot(Receivable receivable) {
+        return "externalInvoiceNumber=" + receivable.getExternalInvoiceNumber()
+                + ", externalInvoiceDate=" + receivable.getExternalInvoiceDate();
+    }
+
+    private void verifyVersion(Receivable receivable, Long expectedVersion) {
+        if (!Objects.equals(receivable.getVersion(), expectedVersion)) {
+            throw new BusinessException(ErrorCode.VERSION_CONFLICT);
         }
     }
 

@@ -38,7 +38,10 @@ public enum AuditActionType {
     INVENTORY_POLICY_UPDATE(AuditTargetType.COMPANY_ITEM),
 
     CUSTOMER_ITEM_MAPPING_ACTIVATE(AuditTargetType.CUSTOMER_ITEM_MAPPING),
-    CUSTOMER_ITEM_MAPPING_DEACTIVATE(AuditTargetType.CUSTOMER_ITEM_MAPPING);
+    CUSTOMER_ITEM_MAPPING_DEACTIVATE(AuditTargetType.CUSTOMER_ITEM_MAPPING),
+
+    //財務主管更正正式應收的外部發票號碼或日期
+    RECEIVABLE_INVOICE_CORRECT(AuditTargetType.RECEIVABLE);
 
     private final AuditTargetType targetType;
 }

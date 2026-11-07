@@ -106,7 +106,9 @@ public class IdentityDataInitializer implements ApplicationRunner {
             new PermissionSeed("DO", "READY"),
             new PermissionSeed("DO", "POST"),
             new PermissionSeed("DO_DOCUMENT", "VIEW"),
-            new PermissionSeed("RECEIVABLE", "VIEW")
+            new PermissionSeed("RECEIVABLE", "VIEW"),
+            new PermissionSeed("RECEIVABLE", "CONFIRM"),
+            new PermissionSeed("RECEIVABLE", "INVOICE_CORRECT")
     );
 
     private static final List<String> APP_ADMIN_PERMISSIONS = List.of(
@@ -205,12 +207,14 @@ public class IdentityDataInitializer implements ApplicationRunner {
     private static final List<String> FINANCE_PERMISSIONS = List.of(
             //登錄收款時要選客戶
             "CUSTOMER_VIEW",
-            "RECEIVABLE_VIEW"
+            "RECEIVABLE_VIEW",
+            "RECEIVABLE_CONFIRM"
     );
 
     //財務主管包含財務的全部權限，這裡只列主管額外的權限
     private static final List<String> FINANCE_MANAGER_PERMISSIONS = List.of(
-            "CUSTOMER_PAYMENT_TERM_MANAGE"
+            "CUSTOMER_PAYMENT_TERM_MANAGE",
+            "RECEIVABLE_INVOICE_CORRECT"
     );
 
     //營運主管可以替代核准所有類型，主管自己建立的資料由營運主管核准

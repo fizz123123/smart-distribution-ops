@@ -1,5 +1,6 @@
 package com.smartdistribution.receivable.mapper;
 
+import com.smartdistribution.identity.service.UserDirectoryService;
 import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.receivable.dto.response.ReceivableDetailResponse;
@@ -12,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -23,14 +26,18 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ReceivableAssembler {
 
+    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
+
     private final ReceivableLineRepository receivableLineRepository;
     private final ReceivableMasterData receivableMasterData;
+    private final UserDirectoryService userDirectoryService;
 
     //清單頁一次查好這一頁的客戶
     public Page<ReceivableSummaryResponse> toSummaries(Page<Receivable> receivables) {
         Map<Long, Customer> customers = receivableMasterData.findCustomers(
                 receivables.stream().map(Receivable::getCustomerId).collect(Collectors.toSet())
         );
+        LocalDate today = LocalDate.now(TAIPEI);
 
         return receivables.map(receivable -> {
             Customer customer = customers.get(receivable.getCustomerId());
@@ -46,6 +53,8 @@ public class ReceivableAssembler {
                     receivable.getSoNumber(),
                     receivable.getActualShipmentDate(),
                     receivable.getDueDate(),
+                    receivable.dueStatus(today),
+                    receivable.getExternalInvoiceNumber(),
                     receivable.getTotalAmount(),
                     receivable.getCreatedAt()
             );
@@ -80,9 +89,21 @@ public class ReceivableAssembler {
                 ),
                 receivable.getPaymentTerm(),
                 receivable.getDueDate(),
+                receivable.dueStatus(LocalDate.now(TAIPEI)),
                 receivable.getUntaxedAmount(),
                 receivable.getTaxAmount(),
                 receivable.getTotalAmount(),
+                receivable.getExternalInvoiceNumber() == null ? null : new ReceivableDetailResponse.ExternalInvoice(
+                        receivable.getExternalInvoiceNumber(),
+                        receivable.getExternalInvoiceDate()
+                ),
+                receivable.getConfirmedAt() == null ? null : new ReceivableDetailResponse.Confirmation(
+                        new ReceivableDetailResponse.UserRef(
+                                receivable.getConfirmedBy(),
+                                userDirectoryService.findName(receivable.getConfirmedBy())
+                        ),
+                        receivable.getConfirmedAt()
+                ),
                 receivable.getCreatedAt(),
                 receivable.getUpdatedAt(),
                 receivable.getVersion(),

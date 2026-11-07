@@ -6,12 +6,16 @@ import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.masterdata.customer.entity.PaymentTerm;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -89,6 +93,50 @@ public abstract class ReceivableTestSupport extends DeliveryOrderTestSupport {
     protected ResultActions getReceivable(String token, Long receivableId) throws Exception {
         return mockMvc.perform(get("/api/v1/receivables/{id}", receivableId)
                 .header("Authorization", bearer(token)));
+    }
+
+    protected Long receivableVersion(String token, Long receivableId) throws Exception {
+        return readLong(getReceivable(token, receivableId).andExpect(status().isOk()).andReturn(), "$.version");
+    }
+
+    protected String receivableNumber(Long receivableId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT receivable_number FROM receivable WHERE id = ?",
+                String.class,
+                receivableId
+        );
+    }
+
+    //每次產生不同的發票號碼，避免和開發資料庫裡的資料撞號
+    protected static String randomInvoiceNumber() {
+        return "AB%08d".formatted(ThreadLocalRandom.current().nextInt(100_000_000));
+    }
+
+    protected ResultActions confirm(String token, Long receivableId, String invoiceNumber, LocalDate invoiceDate)
+            throws Exception {
+        return confirm(token, receivableId, invoiceNumber, invoiceDate, receivableVersion(token, receivableId));
+    }
+
+    protected ResultActions confirm(
+            String token,
+            Long receivableId,
+            String invoiceNumber,
+            LocalDate invoiceDate,
+            Long version
+    ) throws Exception {
+        return mockMvc.perform(post("/api/v1/receivables/{id}/confirm", receivableId)
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"externalInvoiceNumber": "%s", "externalInvoiceDate": "%s", "version": %d}
+                        """.formatted(invoiceNumber, invoiceDate, version)));
+    }
+
+    protected ResultActions correctExternalInvoice(String token, Long receivableId, String body) throws Exception {
+        return mockMvc.perform(patch("/api/v1/receivables/{id}/external-invoice", receivableId)
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body));
     }
 
     /**

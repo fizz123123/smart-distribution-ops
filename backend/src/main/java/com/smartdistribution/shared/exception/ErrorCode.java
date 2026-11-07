@@ -377,6 +377,18 @@ public enum ErrorCode {
             HttpStatus.CONFLICT,
             "這張出貨單已經有應收，不能再建立一次。"
     ),
+    RECEIVABLE_STATUS_CONFLICT(
+            HttpStatus.CONFLICT,
+            "應收目前的狀態不允許此操作，請重新載入。"
+    ),
+    RECEIVABLE_INVOICE_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "外部發票資料不正確：號碼須為 2 個英文字母加 8 位數字，日期不能晚於今天。"
+    ),
+    RECEIVABLE_INVOICE_NUMBER_DUPLICATE(
+            HttpStatus.CONFLICT,
+            "這個發票號碼已經用在其他應收。"
+    ),
 
     // Document
     DOCUMENT_NOT_FOUND(

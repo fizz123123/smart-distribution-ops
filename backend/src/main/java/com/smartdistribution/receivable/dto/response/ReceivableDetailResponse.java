@@ -3,6 +3,7 @@ package com.smartdistribution.receivable.dto.response;
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
 import com.smartdistribution.masterdata.customer.entity.PaymentTerm;
 import com.smartdistribution.receivable.entity.ReceivableStatus;
+import com.smartdistribution.receivable.service.DueStatus;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -11,6 +12,8 @@ import java.util.List;
 
 /**
  * 應收詳情：金額一律是 TWD；表頭是含稅，明細是未稅
+ *
+ * @param dueStatus 即將到期或逾期；都不是、或已收清時是 null
  */
 public record ReceivableDetailResponse(
         Long id,
@@ -21,9 +24,12 @@ public record ReceivableDetailResponse(
         SalesOrderRef salesOrder,
         PaymentTerm paymentTerm,
         LocalDate dueDate,
+        DueStatus dueStatus,
         BigDecimal untaxedAmount,
         BigDecimal taxAmount,
         BigDecimal totalAmount,
+        ExternalInvoice externalInvoice,
+        Confirmation confirmation,
         Instant createdAt,
         Instant updatedAt,
         Long version,
@@ -47,6 +53,26 @@ public record ReceivableDetailResponse(
     public record SalesOrderRef(
             Long id,
             String soNumber
+    ) {
+    }
+
+    public record UserRef(
+            Long id,
+            String name
+    ) {
+    }
+
+    //還沒確認時整個是 null
+    public record ExternalInvoice(
+            String number,
+            LocalDate date
+    ) {
+    }
+
+    //誰在什麼時候確認成正式應收；還沒確認時是 null
+    public record Confirmation(
+            UserRef by,
+            Instant at
     ) {
     }
 

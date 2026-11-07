@@ -38,6 +38,14 @@ public abstract class DeliveryOrderTestSupport extends SalesOrderTestSupport {
         //DO 過帳會建立應收；應收只存 SO 與 DO 的 ID，沒有外鍵，和 DO 一起清掉
         jdbcTemplate.update(
                 """
+                DELETE FROM audit_log
+                WHERE target_type = 'RECEIVABLE'
+                  AND target_id IN (SELECT id FROM receivable WHERE sales_order_id IN (%s))
+                """.formatted(testOrders),
+                CUSTOMER_NAME_PREFIX + "%"
+        );
+        jdbcTemplate.update(
+                """
                 DELETE line FROM receivable_line line
                 JOIN receivable receivable ON receivable.id = line.receivable_id
                 WHERE receivable.sales_order_id IN (%s)

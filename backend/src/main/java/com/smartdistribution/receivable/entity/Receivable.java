@@ -1,6 +1,9 @@
 package com.smartdistribution.receivable.entity;
 
 import com.smartdistribution.masterdata.customer.entity.PaymentTerm;
+import com.smartdistribution.receivable.service.DueStatus;
+import com.smartdistribution.shared.exception.BusinessException;
+import com.smartdistribution.shared.exception.ErrorCode;
 import com.smartdistribution.shared.persistence.entity.TimestampedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -16,6 +19,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 
 /**
@@ -75,6 +79,19 @@ public class Receivable extends TimestampedEntity {
     @Column(name = "total_amount", nullable = false, precision = 15, scale = 0)
     private BigDecimal totalAmount;
 
+    //財務確認時填寫；統一發票由外部系統開立，這裡只記號碼與日期
+    @Column(name = "external_invoice_number", unique = true, length = 10)
+    private String externalInvoiceNumber;
+
+    @Column(name = "external_invoice_date")
+    private LocalDate externalInvoiceDate;
+
+    @Column(name = "confirmed_by")
+    private Long confirmedBy;
+
+    @Column(name = "confirmed_at")
+    private Instant confirmedAt;
+
     @Version
     @Column(nullable = false)
     private Long version;
@@ -107,5 +124,40 @@ public class Receivable extends TimestampedEntity {
 
     public void assignNumber() {
         this.receivableNumber = "AR-%06d".formatted(id);
+    }
+
+    /**
+     * @return 即將到期或逾期；已收清的不算，回 null
+     */
+    public DueStatus dueStatus(LocalDate today) {
+        return status == ReceivableStatus.PAID ? null : DueStatus.of(dueDate, today);
+    }
+
+    //已確認的應收才能收款，也才能更正發票
+    public boolean isConfirmed() {
+        return status != ReceivableStatus.PENDING_CONFIRMATION;
+    }
+
+    //財務核對 DO 與金額後填入外部發票，轉為正式應收
+    public void confirm(String invoiceNumber, LocalDate invoiceDate, Long actorId, Instant at) {
+        if (isConfirmed()) {
+            throw new BusinessException(ErrorCode.RECEIVABLE_STATUS_CONFLICT);
+        }
+
+        this.externalInvoiceNumber = invoiceNumber;
+        this.externalInvoiceDate = invoiceDate;
+        this.confirmedBy = actorId;
+        this.confirmedAt = at;
+        this.status = ReceivableStatus.OPEN;
+    }
+
+    //財務主管更正外部發票；只改號碼與日期，金額、到期日與狀態都不變
+    public void correctExternalInvoice(String invoiceNumber, LocalDate invoiceDate) {
+        if (!isConfirmed()) {
+            throw new BusinessException(ErrorCode.RECEIVABLE_STATUS_CONFLICT);
+        }
+
+        this.externalInvoiceNumber = invoiceNumber;
+        this.externalInvoiceDate = invoiceDate;
     }
 }
