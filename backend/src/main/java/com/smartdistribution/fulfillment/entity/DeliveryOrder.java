@@ -103,6 +103,10 @@ public class DeliveryOrder extends TimestampedEntity {
         return createdBy.equals(userId);
     }
 
+    public boolean isDraft() {
+        return status == DeliveryOrderStatus.DRAFT;
+    }
+
     public boolean isReady() {
         return status == DeliveryOrderStatus.READY;
     }

@@ -88,9 +88,7 @@ public class SalesOrderDeliveryServiceImpl implements SalesOrderDeliveryService 
         Map<Long, BigDecimal> cancelledByLine = salesOrderQuantities.findCancelledQty(lineIds);
         Map<Long, ShipmentQuantity> shipmentsByLine = salesOrderQuantities.findShipments(lineIds);
 
-        boolean nothingRemaining = lines.stream()
-                .allMatch(line -> salesOrderQuantities.remainingQty(line, cancelledByLine, shipmentsByLine).signum() <= 0);
-        if (nothingRemaining) {
+        if (salesOrderQuantities.isFulfilled(lines, cancelledByLine, shipmentsByLine)) {
             salesOrder.close();
         }
     }

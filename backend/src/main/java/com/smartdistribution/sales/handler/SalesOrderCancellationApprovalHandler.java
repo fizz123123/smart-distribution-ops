@@ -106,9 +106,7 @@ public class SalesOrderCancellationApprovalHandler implements ApprovalHandler {
 
         cancellation.approve(Instant.now());
 
-        boolean nothingRemaining = salesOrderLines.stream()
-                .allMatch(line -> salesOrderQuantities.remainingQty(line, cancelledAfter, shipmentsByLine).signum() <= 0);
-        if (nothingRemaining) {
+        if (salesOrderQuantities.isFulfilled(salesOrderLines, cancelledAfter, shipmentsByLine)) {
             salesOrder.close();
         }
     }

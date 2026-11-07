@@ -3,11 +3,11 @@ package com.smartdistribution.fulfillment.service.impl;
 import com.smartdistribution.document.entity.DocumentType;
 import com.smartdistribution.document.service.DocumentService;
 import com.smartdistribution.document.service.StoredDocument;
-import com.smartdistribution.fulfillment.dto.request.ActualQuantityRequest;
 import com.smartdistribution.fulfillment.dto.request.CreateDeliveryOrderRequest;
 import com.smartdistribution.fulfillment.dto.request.DeliveryOrderLineRequest;
 import com.smartdistribution.fulfillment.dto.request.PostDeliveryOrderRequest;
 import com.smartdistribution.fulfillment.dto.request.ReadyDeliveryOrderRequest;
+import com.smartdistribution.fulfillment.dto.request.ReadyLineRequest;
 import com.smartdistribution.fulfillment.dto.response.DeliveryOrderDetailResponse;
 import com.smartdistribution.fulfillment.dto.response.DeliveryOrderSummaryResponse;
 import com.smartdistribution.fulfillment.entity.DeliveryOrder;
@@ -18,7 +18,6 @@ import com.smartdistribution.fulfillment.repository.DeliveryOrderLineRepository;
 import com.smartdistribution.fulfillment.repository.DeliveryOrderRepository;
 import com.smartdistribution.fulfillment.service.DeliveryOrderMasterData;
 import com.smartdistribution.fulfillment.service.DeliveryOrderPdfLayout;
-import com.smartdistribution.fulfillment.service.DeliveryOrderQuantities;
 import com.smartdistribution.fulfillment.service.DeliveryOrderService;
 import com.smartdistribution.inventory.service.InventoryService.DeliveryLine;
 import com.smartdistribution.inventory.service.InventoryService;
@@ -28,6 +27,7 @@ import com.smartdistribution.sales.service.SalesOrderAmounts;
 import com.smartdistribution.sales.service.SalesOrderDeliveryService.SalesOrderForDelivery;
 import com.smartdistribution.sales.service.SalesOrderDeliveryService;
 import com.smartdistribution.sales.service.ShipmentQuantityProvider.ShipmentQuantity;
+import com.smartdistribution.sales.service.ShipmentQuantityProvider;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import com.smartdistribution.shared.security.currentuser.CurrentUserProvider;
@@ -64,7 +64,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
 
     private final DeliveryOrderRepository deliveryOrderRepository;
     private final DeliveryOrderLineRepository deliveryOrderLineRepository;
-    private final DeliveryOrderQuantities deliveryOrderQuantities;
+    private final ShipmentQuantityProvider shipmentQuantityProvider;
     private final DeliveryOrderMasterData deliveryOrderMasterData;
     private final DeliveryOrderPdfLayout deliveryOrderPdfLayout;
     private final DeliveryOrderAssembler deliveryOrderAssembler;
@@ -158,12 +158,11 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         DeliveryOrder deliveryOrder = findDeliveryOrderById(deliveryOrderId);
         verifyVersion(deliveryOrder, request.version());
 
-        //已完成揀貨的才有出貨單；作廢前先記下狀態
-        boolean hadDocument = deliveryOrder.isReady();
         Long actorId = currentUserProvider.getCurrentUserId();
 
         deliveryOrder.voidOrder(request.reason(), actorId, Instant.now());
-        if (hadDocument) {
+        //完成揀貨過就有出貨單，要一起作廢
+        if (deliveryOrder.getReadyAt() != null) {
             documentService.voidDocument(DocumentType.DELIVERY_ORDER, deliveryOrderId, actorId, deliveryOrder.getVoidReason());
         }
         deliveryOrderRepository.flush();
@@ -178,10 +177,16 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         DeliveryOrder deliveryOrder = findDeliveryOrderById(deliveryOrderId);
         verifyVersion(deliveryOrder, request.version());
 
+        //先擋狀態，已過帳或作廢的 DO 不必再檢查數量
+        if (!deliveryOrder.isDraft()) {
+            throw new BusinessException(ErrorCode.DO_STATUS_CONFLICT);
+        }
+
+        Long actorId = currentUserProvider.getCurrentUserId();
         List<DeliveryOrderLine> lines = deliveryOrderLineRepository.findAllByDeliveryOrderIdOrderByLineNoAsc(deliveryOrderId);
         recordActualQuantities(lines, request.lines());
 
-        deliveryOrder.markReady(currentUserProvider.getCurrentUserId(), Instant.now());
+        deliveryOrder.markReady(actorId, Instant.now());
 
         //出貨單依實際量產生，交給司機與客戶的就是這一份
         SalesOrderForDelivery salesOrder = findSalesOrder(deliveryOrder.getSalesOrderId());
@@ -196,7 +201,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                 deliveryOrderId,
                 deliveryOrder.getDoNumber(),
                 pdf,
-                currentUserProvider.getCurrentUserId()
+                actorId
         );
         deliveryOrderRepository.flush();
 
@@ -261,12 +266,12 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
     /**
      * 完成揀貨的數量檢查：DO 上每一筆都要回報一次；0 ≤ 實際量 ≤ 預計量、小數位符合單位；至少一筆大於 0
      */
-    private void recordActualQuantities(List<DeliveryOrderLine> lines, List<ActualQuantityRequest> requests) {
+    private void recordActualQuantities(List<DeliveryOrderLine> lines, List<ReadyLineRequest> requests) {
         Map<Long, DeliveryOrderLine> linesById = lines.stream()
                 .collect(Collectors.toMap(DeliveryOrderLine::getId, Function.identity()));
         Set<Long> reportedLineIds = new HashSet<>();
 
-        for (ActualQuantityRequest request : requests) {
+        for (ReadyLineRequest request : requests) {
             DeliveryOrderLine line = linesById.get(request.deliveryOrderLineId());
             if (line == null || !reportedLineIds.add(line.getId())) {
                 throw new BusinessException(
@@ -364,7 +369,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
     private void checkAgainstReservation(List<CheckedLine> checkedLines) {
         List<Long> salesOrderLineIds = checkedLines.stream().map(line -> line.salesOrderLine().id()).toList();
         Map<Long, BigDecimal> reservedByLine = inventoryService.findOpenQtyBySalesOrderLines(salesOrderLineIds);
-        Map<Long, ShipmentQuantity> shipmentsByLine = deliveryOrderQuantities.findBySalesOrderLines(salesOrderLineIds);
+        Map<Long, ShipmentQuantity> shipmentsByLine = shipmentQuantityProvider.findBySalesOrderLines(salesOrderLineIds);
 
         for (CheckedLine checkedLine : checkedLines) {
             Long salesOrderLineId = checkedLine.salesOrderLine().id();

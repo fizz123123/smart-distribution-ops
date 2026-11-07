@@ -27,7 +27,7 @@ public class SalesOrderQuantities {
     private final SalesOrderCancellationLineRepository salesOrderCancellationLineRepository;
     private final ShipmentQuantityProvider shipmentQuantityProvider;
 
-    // SO 明細 ID → 已核准取消的基準數量；沒有取消的明細不會出現在結果中
+    //SO 明細 ID → 已核准取消的基準數量；沒有取消的明細不會出現在結果中
     public Map<Long, BigDecimal> findCancelledQty(Collection<Long> salesOrderLineIds) {
         if (salesOrderLineIds.isEmpty()) {
             return Map.of();
@@ -42,12 +42,8 @@ public class SalesOrderQuantities {
                 ));
     }
 
-    // SO 明細 ID → 已出貨與進行中 DO 數量；沒有 DO 的明細不會出現在結果中
+    //SO 明細 ID → 已出貨與進行中 DO 數量；沒有 DO 的明細不會出現在結果中
     public Map<Long, ShipmentQuantity> findShipments(Collection<Long> salesOrderLineIds) {
-        if (salesOrderLineIds.isEmpty()) {
-            return Map.of();
-        }
-
         return shipmentQuantityProvider.findBySalesOrderLines(salesOrderLineIds);
     }
 
@@ -68,6 +64,19 @@ public class SalesOrderQuantities {
     ) {
         return remainingQty(line, cancelledQtyByLine, shipmentsByLine)
                 .subtract(shipment(line, shipmentsByLine).deliveringQty());
+    }
+
+    /**
+     * 每筆明細的剩餘需求都是 0，也就是都已出貨或取消，SO 就可以履約結案
+     * 餘量取消核准與 DO 過帳共用這個判斷
+     */
+    public boolean isFulfilled(
+            Collection<SalesOrderLine> lines,
+            Map<Long, BigDecimal> cancelledQtyByLine,
+            Map<Long, ShipmentQuantity> shipmentsByLine
+    ) {
+        return lines.stream()
+                .allMatch(line -> remainingQty(line, cancelledQtyByLine, shipmentsByLine).signum() <= 0);
     }
 
     /**

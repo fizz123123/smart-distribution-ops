@@ -10,7 +10,7 @@ import java.util.List;
 //完成揀貨：DO 上的每一筆都要回報一次
 public record ReadyDeliveryOrderRequest(
         @NotEmpty
-        List<@Valid @NotNull ActualQuantityRequest> lines,
+        List<@Valid @NotNull ReadyLineRequest> lines,
 
         @NotNull
         @PositiveOrZero

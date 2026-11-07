@@ -43,7 +43,7 @@ class DeliveryOrderPostingApiIntegrationTest extends DeliveryOrderTestSupport {
         ready(warehouse, first, actualLine(findDeliveryOrderLineIds(first).getFirst(), "4"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("READY"))
-                .andExpect(jsonPath("$.picked.at").isNotEmpty())
+                .andExpect(jsonPath("$.ready.at").isNotEmpty())
                 .andExpect(jsonPath("$.lines[0].actualBaseQty").value(4));
 
         getOrder(salesManager, order.salesOrderId())

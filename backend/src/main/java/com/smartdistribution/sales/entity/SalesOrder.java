@@ -167,7 +167,7 @@ public class SalesOrder extends TimestampedEntity {
         this.status = SalesOrderStatus.RETURNED;
     }
 
-    // 履約結案：每筆明細的有效訂購量都已出貨或取消；由餘量取消核准或 DO 過帳觸發
+    //履約結案：每筆明細的有效訂購量都已出貨或取消；由餘量取消核准或 DO 過帳觸發
     public void close() {
         ensureStatus(SalesOrderStatus.APPROVED);
 

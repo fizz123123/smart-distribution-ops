@@ -23,7 +23,7 @@ public record DeliveryOrderDetailResponse(
         LocalDate actualShipmentDate,
         String remark,
         UserRef createdBy,
-        Handling picked,
+        Handling ready,
         Handling posted,
         Voidance voidance,
         Instant createdAt,
@@ -61,7 +61,7 @@ public record DeliveryOrderDetailResponse(
     ) {
     }
 
-    //完成揀貨或過帳的操作者與時間；還沒發生時是 null；有 picked 就代表出貨單已產生
+    //完成揀貨或過帳的操作者與時間；還沒發生時是 null；有 ready 就代表出貨單已產生
     public record Handling(
             UserRef by,
             Instant at

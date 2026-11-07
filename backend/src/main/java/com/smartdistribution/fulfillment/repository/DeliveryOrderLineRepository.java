@@ -14,7 +14,7 @@ public interface DeliveryOrderLineRepository extends JpaRepository<DeliveryOrder
 
     /**
      * 關聯這些 SO 明細的 DO 數量，依 SO 明細與 DO 狀態分組加總；作廢的不算
-     * 要用預計量還是實際量依狀態決定，在 DeliveryOrderQuantities 裡算
+     * 要用預計量還是實際量依狀態決定，在 ShipmentQuantityProviderImpl 裡算
      */
     @Query("""
             SELECT new com.smartdistribution.fulfillment.repository.ShipmentQuantityProjection(
