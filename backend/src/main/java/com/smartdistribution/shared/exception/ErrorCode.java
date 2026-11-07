@@ -330,6 +330,44 @@ public enum ErrorCode {
             "實收數量超過採購明細的未結數量。"
     ),
 
+    // Delivery order
+    DELIVERY_ORDER_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "找不到指定的出貨單。"
+    ),
+    DO_STATUS_CONFLICT(
+            HttpStatus.CONFLICT,
+            "出貨單目前的狀態不允許此操作，請重新載入。"
+    ),
+    DO_SALES_ORDER_NOT_APPROVED(
+            HttpStatus.CONFLICT,
+            "只有已核准的 SO 才能通知出貨。"
+    ),
+    DO_LINE_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "出貨明細不正確：每筆 SO 明細只能出現一次，而且必須屬於這張 SO。"
+    ),
+    DO_QUANTITY_EXCEEDS_RESERVATION(
+            HttpStatus.CONFLICT,
+            "出貨數量超過已預留、尚未排入出貨的數量。"
+    ),
+    DO_WITHDRAW_FORBIDDEN(
+            HttpStatus.FORBIDDEN,
+            "只能撤回自己通知的出貨。"
+    ),
+    DO_ACTUAL_QUANTITY_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "實際出貨量不正確：每筆明細都要回報一次，介於 0 和預計量之間，而且至少一筆大於 0。"
+    ),
+    DO_SHIPMENT_DATE_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "實際出貨日不能晚於今天。"
+    ),
+    DO_RESERVATION_INSUFFICIENT(
+            HttpStatus.CONFLICT,
+            "預留數量不足，無法出貨過帳。"
+    ),
+
     // Document
     DOCUMENT_NOT_FOUND(
             HttpStatus.NOT_FOUND,

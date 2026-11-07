@@ -1,10 +1,9 @@
 package com.smartdistribution.sales.service;
 
 import com.smartdistribution.sales.dto.request.CreateSalesOrderCancellationRequest;
-import com.smartdistribution.sales.dto.request.SubmitSalesOrderCancellationRequest;
 import com.smartdistribution.sales.dto.request.UpdateSalesOrderCancellationRequest;
-import com.smartdistribution.sales.dto.request.WithdrawSalesOrderCancellationRequest;
 import com.smartdistribution.sales.dto.response.SalesOrderCancellationResponse;
+import com.smartdistribution.shared.web.request.VersionRequest;
 
 import java.util.List;
 
@@ -29,12 +28,12 @@ public interface SalesOrderCancellationService {
 
     SalesOrderCancellationResponse submitCancellation(
             Long cancellationId,
-            SubmitSalesOrderCancellationRequest request
+            VersionRequest request
     );
 
     //撤回不想送出的申請：DRAFT / RETURNED → WITHDRAWN
     SalesOrderCancellationResponse withdrawCancellation(
             Long cancellationId,
-            WithdrawSalesOrderCancellationRequest request
+            VersionRequest request
     );
 }

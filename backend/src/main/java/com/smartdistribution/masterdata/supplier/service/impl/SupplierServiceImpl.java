@@ -5,9 +5,7 @@ import com.smartdistribution.approval.service.ApprovalService;
 import com.smartdistribution.audit.entity.AuditActionType;
 import com.smartdistribution.audit.service.AuditService;
 import com.smartdistribution.masterdata.common.MasterDataStatus;
-import com.smartdistribution.masterdata.supplier.dto.request.ChangeSupplierStatusRequest;
 import com.smartdistribution.masterdata.supplier.dto.request.CreateSupplierRequest;
-import com.smartdistribution.masterdata.supplier.dto.request.SubmitSupplierRequest;
 import com.smartdistribution.masterdata.supplier.dto.request.UpdateSupplierRequest;
 import com.smartdistribution.masterdata.supplier.dto.response.SupplierResponse;
 import com.smartdistribution.masterdata.supplier.entity.Supplier;
@@ -17,6 +15,8 @@ import com.smartdistribution.masterdata.supplier.service.SupplierService;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import com.smartdistribution.shared.security.currentuser.CurrentUserProvider;
+import com.smartdistribution.shared.web.request.ReasonRequest;
+import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -158,7 +158,7 @@ public class SupplierServiceImpl implements SupplierService {
     @PreAuthorize("hasAuthority('SUPPLIER_SUBMIT')")
     public SupplierResponse submitSupplier(
             Long supplierId,
-            SubmitSupplierRequest request
+            VersionRequest request
     ) {
         Supplier supplier = findSupplierById(supplierId);
         verifyVersion(supplier, request.version());
@@ -179,7 +179,7 @@ public class SupplierServiceImpl implements SupplierService {
     @PreAuthorize("hasAuthority('SUPPLIER_STATUS_MANAGE')")
     public SupplierResponse deactivateSupplier(
             Long supplierId,
-            ChangeSupplierStatusRequest request
+            ReasonRequest request
     ) {
         Supplier supplier = findSupplierById(supplierId);
         verifyVersion(supplier, request.version());
@@ -203,7 +203,7 @@ public class SupplierServiceImpl implements SupplierService {
     @PreAuthorize("hasAuthority('SUPPLIER_STATUS_MANAGE')")
     public SupplierResponse activateSupplier(
             Long supplierId,
-            ChangeSupplierStatusRequest request
+            ReasonRequest request
     ) {
         Supplier supplier = findSupplierById(supplierId);
         verifyVersion(supplier, request.version());

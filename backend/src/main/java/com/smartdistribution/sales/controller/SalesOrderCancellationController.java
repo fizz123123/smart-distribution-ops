@@ -1,11 +1,10 @@
 package com.smartdistribution.sales.controller;
 
 import com.smartdistribution.sales.dto.request.CreateSalesOrderCancellationRequest;
-import com.smartdistribution.sales.dto.request.SubmitSalesOrderCancellationRequest;
 import com.smartdistribution.sales.dto.request.UpdateSalesOrderCancellationRequest;
-import com.smartdistribution.sales.dto.request.WithdrawSalesOrderCancellationRequest;
 import com.smartdistribution.sales.dto.response.SalesOrderCancellationResponse;
 import com.smartdistribution.sales.service.SalesOrderCancellationService;
+import com.smartdistribution.shared.web.request.VersionRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -65,7 +64,7 @@ public class SalesOrderCancellationController {
     @PostMapping("/sales-order-cancellations/{cancellationId}/submit")
     public ResponseEntity<SalesOrderCancellationResponse> submitCancellation(
             @PathVariable Long cancellationId,
-            @Valid @RequestBody SubmitSalesOrderCancellationRequest request
+            @Valid @RequestBody VersionRequest request
     ) {
         return ResponseEntity.ok(salesOrderCancellationService.submitCancellation(cancellationId, request));
     }
@@ -73,7 +72,7 @@ public class SalesOrderCancellationController {
     @PostMapping("/sales-order-cancellations/{cancellationId}/withdraw")
     public ResponseEntity<SalesOrderCancellationResponse> withdrawCancellation(
             @PathVariable Long cancellationId,
-            @Valid @RequestBody WithdrawSalesOrderCancellationRequest request
+            @Valid @RequestBody VersionRequest request
     ) {
         return ResponseEntity.ok(salesOrderCancellationService.withdrawCancellation(cancellationId, request));
     }

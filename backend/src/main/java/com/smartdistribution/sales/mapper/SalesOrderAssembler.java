@@ -7,19 +7,20 @@ import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.masterdata.customerprice.entity.CustomerPrice;
-import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse.Line;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse.Supply;
+import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderSummaryResponse;
 import com.smartdistribution.sales.entity.SalesOrder;
 import com.smartdistribution.sales.entity.SalesOrderLine;
 import com.smartdistribution.sales.entity.SalesOrderStatus;
 import com.smartdistribution.sales.repository.SalesOrderLineRepository;
-import com.smartdistribution.sales.service.PurchaseSupply;
+import com.smartdistribution.sales.service.PurchaseSupplyProvider.PurchaseSupply;
 import com.smartdistribution.sales.service.PurchaseSupplyProvider;
 import com.smartdistribution.sales.service.SalesOrderAmounts;
 import com.smartdistribution.sales.service.SalesOrderMasterData;
 import com.smartdistribution.sales.service.SalesOrderQuantities;
+import com.smartdistribution.sales.service.ShipmentQuantityProvider.ShipmentQuantity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Component;
@@ -218,6 +219,10 @@ public class SalesOrderAssembler {
                 ? purchaseSupplyProvider.findBySalesOrderLines(lineIds)
                 : Map.of();
 
+        Map<Long, ShipmentQuantity> shipmentsByLine = approved
+                ? salesOrderQuantities.findShipments(lineIds)
+                : Map.of();
+
         return lines.stream()
                 .map(line -> {
                     CompanyItem item = items.get(line.getCompanyItemId());
@@ -238,26 +243,31 @@ public class SalesOrderAssembler {
                             line.getCustomerPriceId(),
                             line.getUnitPriceExcludingTax(),
                             line.getLineAmountExcludingTax(),
-                            approved ? toSupply(line, reservedByLine, cancelledByLine, purchaseByLine) : null
+                            approved
+                                    ? toSupply(line, reservedByLine, cancelledByLine, purchaseByLine, shipmentsByLine)
+                                    : null
                     );
                 }).toList();
     }
 
     /**
      * 尚待規劃 ＝ 有效訂購量 － 已出貨 － 已預留 － 已規劃未下單 － 採購在途，最低為 0
-     * 有效訂購量 ＝ 訂購基準數量 － 已核准取消量；已規劃未下單與採購在途由採購模組提供；DO 完成前出貨先固定為 0
+     * 有效訂購量 ＝ 訂購基準數量 － 已核准取消量；已規劃未下單與採購在途由採購模組提供，已出貨與進行中 DO 由出貨模組提供
+     * 進行中 DO 的數量仍在預留裡，所以不另外扣
      */
     private Supply toSupply(
             SalesOrderLine line,
             Map<Long, BigDecimal> reservedByLine,
             Map<Long, BigDecimal> cancelledByLine,
-            Map<Long, PurchaseSupply> purchaseByLine
+            Map<Long, PurchaseSupply> purchaseByLine,
+            Map<Long, ShipmentQuantity> shipmentsByLine
     ) {
         BigDecimal reservedQty = reservedByLine.getOrDefault(line.getId(), BigDecimal.ZERO);
         PurchaseSupply purchase = purchaseByLine.getOrDefault(line.getId(), PurchaseSupply.NONE);
         BigDecimal plannedNotOrderedQty = purchase.plannedNotOrderedQty();
         BigDecimal inTransitQty = purchase.inTransitQty();
-        BigDecimal shippedQty = salesOrderQuantities.shippedQty(line);
+        ShipmentQuantity shipment = shipmentsByLine.getOrDefault(line.getId(), ShipmentQuantity.NONE);
+        BigDecimal shippedQty = shipment.shippedQty();
         BigDecimal cancelledQty = cancelledByLine.getOrDefault(line.getId(), BigDecimal.ZERO);
 
         BigDecimal unplannedQty = line.getBaseQty()
@@ -268,7 +278,15 @@ public class SalesOrderAssembler {
                 .subtract(inTransitQty)
                 .max(BigDecimal.ZERO);
 
-        return new Supply(reservedQty, plannedNotOrderedQty, inTransitQty, shippedQty, cancelledQty, unplannedQty);
+        return new Supply(
+                reservedQty,
+                plannedNotOrderedQty,
+                inTransitQty,
+                shipment.deliveringQty(),
+                shippedQty,
+                cancelledQty,
+                unplannedQty
+        );
     }
 
     private SalesOrderDetailResponse.UserRef userRef(Long userId) {

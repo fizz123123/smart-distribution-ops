@@ -1,7 +1,7 @@
 package com.smartdistribution.purchasing.service.impl;
 
+import com.smartdistribution.inventory.service.InventoryService.ReceiptLine;
 import com.smartdistribution.inventory.service.InventoryService;
-import com.smartdistribution.inventory.service.ReceiptLine;
 import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.purchasing.dto.request.GoodsReceiptLineRequest;
 import com.smartdistribution.purchasing.dto.request.PostGoodsReceiptRequest;
@@ -21,8 +21,8 @@ import com.smartdistribution.purchasing.repository.PurchaseOrderRepository;
 import com.smartdistribution.purchasing.service.GoodsReceiptService;
 import com.smartdistribution.purchasing.service.PurchaseOrderAmounts;
 import com.smartdistribution.purchasing.service.PurchaseOrderMasterData;
+import com.smartdistribution.sales.service.SalesOrderDemandService.SalesOrderLineDemand;
 import com.smartdistribution.sales.service.SalesOrderDemandService;
-import com.smartdistribution.sales.service.SalesOrderLineDemand;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import com.smartdistribution.shared.security.currentuser.CurrentUserProvider;

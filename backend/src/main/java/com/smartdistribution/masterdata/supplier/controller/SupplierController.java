@@ -1,12 +1,12 @@
 package com.smartdistribution.masterdata.supplier.controller;
 
 import com.smartdistribution.masterdata.common.MasterDataStatus;
-import com.smartdistribution.masterdata.supplier.dto.request.ChangeSupplierStatusRequest;
 import com.smartdistribution.masterdata.supplier.dto.request.CreateSupplierRequest;
-import com.smartdistribution.masterdata.supplier.dto.request.SubmitSupplierRequest;
 import com.smartdistribution.masterdata.supplier.dto.request.UpdateSupplierRequest;
 import com.smartdistribution.masterdata.supplier.dto.response.SupplierResponse;
 import com.smartdistribution.masterdata.supplier.service.SupplierService;
+import com.smartdistribution.shared.web.request.ReasonRequest;
+import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -74,7 +74,7 @@ public class SupplierController {
     @PostMapping("/{supplierId}/submit")
     public ResponseEntity<SupplierResponse> submitSupplier(
             @PathVariable Long supplierId,
-            @Valid @RequestBody SubmitSupplierRequest request
+            @Valid @RequestBody VersionRequest request
     ) {
         SupplierResponse response = supplierService.submitSupplier(supplierId, request);
 
@@ -84,7 +84,7 @@ public class SupplierController {
     @PostMapping("/{supplierId}/deactivate")
     public ResponseEntity<SupplierResponse> deactivateSupplier(
             @PathVariable Long supplierId,
-            @Valid @RequestBody ChangeSupplierStatusRequest request
+            @Valid @RequestBody ReasonRequest request
     ) {
         SupplierResponse response = supplierService.deactivateSupplier(supplierId, request);
 
@@ -94,7 +94,7 @@ public class SupplierController {
     @PostMapping("/{supplierId}/activate")
     public ResponseEntity<SupplierResponse> activateSupplier(
             @PathVariable Long supplierId,
-            @Valid @RequestBody ChangeSupplierStatusRequest request
+            @Valid @RequestBody ReasonRequest request
     ) {
         SupplierResponse response = supplierService.activateSupplier(supplierId, request);
 

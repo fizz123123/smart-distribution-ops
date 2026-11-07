@@ -8,10 +8,8 @@ import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.masterdata.customerprice.entity.CustomerPrice;
-import com.smartdistribution.sales.dto.request.CancelSalesOrderRequest;
 import com.smartdistribution.sales.dto.request.CreateSalesOrderRequest;
 import com.smartdistribution.sales.dto.request.SalesOrderLineRequest;
-import com.smartdistribution.sales.dto.request.SubmitSalesOrderRequest;
 import com.smartdistribution.sales.dto.request.UpdateSalesOrderRequest;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderSummaryResponse;
@@ -29,6 +27,7 @@ import com.smartdistribution.sales.service.SalesOrderService;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import com.smartdistribution.shared.security.currentuser.CurrentUserProvider;
+import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -134,7 +133,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     @Override
     @Transactional
     @PreAuthorize("hasAuthority('SO_SUBMIT')")
-    public SalesOrderDetailResponse submitSalesOrder(Long salesOrderId, SubmitSalesOrderRequest request) {
+    public SalesOrderDetailResponse submitSalesOrder(Long salesOrderId, VersionRequest request) {
         SalesOrder salesOrder = findSalesOrderById(salesOrderId);
         verifyVersion(salesOrder, request.version());
 
@@ -183,7 +182,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     @Override
     @Transactional
     @PreAuthorize("hasAuthority('SO_UPDATE')")
-    public SalesOrderDetailResponse cancelSalesOrder(Long salesOrderId, CancelSalesOrderRequest request) {
+    public SalesOrderDetailResponse cancelSalesOrder(Long salesOrderId, VersionRequest request) {
         SalesOrder salesOrder = findSalesOrderById(salesOrderId);
         verifyVersion(salesOrder, request.version());
 

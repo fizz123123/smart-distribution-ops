@@ -6,9 +6,7 @@ import com.smartdistribution.audit.entity.AuditActionType;
 import com.smartdistribution.audit.service.AuditService;
 import com.smartdistribution.masterdata.common.MasterDataStatus;
 import com.smartdistribution.masterdata.customer.dto.request.ChangeCustomerPaymentTermRequest;
-import com.smartdistribution.masterdata.customer.dto.request.ChangeCustomerStatusRequest;
 import com.smartdistribution.masterdata.customer.dto.request.CreateCustomerRequest;
-import com.smartdistribution.masterdata.customer.dto.request.SubmitCustomerRequest;
 import com.smartdistribution.masterdata.customer.dto.request.UpdateCustomerRequest;
 import com.smartdistribution.masterdata.customer.dto.response.CustomerResponse;
 import com.smartdistribution.masterdata.customer.entity.Customer;
@@ -19,6 +17,8 @@ import com.smartdistribution.masterdata.customer.service.CustomerService;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import com.smartdistribution.shared.security.currentuser.CurrentUserProvider;
+import com.smartdistribution.shared.web.request.ReasonRequest;
+import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -159,7 +159,7 @@ public class CustomerServiceImpl implements CustomerService {
     @PreAuthorize("hasAuthority('CUSTOMER_SUBMIT')")
     public CustomerResponse submitCustomer(
             Long customerId,
-            SubmitCustomerRequest request
+            VersionRequest request
     ) {
         Customer customer = findCustomerById(customerId);
         verifyVersion(customer, request.version());
@@ -180,7 +180,7 @@ public class CustomerServiceImpl implements CustomerService {
     @PreAuthorize("hasAuthority('CUSTOMER_STATUS_MANAGE')")
     public CustomerResponse deactivateCustomer(
             Long customerId,
-            ChangeCustomerStatusRequest request
+            ReasonRequest request
     ) {
         Customer customer = findCustomerById(customerId);
         verifyVersion(customer, request.version());
@@ -204,7 +204,7 @@ public class CustomerServiceImpl implements CustomerService {
     @PreAuthorize("hasAuthority('CUSTOMER_STATUS_MANAGE')")
     public CustomerResponse activateCustomer(
             Long customerId,
-            ChangeCustomerStatusRequest request
+            ReasonRequest request
     ) {
         Customer customer = findCustomerById(customerId);
         verifyVersion(customer, request.version());

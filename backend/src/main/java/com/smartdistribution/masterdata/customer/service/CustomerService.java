@@ -2,11 +2,11 @@ package com.smartdistribution.masterdata.customer.service;
 
 import com.smartdistribution.masterdata.common.MasterDataStatus;
 import com.smartdistribution.masterdata.customer.dto.request.ChangeCustomerPaymentTermRequest;
-import com.smartdistribution.masterdata.customer.dto.request.ChangeCustomerStatusRequest;
 import com.smartdistribution.masterdata.customer.dto.request.CreateCustomerRequest;
-import com.smartdistribution.masterdata.customer.dto.request.SubmitCustomerRequest;
 import com.smartdistribution.masterdata.customer.dto.request.UpdateCustomerRequest;
 import com.smartdistribution.masterdata.customer.dto.response.CustomerResponse;
+import com.smartdistribution.shared.web.request.ReasonRequest;
+import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 
@@ -24,11 +24,11 @@ public interface CustomerService {
 
     CustomerResponse updateCustomer(Long customerId, UpdateCustomerRequest request);
 
-    CustomerResponse submitCustomer(Long customerId, SubmitCustomerRequest request);
+    CustomerResponse submitCustomer(Long customerId, VersionRequest request);
 
-    CustomerResponse deactivateCustomer(Long customerId, ChangeCustomerStatusRequest request);
+    CustomerResponse deactivateCustomer(Long customerId, ReasonRequest request);
 
-    CustomerResponse activateCustomer(Long customerId, ChangeCustomerStatusRequest request);
+    CustomerResponse activateCustomer(Long customerId, ReasonRequest request);
 
     CustomerResponse changePaymentTerm(Long customerId, ChangeCustomerPaymentTermRequest request);
 }

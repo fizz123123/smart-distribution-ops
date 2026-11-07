@@ -78,12 +78,15 @@ public record SalesOrderDetailResponse(
 
     /**
      * 供應狀態：全部以庫存基準單位表示
-     * 已規劃未下單與採購在途來自 PO；已出貨要等出貨單完成，目前固定為 0
+     * 已規劃未下單與採購在途來自 PO；進行中 DO 與已出貨來自 DO
+     *
+     * @param deliveringQty 已排入 DO、還沒過帳的數量，仍在預留裡；可再通知出貨 ＝ 預留 － 這個數量
      */
     public record Supply(
             BigDecimal reservedQty,
             BigDecimal plannedNotOrderedQty,
             BigDecimal inTransitQty,
+            BigDecimal deliveringQty,
             BigDecimal shippedQty,
             BigDecimal cancelledQty,
             BigDecimal unplannedQty

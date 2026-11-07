@@ -7,10 +7,8 @@ import com.smartdistribution.audit.service.AuditService;
 import com.smartdistribution.inventory.service.InventoryService;
 import com.smartdistribution.masterdata.common.MasterDataStatus;
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
-import com.smartdistribution.masterdata.companyitem.dto.request.ChangeCompanyItemStatusRequest;
 import com.smartdistribution.masterdata.companyitem.dto.request.CreateCompanyItemRequest;
 import com.smartdistribution.masterdata.companyitem.dto.request.ReplaceUnitConversionsRequest;
-import com.smartdistribution.masterdata.companyitem.dto.request.SubmitCompanyItemRequest;
 import com.smartdistribution.masterdata.companyitem.dto.request.UnitConversionRequest;
 import com.smartdistribution.masterdata.companyitem.dto.request.UpdateCompanyItemRequest;
 import com.smartdistribution.masterdata.companyitem.dto.response.CompanyItemDetailResponse;
@@ -28,6 +26,8 @@ import com.smartdistribution.masterdata.supplier.repository.SupplierRepository;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import com.smartdistribution.shared.security.currentuser.CurrentUserProvider;
+import com.smartdistribution.shared.web.request.ReasonRequest;
+import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -246,7 +246,7 @@ public class CompanyItemServiceImpl implements CompanyItemService {
     @PreAuthorize("hasAuthority('COMPANY_ITEM_SUBMIT')")
     public CompanyItemDetailResponse submitCompanyItem(
             Long companyItemId,
-            SubmitCompanyItemRequest request
+            VersionRequest request
     ) {
         CompanyItem item = findCompanyItemById(companyItemId);
         verifyVersion(item, request.version());
@@ -267,7 +267,7 @@ public class CompanyItemServiceImpl implements CompanyItemService {
     @PreAuthorize("hasAuthority('COMPANY_ITEM_STATUS_MANAGE')")
     public CompanyItemDetailResponse deactivateCompanyItem(
             Long companyItemId,
-            ChangeCompanyItemStatusRequest request
+            ReasonRequest request
     ) {
         CompanyItem item = findCompanyItemById(companyItemId);
         verifyVersion(item, request.version());
@@ -291,7 +291,7 @@ public class CompanyItemServiceImpl implements CompanyItemService {
     @PreAuthorize("hasAuthority('COMPANY_ITEM_STATUS_MANAGE')")
     public CompanyItemDetailResponse activateCompanyItem(
             Long companyItemId,
-            ChangeCompanyItemStatusRequest request
+            ReasonRequest request
     ) {
         CompanyItem item = findCompanyItemById(companyItemId);
         verifyVersion(item, request.version());

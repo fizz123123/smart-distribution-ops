@@ -2,7 +2,7 @@
 
 > 文件版本：v1.0  
 > 建立日期：2026-10-05  
-> 最後更新：2026-11-01  
+> 最後更新：2026-11-03  
 > 文件定位：依功能模組、角色權限、領域規則、資料模型及狀態轉換，定義前端畫面與後端 API 的責任邊界、主要操作、輸入輸出及錯誤處理。
 
 ---
@@ -348,7 +348,7 @@ SO詳情 至少顯示：
 | 取消申請送審 | `POST` | `/sales-order-cancellations/{id}/submit` | `SO_CANCELLATION_SUBMIT` |
 | 撤回取消申請 | `POST` | `/sales-order-cancellations/{id}/withdraw` | `SO_CANCELLATION_CREATE` |
 | 取消申請核准／退回 | `POST` | `/approval-requests/{id}/approve`、`/approval-requests/{id}/return` | `SO_CANCELLATION_APPROVE` |
-| 通知本次出貨（P5） | `POST` | `/sales-orders/{id}/delivery-orders` | `DO_CREATE` |
+| 通知本次出貨 | `POST` | `/sales-orders/{id}/delivery-orders` | `DO_CREATE` |
 
 清單的 `keyword` 比對 SO 編號與客戶訂單編號。
 
@@ -390,7 +390,7 @@ SO 詳情 response 的重點欄位：
 | `soNumber`、`status`、`version` | 編號、狀態與目前版本 |
 | `paymentTerm`、`untaxedAmount`、`taxAmount`、`totalAmount` | 送審後為快照；草稿與退回時依目前主檔試算，缺價格時金額為 `null` |
 | `warnings` | 草稿與退回時列出送審前須處理的問題，例如缺少價格或換算 |
-| `lines[].supply` | 核准後才有值：`reservedQty`、`plannedNotOrderedQty`、`inTransitQty`、`shippedQty`、`cancelledQty`、`unplannedQty`，皆為基準單位 |
+| `lines[].supply` | 核准後才有值：`reservedQty`、`plannedNotOrderedQty`、`inTransitQty`、`deliveringQty`、`shippedQty`、`cancelledQty`、`unplannedQty`，皆為基準單位；`deliveringQty` 是已排入 `DRAFT` / `READY` DO 的數量，仍在預留裡，可再通知出貨量 ＝ `reservedQty － deliveringQty` |
 
 建立或修改取消申請：
 
@@ -427,7 +427,7 @@ SO 與取消申請的錯誤碼：
 | `SO_PRICE_REVOKED` | 409 | 核准時引用價格已撤銷（D-033） |
 | `SO_CANCELLATION_STATUS_CONFLICT` | 409 | 取消申請狀態不允許該操作 |
 | `SO_CANCELLATION_PENDING_EXISTS` | 409 | 該 SO 已有未完成的取消申請 |
-| `SO_CANCELLATION_QUANTITY_EXCEEDED` | 409 | 取消量超過可取消量，訊息含最多可取消數量 |
+| `SO_CANCELLATION_QUANTITY_EXCEEDED` | 409 | 取消量超過可取消量（剩餘需求 － 進行中 DO 數量，D-072），訊息含最多可取消數量；有數量排在 DO 裡時一併提示先撤回或作廢 DO |
 
 SO 頁面的「轉 PO」只是把缺料明細預填到 PO 建立畫面，送出時呼叫 `POST /purchase-orders`（D-062），不另開 API。
 
@@ -436,17 +436,20 @@ SO 頁面的「轉 PO」只是把缺料明細預填到 PO 建立畫面，送出�
 ```json
 {
   "plannedShipmentDate": "2026-10-18",
+  "remark": null,
   "lines": [
     {
       "salesOrderLineId": 1,
-      "plannedQuantity": 10,
-      "unit": "PCS"
+      "plannedQuantity": 10
     }
   ]
 }
 ```
 
-SO 詳情 response 直接包含各明細的已預留、已規劃未下單、採購在途及尚待規劃等供應狀態，不另提供供應狀態專用 API。後端將預計出貨量換算成基準單位，並檢查同一 SO 明細所有有效 DO 草稿合計不超過預留。
+- 只列這次要出的明細；分批出貨就是分次通知。數量使用 SO 明細的單位，不另外輸入單位（D-074）。
+- 後端將預計出貨量換算成基準單位，並檢查每筆不超過「有效預留 － 已排入其他 DO 的數量」。
+
+SO 詳情 response 直接包含各明細的已預留、已規劃未下單、採購在途、進行中 DO 及尚待規劃等供應狀態，不另提供供應狀態專用 API。這張 SO 的 DO 以 `GET /delivery-orders?salesOrderId=` 查詢（D-075）。
 
 ### 6.3 SO 細部權限與預設角色
 
@@ -685,23 +688,29 @@ PO 與收貨細部權限與預設角色：
 
 ### 8.1 畫面資料
 
-WH-03 只顯示倉管履約所需資料，不提供非必要的客戶價格、PO 採購單價或完整 SO 編輯功能。至少包含：
+WH-03 只顯示倉管履約所需資料，不提供非必要的客戶價格、PO 採購單價或完整 SO 編輯功能。DO 的回應不含任何價格。至少包含：
 
 - DO 編號、來源 SO 編號、客戶、交貨資料與預計出貨日。
-- 預計出貨量、實際出貨量與可過帳數量。
-- 公司料號、品名、儲位備註及交易／基準單位。
-- 正式 PDF 狀態、實際出貨日及過帳紀錄。
+- 預計出貨量、實際出貨量。
+- 公司料號、品名、客戶料號及單位。
+- 完成揀貨與過帳的操作者與時間、實際出貨日。
 
 ### 8.2 API 對照
 
 | 操作 | Method | Path | 權限 |
 | --- | --- | --- | --- |
-| 清單／詳情 | `GET` | `/delivery-orders`、`/delivery-orders/{id}` | `DO_VIEW` |
-| 修改草稿預計出貨量 | `PATCH` | `/delivery-orders/{id}` | `DO_PICK` |
-| 完成揀貨並產生 PDF | `POST` | `/delivery-orders/{id}/ready` | `DO_READY` |
-| 下載正式 PDF | `GET` | `/delivery-orders/{id}/document` | `DO_DOCUMENT_VIEW` |
+| 通知出貨 | `POST` | `/sales-orders/{id}/delivery-orders` | `DO_CREATE` |
+| 清單 | `GET` | `/delivery-orders?keyword=&status=&salesOrderId=` | `DO_VIEW` |
+| 詳情 | `GET` | `/delivery-orders/{id}` | `DO_VIEW` |
+| 撤回通知 | `POST` | `/delivery-orders/{id}/withdraw` | `DO_CREATE` |
+| 完成揀貨並產生出貨單 | `POST` | `/delivery-orders/{id}/ready` | `DO_READY` |
 | 出貨過帳 | `POST` | `/delivery-orders/{id}/post` | `DO_POST` |
 | 過帳前作廢 | `POST` | `/delivery-orders/{id}/void` | `DO_VOID` |
+| 下載出貨單 | `GET` | `/delivery-orders/{id}/document` | `DO_DOCUMENT_VIEW` |
+
+清單的 `keyword` 比對 DO 編號；要看某張 SO 的 DO，用 `salesOrderId` 篩選。DO 草稿不提供修改（D-070）。
+
+撤回通知只帶 `version`，只能撤回自己通知的 `DRAFT`。作廢帶 `reason` 與 `version`，`DRAFT` 與 `READY` 都可以作廢。
 
 完成揀貨：
 
@@ -710,15 +719,20 @@ WH-03 只顯示倉管履約所需資料，不提供非必要的客戶價格、PO
   "lines": [
     {
       "deliveryOrderLineId": 1,
-      "actualQuantity": 10,
-      "unit": "PCS"
+      "actualQuantity": 10
+    },
+    {
+      "deliveryOrderLineId": 2,
+      "actualQuantity": 0
     }
   ],
   "version": 2
 }
 ```
 
-草稿階段保存的是預計出貨量；完成揀貨時才保存實際出貨量。每筆實際出貨量必須大於 0 且不得超過預計出貨量，少出的差額繼續保留在來源 SO 的有效預留中。正式 DO PDF 依實際出貨量產生。
+- DO 上的每一筆都要回報一次；0 ≤ 實際量 ≤ 預計量，至少一筆大於 0（D-071）。數量使用 SO 明細的單位。
+- 實際量 0 代表這一筆這次不出；少出的差額繼續保留在來源 SO 的有效預留中。
+- 出貨單依實際量產生：一份 PDF 三頁，分別為存根聯、客戶聯、簽收聯，只列實際量大於 0 的明細，不含價格（D-073）。
 
 出貨過帳：
 
@@ -729,9 +743,33 @@ WH-03 只顯示倉管履約所需資料，不提供非必要的客戶價格、PO
 }
 ```
 
-後端須再次鎖定庫存、預留及有效 DO 明細，確認數量後才能扣庫存、使用預留並建立唯一應收草稿。
+後端先鎖定 DO 表頭，確認 DO 為 `READY`、實際出貨日不晚於今天，再由庫存依料號順序鎖定餘額、確認預留足夠後扣庫存並使用預留。SO 每筆明細都已出貨或取消時轉為 `CLOSED`。本階段的過帳不建立應收草稿，應收階段再接上。
 
-下載正式 DO PDF 時，後端先驗證 `DO_DOCUMENT_VIEW` 與資料範圍、保存下載連結核發紀錄，再回傳 `302 Redirect` 至 3 分鐘有效的 S3 Presigned URL。
+下載出貨單時，後端驗證 `DO_DOCUMENT_VIEW` 後回傳檔案（`application/pdf`），並在應用程式 log 記錄下載（D-067）。作廢的出貨單仍可下載，檔名加上 `-voided`。部署換成 S3 後，改為回傳 `302 Redirect` 至 3 分鐘有效的 S3 Presigned URL（D-061）。
+
+DO 的錯誤碼：
+
+| 錯誤碼 | HTTP | 情境 |
+| --- | --- | --- |
+| `DELIVERY_ORDER_NOT_FOUND` | 404 | DO 不存在 |
+| `DO_STATUS_CONFLICT` | 409 | 狀態不允許該操作，包括重複過帳、撤回已揀貨的 DO、作廢已過帳的 DO |
+| `DO_SALES_ORDER_NOT_APPROVED` | 409 | SO 不是已核准 |
+| `DO_LINE_INVALID` | 400 | 明細不屬於這張 SO、重複或小數位不符 |
+| `DO_QUANTITY_EXCEEDS_RESERVATION` | 409 | 超過可通知出貨量，訊息含最多數量 |
+| `DO_WITHDRAW_FORBIDDEN` | 403 | 撤回別人通知的草稿 |
+| `DO_ACTUAL_QUANTITY_INVALID` | 400 | 回報缺漏或重複、超過預計量、小數位不符，或全部都是 0 |
+| `DO_SHIPMENT_DATE_INVALID` | 400 | 實際出貨日晚於今天 |
+| `DO_RESERVATION_INSUFFICIENT` | 409 | 過帳時預留不足 |
+| `DOCUMENT_NOT_FOUND` | 404 | 這張 DO 還沒有出貨單 |
+
+### 8.3 DO 細部權限與預設角色
+
+| 權限 | 預設角色 |
+| --- | --- |
+| `DO_VIEW` | SALES、SALES_MANAGER、WAREHOUSE、WAREHOUSE_MANAGER、MANAGER |
+| `DO_CREATE` | SALES、SALES_MANAGER |
+| `DO_READY`、`DO_POST`、`DO_VOID` | WAREHOUSE、WAREHOUSE_MANAGER |
+| `DO_DOCUMENT_VIEW` | SALES、SALES_MANAGER、WAREHOUSE、WAREHOUSE_MANAGER、MANAGER |
 
 ## 9. 應收、收款與核銷契約
 
@@ -937,7 +975,7 @@ POST /integrations/line/webhook
 
 - JWT access token 與 refresh token 的有效時間及撤銷方式。
 - 查詢 API 的實際索引、最大分頁筆數及模糊搜尋策略。
-- 權限代碼的完整 seed 清單及各角色預設對應（帳號權限見 D-036，主檔權限見第 5.3 節，SO 權限見 6.3 節，PO 與收貨權限見 7.2 節，庫存權限見 7.3 節，其餘模組實作時補齊）。
+- 權限代碼的完整 seed 清單及各角色預設對應（帳號權限見 D-036，主檔權限見第 5.3 節，SO 權限見 6.3 節，PO 與收貨權限見 7.2 節，庫存權限見 7.3 節，DO 權限見 8.3 節，其餘模組實作時補齊）。
 - API 文件以 SpringDoc OpenAPI 產生的 schema 與範例。
 - LINE 確認 token 與 webhook event ID 的保存期限，以及收款 `clientRequestId` 的重送回應策略。
 

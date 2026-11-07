@@ -2,17 +2,16 @@ package com.smartdistribution.identity.service.impl;
 
 import com.smartdistribution.audit.entity.AuditActionType;
 import com.smartdistribution.audit.service.AuditService;
-import com.smartdistribution.identity.dto.request.ChangeUserStatusRequest;
 import com.smartdistribution.identity.dto.request.CreateUserRequest;
 import com.smartdistribution.identity.dto.request.PermissionGrantItemRequest;
 import com.smartdistribution.identity.dto.request.ReplaceUserPermissionGrantsRequest;
 import com.smartdistribution.identity.dto.request.ReplaceUserRolesRequest;
 import com.smartdistribution.identity.dto.request.UpdateUserRequest;
-import com.smartdistribution.identity.dto.response.UserDetailResponse;
-import com.smartdistribution.identity.dto.response.UserSummaryResponse;
 import com.smartdistribution.identity.dto.response.AuthorizationOptionsResponse;
 import com.smartdistribution.identity.dto.response.PermissionResponse;
 import com.smartdistribution.identity.dto.response.RoleResponse;
+import com.smartdistribution.identity.dto.response.UserDetailResponse;
+import com.smartdistribution.identity.dto.response.UserSummaryResponse;
 import com.smartdistribution.identity.entity.AppUser;
 import com.smartdistribution.identity.entity.PasswordTokenPurpose;
 import com.smartdistribution.identity.entity.Permission;
@@ -31,6 +30,7 @@ import com.smartdistribution.identity.service.UserManagementService;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import com.smartdistribution.shared.security.currentuser.CurrentUserProvider;
+import com.smartdistribution.shared.web.request.ReasonRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -223,7 +223,7 @@ public class UserManagementServiceImpl implements UserManagementService {
     @PreAuthorize("hasAuthority('USER_MANAGE')")
     public UserDetailResponse activateUser(
             Long userId,
-            ChangeUserStatusRequest request
+            ReasonRequest request
     ) {
         AppUser user = findUserById(userId);
         verifyVersion(user, request.version());
@@ -251,7 +251,7 @@ public class UserManagementServiceImpl implements UserManagementService {
     @PreAuthorize("hasAuthority('USER_MANAGE')")
     public UserDetailResponse disableUser(
             Long userId,
-            ChangeUserStatusRequest request
+            ReasonRequest request
     ) {
         AppUser user = findUserById(userId);
         ensureTargetIsNotCurrentUser(userId);

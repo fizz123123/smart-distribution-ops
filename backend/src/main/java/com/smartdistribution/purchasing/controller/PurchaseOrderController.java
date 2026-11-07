@@ -3,14 +3,14 @@ package com.smartdistribution.purchasing.controller;
 import com.smartdistribution.document.service.StoredDocument;
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
 import com.smartdistribution.purchasing.dto.request.CreatePurchaseOrderRequest;
-import com.smartdistribution.purchasing.dto.request.PurchaseOrderReasonRequest;
-import com.smartdistribution.purchasing.dto.request.PurchaseOrderVersionRequest;
 import com.smartdistribution.purchasing.dto.request.UpdatePurchaseOrderRequest;
 import com.smartdistribution.purchasing.dto.response.LastPriceResponse;
 import com.smartdistribution.purchasing.dto.response.PurchaseOrderDetailResponse;
 import com.smartdistribution.purchasing.dto.response.PurchaseOrderSummaryResponse;
 import com.smartdistribution.purchasing.entity.PurchaseOrderStatus;
 import com.smartdistribution.purchasing.service.PurchaseOrderService;
+import com.smartdistribution.shared.web.request.ReasonRequest;
+import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -83,7 +83,7 @@ public class PurchaseOrderController {
     @PostMapping("/{purchaseOrderId}/submit")
     public ResponseEntity<PurchaseOrderDetailResponse> submitPurchaseOrder(
             @PathVariable Long purchaseOrderId,
-            @Valid @RequestBody PurchaseOrderVersionRequest request
+            @Valid @RequestBody VersionRequest request
     ) {
         return ResponseEntity.ok(purchaseOrderService.submitPurchaseOrder(purchaseOrderId, request));
     }
@@ -91,7 +91,7 @@ public class PurchaseOrderController {
     @PostMapping("/{purchaseOrderId}/cancel-draft")
     public ResponseEntity<PurchaseOrderDetailResponse> cancelDraft(
             @PathVariable Long purchaseOrderId,
-            @Valid @RequestBody PurchaseOrderVersionRequest request
+            @Valid @RequestBody VersionRequest request
     ) {
         return ResponseEntity.ok(purchaseOrderService.cancelDraft(purchaseOrderId, request));
     }
@@ -99,7 +99,7 @@ public class PurchaseOrderController {
     @PostMapping("/{purchaseOrderId}/cancel")
     public ResponseEntity<PurchaseOrderDetailResponse> cancelApproved(
             @PathVariable Long purchaseOrderId,
-            @Valid @RequestBody PurchaseOrderReasonRequest request
+            @Valid @RequestBody ReasonRequest request
     ) {
         return ResponseEntity.ok(purchaseOrderService.cancelApproved(purchaseOrderId, request));
     }
@@ -107,7 +107,7 @@ public class PurchaseOrderController {
     @PostMapping("/{purchaseOrderId}/close-short")
     public ResponseEntity<PurchaseOrderDetailResponse> closeShort(
             @PathVariable Long purchaseOrderId,
-            @Valid @RequestBody PurchaseOrderReasonRequest request
+            @Valid @RequestBody ReasonRequest request
     ) {
         return ResponseEntity.ok(purchaseOrderService.closeShort(purchaseOrderId, request));
     }

@@ -1,14 +1,14 @@
 package com.smartdistribution.masterdata.companyitem.controller;
 
 import com.smartdistribution.masterdata.common.MasterDataStatus;
-import com.smartdistribution.masterdata.companyitem.dto.request.ChangeCompanyItemStatusRequest;
 import com.smartdistribution.masterdata.companyitem.dto.request.CreateCompanyItemRequest;
 import com.smartdistribution.masterdata.companyitem.dto.request.ReplaceUnitConversionsRequest;
-import com.smartdistribution.masterdata.companyitem.dto.request.SubmitCompanyItemRequest;
 import com.smartdistribution.masterdata.companyitem.dto.request.UpdateCompanyItemRequest;
 import com.smartdistribution.masterdata.companyitem.dto.response.CompanyItemDetailResponse;
 import com.smartdistribution.masterdata.companyitem.dto.response.CompanyItemSummaryResponse;
 import com.smartdistribution.masterdata.companyitem.service.CompanyItemService;
+import com.smartdistribution.shared.web.request.ReasonRequest;
+import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -92,7 +92,7 @@ public class CompanyItemController {
     @PostMapping("/{companyItemId}/submit")
     public ResponseEntity<CompanyItemDetailResponse> submitCompanyItem(
             @PathVariable Long companyItemId,
-            @Valid @RequestBody SubmitCompanyItemRequest request
+            @Valid @RequestBody VersionRequest request
     ) {
         CompanyItemDetailResponse response =
                 companyItemService.submitCompanyItem(companyItemId, request);
@@ -103,7 +103,7 @@ public class CompanyItemController {
     @PostMapping("/{companyItemId}/deactivate")
     public ResponseEntity<CompanyItemDetailResponse> deactivateCompanyItem(
             @PathVariable Long companyItemId,
-            @Valid @RequestBody ChangeCompanyItemStatusRequest request
+            @Valid @RequestBody ReasonRequest request
     ) {
         CompanyItemDetailResponse response =
                 companyItemService.deactivateCompanyItem(companyItemId, request);
@@ -114,7 +114,7 @@ public class CompanyItemController {
     @PostMapping("/{companyItemId}/activate")
     public ResponseEntity<CompanyItemDetailResponse> activateCompanyItem(
             @PathVariable Long companyItemId,
-            @Valid @RequestBody ChangeCompanyItemStatusRequest request
+            @Valid @RequestBody ReasonRequest request
     ) {
         CompanyItemDetailResponse response =
                 companyItemService.activateCompanyItem(companyItemId, request);

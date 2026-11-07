@@ -3,8 +3,8 @@ package com.smartdistribution.sales.handler;
 import com.smartdistribution.approval.entity.ApprovalTargetType;
 import com.smartdistribution.approval.handler.ApprovalHandler;
 import com.smartdistribution.approval.handler.ApprovalTarget;
+import com.smartdistribution.inventory.service.InventoryService.ReservationDemand;
 import com.smartdistribution.inventory.service.InventoryService;
-import com.smartdistribution.inventory.service.ReservationDemand;
 import com.smartdistribution.sales.entity.SalesOrder;
 import com.smartdistribution.sales.entity.SalesOrderCancellation;
 import com.smartdistribution.sales.entity.SalesOrderCancellationLine;
@@ -14,6 +14,7 @@ import com.smartdistribution.sales.repository.SalesOrderCancellationLineReposito
 import com.smartdistribution.sales.repository.SalesOrderCancellationRepository;
 import com.smartdistribution.sales.repository.SalesOrderLineRepository;
 import com.smartdistribution.sales.service.SalesOrderQuantities;
+import com.smartdistribution.sales.service.ShipmentQuantityProvider.ShipmentQuantity;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -73,15 +74,20 @@ public class SalesOrderCancellationApprovalHandler implements ApprovalHandler {
                 salesOrderLineRepository.findAllBySalesOrderIdOrderByLineNoAsc(salesOrder.getId());
         List<SalesOrderCancellationLine> cancellationLines = findLines(targetId);
 
-        //此時只會算到其他已核准的取消，本張尚未核准
-        Map<Long, BigDecimal> cancelledBefore = salesOrderQuantities.findCancelledQty(
-                salesOrderLines.stream().map(SalesOrderLine::getId).toList()
-        );
+        //此時只會算到其他已核准的取消，本張尚未核准；送審後才建立的 DO 也在這裡重新算進來
+        List<Long> salesOrderLineIds = salesOrderLines.stream()
+                .map(SalesOrderLine::getId)
+                .toList();
+
+        Map<Long, BigDecimal> cancelledBefore = salesOrderQuantities.findCancelledQty(salesOrderLineIds);
+        Map<Long, ShipmentQuantity> shipmentsByLine = salesOrderQuantities.findShipments(salesOrderLineIds);
         Map<Long, BigDecimal> cancelledAfter = new HashMap<>(cancelledBefore);
 
         for (SalesOrderCancellationLine line : cancellationLines) {
             SalesOrderLine salesOrderLine = line.getSalesOrderLine();
-            salesOrderQuantities.ensureWithinCancellableQty(salesOrderLine, line.getBaseQty(), cancelledBefore);
+            salesOrderQuantities.ensureWithinCancellableQty(
+                    salesOrderLine, line.getBaseQty(), cancelledBefore, shipmentsByLine
+            );
 
             cancelledAfter.merge(salesOrderLine.getId(), line.getBaseQty(), BigDecimal::add);
         }
@@ -91,7 +97,7 @@ public class SalesOrderCancellationApprovalHandler implements ApprovalHandler {
                         .map(line -> new ReservationDemand(
                                 line.getSalesOrderLine().getId(),
                                 line.getSalesOrderLine().getCompanyItemId(),
-                                salesOrderQuantities.cancellableQty(line.getSalesOrderLine(), cancelledAfter)
+                                salesOrderQuantities.remainingQty(line.getSalesOrderLine(), cancelledAfter, shipmentsByLine)
                         ))
                         .toList(),
                 cancellation.getId(),
@@ -100,9 +106,7 @@ public class SalesOrderCancellationApprovalHandler implements ApprovalHandler {
 
         cancellation.approve(Instant.now());
 
-        boolean nothingRemaining = salesOrderLines.stream()
-                .allMatch(line -> salesOrderQuantities.cancellableQty(line, cancelledAfter).signum() <= 0);
-        if (nothingRemaining) {
+        if (salesOrderQuantities.isFulfilled(salesOrderLines, cancelledAfter, shipmentsByLine)) {
             salesOrder.close();
         }
     }

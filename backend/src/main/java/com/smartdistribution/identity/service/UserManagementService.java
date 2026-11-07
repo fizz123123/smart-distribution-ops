@@ -1,6 +1,5 @@
 package com.smartdistribution.identity.service;
 
-import com.smartdistribution.identity.dto.request.ChangeUserStatusRequest;
 import com.smartdistribution.identity.dto.request.CreateUserRequest;
 import com.smartdistribution.identity.dto.request.ReplaceUserPermissionGrantsRequest;
 import com.smartdistribution.identity.dto.request.ReplaceUserRolesRequest;
@@ -8,6 +7,7 @@ import com.smartdistribution.identity.dto.request.UpdateUserRequest;
 import com.smartdistribution.identity.dto.response.AuthorizationOptionsResponse;
 import com.smartdistribution.identity.dto.response.UserDetailResponse;
 import com.smartdistribution.identity.dto.response.UserSummaryResponse;
+import com.smartdistribution.shared.web.request.ReasonRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 
@@ -39,12 +39,12 @@ public interface UserManagementService {
 
     UserDetailResponse activateUser(
             Long userId,
-            ChangeUserStatusRequest request
+            ReasonRequest request
     );
 
     UserDetailResponse disableUser(
             Long userId,
-            ChangeUserStatusRequest request
+            ReasonRequest request
     );
 
     UserDetailResponse replaceRoles(

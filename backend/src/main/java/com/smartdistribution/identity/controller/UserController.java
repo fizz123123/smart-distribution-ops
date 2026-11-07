@@ -1,7 +1,6 @@
 package com.smartdistribution.identity.controller;
 
 import com.smartdistribution.identity.dto.request.ChangeOwnPasswordRequest;
-import com.smartdistribution.identity.dto.request.ChangeUserStatusRequest;
 import com.smartdistribution.identity.dto.request.CreateUserRequest;
 import com.smartdistribution.identity.dto.request.ReplaceUserPermissionGrantsRequest;
 import com.smartdistribution.identity.dto.request.ReplaceUserRolesRequest;
@@ -12,6 +11,7 @@ import com.smartdistribution.identity.dto.response.UserDetailResponse;
 import com.smartdistribution.identity.dto.response.UserSummaryResponse;
 import com.smartdistribution.identity.service.AuthService;
 import com.smartdistribution.identity.service.UserManagementService;
+import com.smartdistribution.shared.web.request.ReasonRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -105,7 +105,7 @@ public class UserController {
     @PostMapping("/{userId}/activate")
     public ResponseEntity<UserDetailResponse> activateUser(
             @PathVariable Long userId,
-            @Valid @RequestBody ChangeUserStatusRequest request
+            @Valid @RequestBody ReasonRequest request
     ) {
         UserDetailResponse response = userManagementService.activateUser(userId, request);
 
@@ -115,7 +115,7 @@ public class UserController {
     @PostMapping("/{userId}/disable")
     public ResponseEntity<UserDetailResponse> disableUser(
             @PathVariable Long userId,
-            @Valid @RequestBody ChangeUserStatusRequest request
+            @Valid @RequestBody ReasonRequest request
     ) {
         UserDetailResponse response = userManagementService.disableUser(userId, request);
 

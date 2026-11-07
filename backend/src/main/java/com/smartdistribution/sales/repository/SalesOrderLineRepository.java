@@ -6,11 +6,15 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface SalesOrderLineRepository extends JpaRepository<SalesOrderLine, Long> {
 
     List<SalesOrderLine> findAllBySalesOrderIdOrderByLineNoAsc(Long salesOrderId);
+
+    //DO 清單一次取回這一頁所有 SO 的明細
+    List<SalesOrderLine> findAllBySalesOrderIdInOrderByLineNoAsc(Collection<Long> salesOrderIds);
 
     //草稿整批取代明細時使用；直接下 DELETE，避免和新明細的行號唯一約束衝突
     @Modifying(flushAutomatically = true)
