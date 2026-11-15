@@ -3,7 +3,9 @@ package com.smartdistribution.approval.controller;
 import com.smartdistribution.approval.dto.request.ApproveRequest;
 import com.smartdistribution.approval.dto.request.ReturnRequest;
 import com.smartdistribution.approval.dto.response.ApprovalDetailResponse;
+import com.smartdistribution.approval.dto.response.ApprovalHistoryResponse;
 import com.smartdistribution.approval.dto.response.ApprovalSummaryResponse;
+import com.smartdistribution.approval.entity.ApprovalTargetType;
 import com.smartdistribution.approval.service.ApprovalService;
 import com.smartdistribution.shared.web.response.PageResponse;
 import jakarta.validation.Valid;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -30,6 +33,14 @@ public class ApprovalController {
             @PageableDefault(size = 20) Pageable pageable
     ) {
         return ResponseEntity.ok(approvalService.findMyPending(pageable));
+    }
+
+    @GetMapping("/history")
+    public ResponseEntity<ApprovalHistoryResponse> findHistory(
+            @RequestParam ApprovalTargetType targetType,
+            @RequestParam Long targetId
+    ) {
+        return ResponseEntity.ok(approvalService.findHistory(targetType, targetId));
     }
 
     @GetMapping("/{approvalRequestId}")
