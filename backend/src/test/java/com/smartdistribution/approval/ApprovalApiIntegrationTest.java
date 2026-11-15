@@ -14,6 +14,7 @@ import com.smartdistribution.masterdata.supplier.entity.Supplier;
 import com.smartdistribution.masterdata.supplier.repository.SupplierRepository;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
+import com.smartdistribution.support.RecordingMailSender;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -70,9 +71,14 @@ class ApprovalApiIntegrationTest {
     @Autowired
     private SupplierRepository supplierRepository;
 
+    @Autowired
+    private RecordingMailSender mailSender;
+
     @BeforeEach
     @AfterEach
     void cleanTestData() {
+        mailSender.clear();
+
         // 只清除測試供應商的核准紀錄，不影響本機開發時建立的資料
         List<Long> supplierIds = jdbcTemplate.queryForList(
                 "SELECT id FROM supplier WHERE name LIKE ?",
@@ -274,6 +280,169 @@ class ApprovalApiIntegrationTest {
                 .andExpect(jsonPath("$.actions.length()").value(3))
                 .andExpect(jsonPath("$.actions[1].actionType").value("RETURN"))
                 .andExpect(jsonPath("$.actions[2].actionType").value("SUBMIT"));
+    }
+
+    @Test
+    void requesterCanReadReturnCommentInHistory() throws Exception {
+        AppUser creator = createUser("history-creator", "PURCHASING");
+        AppUser submitter = createUser("history-submitter", "PURCHASING");
+        AppUser approver = createUser("history-approver", "PURCHASING_MANAGER");
+        Supplier supplier = createPendingSupplier(creator.getId());
+
+        Long firstRoundId = submitAndGetRequestId(
+                ApprovalTargetType.SUPPLIER,
+                supplier.getId(),
+                submitter.getId()
+        );
+
+        mockMvc.perform(post(
+                                "/api/v1/approval-requests/{id}/return",
+                                firstRoundId
+                        )
+                        .header("Authorization", bearer(login(approver.getEmail())))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"comment": "請補齊聯絡資料"}
+                                """))
+                .andExpect(status().isOk());
+
+        prepareResubmission(supplier);
+        submitAndGetRequestId(
+                ApprovalTargetType.SUPPLIER,
+                supplier.getId(),
+                submitter.getId()
+        );
+
+        //建立者沒有核准權限，只有供應商的查看權限
+        mockMvc.perform(get("/api/v1/approval-requests/history")
+                        .param("targetType", "SUPPLIER")
+                        .param("targetId", supplier.getId().toString())
+                        .header("Authorization", bearer(login(creator.getEmail()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.targetType").value("SUPPLIER"))
+                .andExpect(jsonPath("$.entries.length()").value(3))
+                .andExpect(jsonPath("$.entries[0].roundNo").value(1))
+                .andExpect(jsonPath("$.entries[0].actionType").value("SUBMIT"))
+                .andExpect(jsonPath("$.entries[1].actionType").value("RETURN"))
+                .andExpect(jsonPath("$.entries[1].comment").value("請補齊聯絡資料"))
+                .andExpect(jsonPath("$.entries[1].actor.id").value(approver.getId()))
+                .andExpect(jsonPath("$.entries[2].roundNo").value(2))
+                .andExpect(jsonPath("$.entries[2].actionType").value("SUBMIT"));
+    }
+
+    @Test
+    void historyRequiresViewOrApprovePermission() throws Exception {
+        AppUser creator = createUser("history-denied-creator", "PURCHASING");
+        AppUser warehouse = createUser("history-denied-warehouse", "WAREHOUSE");
+        Supplier supplier = createPendingSupplier(creator.getId());
+
+        submitAndGetRequestId(
+                ApprovalTargetType.SUPPLIER,
+                supplier.getId(),
+                creator.getId()
+        );
+
+        mockMvc.perform(get("/api/v1/approval-requests/history")
+                        .param("targetType", "SUPPLIER")
+                        .param("targetId", supplier.getId().toString())
+                        .header("Authorization", bearer(login(warehouse.getEmail()))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+    }
+
+    @Test
+    void submissionNotifiesApproversExceptCreatorAndSubmitter() {
+        AppUser creator = createUser("notify-submit-creator", "PURCHASING_MANAGER");
+        AppUser submitter = createUser("notify-submit-submitter", "PURCHASING");
+        AppUser approver = createUser("notify-submit-approver", "PURCHASING_MANAGER");
+        Supplier supplier = createPendingSupplier(creator.getId());
+
+        approvalService.submit(ApprovalTargetType.SUPPLIER, supplier.getId(), submitter.getId());
+
+        assertThat(mailSender.messagesTo(approver.getEmail()))
+                .singleElement()
+                .satisfies(mail -> assertThat(mail.subject()).startsWith("【智慧營運系統】待核准："));
+        //建立者也有核准權限，但不能核准自己的資料，所以不寄
+        assertThat(mailSender.messagesTo(creator.getEmail())).isEmpty();
+        assertThat(mailSender.messagesTo(submitter.getEmail())).isEmpty();
+    }
+
+    @Test
+    void returnNotifiesCreatorAndSubmitterWithReason() throws Exception {
+        AppUser creator = createUser("notify-return-creator", "PURCHASING");
+        AppUser submitter = createUser("notify-return-submitter", "PURCHASING");
+        AppUser approver = createUser("notify-return-approver", "PURCHASING_MANAGER");
+        Supplier supplier = createPendingSupplier(creator.getId());
+        Long approvalRequestId = submitAndGetRequestId(
+                ApprovalTargetType.SUPPLIER,
+                supplier.getId(),
+                submitter.getId()
+        );
+        mailSender.clear();
+
+        mockMvc.perform(post("/api/v1/approval-requests/{id}/return", approvalRequestId)
+                        .header("Authorization", bearer(login(approver.getEmail())))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"comment": "統編少一碼"}
+                                """))
+                .andExpect(status().isOk());
+
+        for (AppUser requester : List.of(creator, submitter)) {
+            assertThat(mailSender.messagesTo(requester.getEmail()))
+                    .singleElement()
+                    .satisfies(mail -> {
+                        assertThat(mail.subject()).startsWith("【智慧營運系統】已退回：");
+                        assertThat(mail.html()).contains("統編少一碼");
+                    });
+        }
+        assertThat(mailSender.messagesTo(approver.getEmail())).isEmpty();
+    }
+
+    @Test
+    void approvalNotifiesSameCreatorAndSubmitterOnlyOnce() throws Exception {
+        AppUser creator = createUser("notify-approve-creator", "PURCHASING");
+        AppUser approver = createUser("notify-approve-approver", "PURCHASING_MANAGER");
+        Supplier supplier = createPendingSupplier(creator.getId());
+        Long approvalRequestId = submitAndGetRequestId(
+                ApprovalTargetType.SUPPLIER,
+                supplier.getId(),
+                creator.getId()
+        );
+        mailSender.clear();
+
+        mockMvc.perform(post("/api/v1/approval-requests/{id}/approve", approvalRequestId)
+                        .header("Authorization", bearer(login(approver.getEmail())))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk());
+
+        assertThat(mailSender.messagesTo(creator.getEmail()))
+                .singleElement()
+                .satisfies(mail -> assertThat(mail.subject()).startsWith("【智慧營運系統】已核准："));
+    }
+
+    @Test
+    void failedApprovalSendsNoNotification() throws Exception {
+        AppUser creator = createUser("notify-failed-creator", "PURCHASING");
+        AppUser approver = createUser("notify-failed-approver", "PURCHASING_MANAGER");
+        Supplier supplier = createPendingSupplier(creator.getId());
+        Long approvalRequestId = submitAndGetRequestId(
+                ApprovalTargetType.SUPPLIER,
+                supplier.getId(),
+                creator.getId()
+        );
+        //讓供應商不再是待核准，handler 核准時會拋錯，整個核准回滾
+        jdbcTemplate.update("UPDATE supplier SET status = 'DRAFT' WHERE id = ?", supplier.getId());
+        mailSender.clear();
+
+        mockMvc.perform(post("/api/v1/approval-requests/{id}/approve", approvalRequestId)
+                        .header("Authorization", bearer(login(approver.getEmail())))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isConflict());
+
+        assertThat(mailSender.messagesTo(creator.getEmail())).isEmpty();
     }
 
     @Test
