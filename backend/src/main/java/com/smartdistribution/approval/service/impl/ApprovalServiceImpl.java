@@ -3,12 +3,15 @@ package com.smartdistribution.approval.service.impl;
 import com.smartdistribution.approval.dto.request.ApproveRequest;
 import com.smartdistribution.approval.dto.request.ReturnRequest;
 import com.smartdistribution.approval.dto.response.ApprovalDetailResponse;
+import com.smartdistribution.approval.dto.response.ApprovalHistoryResponse;
 import com.smartdistribution.approval.dto.response.ApprovalSummaryResponse;
 import com.smartdistribution.approval.entity.ApprovalAction;
 import com.smartdistribution.approval.entity.ApprovalActionType;
 import com.smartdistribution.approval.entity.ApprovalRequest;
 import com.smartdistribution.approval.entity.ApprovalStatus;
 import com.smartdistribution.approval.entity.ApprovalTargetType;
+import com.smartdistribution.approval.event.ApprovalDecidedEvent;
+import com.smartdistribution.approval.event.ApprovalSubmittedEvent;
 import com.smartdistribution.approval.handler.ApprovalHandler;
 import com.smartdistribution.approval.handler.ApprovalTarget;
 import com.smartdistribution.approval.mapper.ApprovalMapper;
@@ -21,6 +24,7 @@ import com.smartdistribution.shared.exception.ErrorCode;
 import com.smartdistribution.shared.security.currentuser.CurrentUserProvider;
 import com.smartdistribution.shared.security.userdetails.CustomUserDetails;
 import com.smartdistribution.shared.web.response.PageResponse;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.GrantedAuthority;
@@ -43,6 +47,7 @@ public class ApprovalServiceImpl implements ApprovalService {
     private final CurrentUserProvider currentUserProvider;
     private final UserDirectoryService userDirectoryService;
     private final ApprovalMapper approvalMapper;
+    private final ApplicationEventPublisher eventPublisher;
     private final Map<ApprovalTargetType, ApprovalHandler> handlers;
 
     public ApprovalServiceImpl(
@@ -51,6 +56,7 @@ public class ApprovalServiceImpl implements ApprovalService {
             CurrentUserProvider currentUserProvider,
             UserDirectoryService userDirectoryService,
             ApprovalMapper approvalMapper,
+            ApplicationEventPublisher eventPublisher,
             List<ApprovalHandler> approvalHandlers
     ) {
         this.approvalRequestRepository = approvalRequestRepository;
@@ -58,6 +64,7 @@ public class ApprovalServiceImpl implements ApprovalService {
         this.currentUserProvider = currentUserProvider;
         this.userDirectoryService = userDirectoryService;
         this.approvalMapper = approvalMapper;
+        this.eventPublisher = eventPublisher;
         this.handlers = new EnumMap<>(ApprovalTargetType.class);
 
         for (ApprovalHandler handler : approvalHandlers) {
@@ -111,6 +118,17 @@ public class ApprovalServiceImpl implements ApprovalService {
                 submitterId,
                 null
         ));
+
+        eventPublisher.publishEvent(new ApprovalSubmittedEvent(
+                approvalRequest.getId(),
+                targetType,
+                targetId,
+                approvalRequest.getRoundNo(),
+                approvalRequest.getTargetLabel(),
+                approvalRequest.getTargetCreatedBy(),
+                submitterId,
+                approvalRequest.getSubmittedAt()
+        ));
     }
 
     @Override
@@ -155,6 +173,29 @@ public class ApprovalServiceImpl implements ApprovalService {
     }
 
     @Override
+    public ApprovalHistoryResponse findHistory(ApprovalTargetType targetType, Long targetId) {
+        CustomUserDetails user = currentUserProvider.getCurrentUserDetails();
+        if (!hasAuthority(user, targetType.getViewPermissionCode())
+                && !hasAuthority(user, targetType.getPermissionCode())) {
+            throw new BusinessException(ErrorCode.ACCESS_DENIED);
+        }
+
+        List<ApprovalAction> actions = approvalActionRepository.findHistory(targetType, targetId);
+
+        Set<Long> userIds = new HashSet<>();
+        for (ApprovalAction action : actions) {
+            userIds.add(action.getActorId());
+        }
+        Map<Long, String> userNames = userDirectoryService.findNamesByIds(userIds);
+
+        List<ApprovalHistoryResponse.Entry> entries = actions.stream()
+                .map(action -> approvalMapper.toHistoryEntry(action, userNames))
+                .toList();
+
+        return new ApprovalHistoryResponse(targetType, targetId, entries);
+    }
+
+    @Override
     @Transactional
     public ApprovalDetailResponse approve(
             Long approvalRequestId,
@@ -181,6 +222,7 @@ public class ApprovalServiceImpl implements ApprovalService {
                 actor.getUserId(),
                 approvalRequest.getId()
         );
+        publishDecided(approvalRequest, actor.getUserId(), request.comment());
 
         return toDetail(approvalRequest);
     }
@@ -211,8 +253,25 @@ public class ApprovalServiceImpl implements ApprovalService {
                 approvalRequest.getTargetId(),
                 actor.getUserId()
         );
+        publishDecided(approvalRequest, actor.getUserId(), request.comment());
 
         return toDetail(approvalRequest);
+    }
+
+    //handler 成功之後才發出；交易回滾時監聽者不會收到
+    private void publishDecided(ApprovalRequest approvalRequest, Long actorId, String comment) {
+        eventPublisher.publishEvent(new ApprovalDecidedEvent(
+                approvalRequest.getId(),
+                approvalRequest.getTargetType(),
+                approvalRequest.getTargetId(),
+                approvalRequest.getTargetLabel(),
+                approvalRequest.getTargetCreatedBy(),
+                approvalRequest.getSubmittedBy(),
+                approvalRequest.getStatus(),
+                actorId,
+                comment == null || comment.isBlank() ? null : comment.strip(),
+                Instant.now()
+        ));
     }
 
     private ApprovalRequest findApprovalRequest(Long approvalRequestId) {
