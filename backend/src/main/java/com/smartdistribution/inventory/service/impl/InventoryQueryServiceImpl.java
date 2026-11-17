@@ -52,15 +52,7 @@ public class InventoryQueryServiceImpl implements InventoryQueryService {
         String normalizedKeyword = keyword == null || keyword.isBlank() ? null : keyword.strip();
         Page<InventoryBalanceProjection> rows = inventoryBalanceRepository.searchBalances(normalizedKeyword, pageable);
 
-        List<Long> companyItemIds = rows.map(InventoryBalanceProjection::companyItemId).getContent();
-        Map<Long, BigDecimal> reservedQtyByItem = companyItemIds.isEmpty()
-                ? Map.of()
-                : toMap(inventoryReservationRepository.sumOpenQtyByCompanyItemIds(companyItemIds));
-
-        return PageResponse.from(rows.map(row -> inventoryMapper.toBalanceResponse(
-                row,
-                reservedQtyByItem.getOrDefault(row.companyItemId(), BigDecimal.ZERO)
-        )));
+        return PageResponse.from(rows.map(inventoryMapper::toBalanceResponse));
     }
 
     @Override
@@ -105,7 +97,7 @@ public class InventoryQueryServiceImpl implements InventoryQueryService {
     public InventoryConsistencyResponse checkConsistency() {
         List<InventoryBalance> balances = inventoryBalanceRepository.findAll();
         Map<Long, BigDecimal> transactionSumByItem = toMap(inventoryTransactionRepository.sumQuantityByCompanyItem());
-        Map<Long, BigDecimal> reservedQtyByItem = toMap(inventoryReservationRepository.sumOpenQtyByCompanyItem());
+        Map<Long, BigDecimal> reservationSumByItem = toMap(inventoryReservationRepository.sumOpenQtyByCompanyItem());
         Map<Long, BigDecimal> eventSumByReservation = toMap(
                 inventoryReservationEventRepository.sumNetQuantityByReservation(ReservationEventType.RESERVE)
         );
@@ -113,20 +105,26 @@ public class InventoryQueryServiceImpl implements InventoryQueryService {
         List<Issue> issues = new ArrayList<>();
 
         //1.可出貨實體數量 ＝ 異動加總
-        //2.有效預留總量 ≤ 可出貨實體數量
+        //2.已預留數量 ＝ 同料號預留的 open_qty 加總
+        //3.已預留數量 ≤ 可出貨實體數量
         for (InventoryBalance balance : balances) {
             Long companyItemId = balance.getCompanyItemId();
             BigDecimal transactionSum = transactionSumByItem.getOrDefault(companyItemId, BigDecimal.ZERO);
-            BigDecimal reservedQty = reservedQtyByItem.getOrDefault(companyItemId, BigDecimal.ZERO);
+            BigDecimal reservationSum = reservationSumByItem.getOrDefault(companyItemId, BigDecimal.ZERO);
 
             if (transactionSum.compareTo(balance.getOnHandQty()) != 0) {
                 issues.add(new Issue(companyItemId, null, IssueType.ON_HAND_MISMATCH,
                         transactionSum, balance.getOnHandQty()));
             }
 
-            if (reservedQty.compareTo(balance.getOnHandQty()) > 0) {
+            if (reservationSum.compareTo(balance.getReservedQty()) != 0) {
+                issues.add(new Issue(companyItemId, null, IssueType.RESERVED_QTY_MISMATCH,
+                        reservationSum, balance.getReservedQty()));
+            }
+
+            if (balance.getReservedQty().compareTo(balance.getOnHandQty()) > 0) {
                 issues.add(new Issue(companyItemId, null, IssueType.OVER_RESERVED,
-                        balance.getOnHandQty(), reservedQty));
+                        balance.getOnHandQty(), balance.getReservedQty()));
             }
         }
 

@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 庫存模組的 entity 與查詢結果轉成 API 回應；只做欄位轉換，不查詢資料庫
@@ -22,9 +23,13 @@ import java.util.List;
 @Component
 public class InventoryMapper {
 
+    /**
+     * @param reversedBy 原明細 ID → 沖銷它的更正單明細；沒有被沖銷的明細不在裡面
+     */
     public InventoryAdjustmentResponse toAdjustmentResponse(
             InventoryAdjustment adjustment,
-            List<InventoryAdjustmentLine> lines
+            List<InventoryAdjustmentLine> lines,
+            Map<Long, InventoryAdjustmentLine> reversedBy
     ) {
         return new InventoryAdjustmentResponse(
                 adjustment.getId(),
@@ -37,11 +42,22 @@ public class InventoryMapper {
                 adjustment.getPostedAt(),
                 adjustment.getVersion(),
                 lines.stream()
-                        .map(line -> new InventoryAdjustmentResponse.Line(
-                                line.getCompanyItemId(),
-                                line.getQuantityChangeBase()
-                        ))
+                        .map(line -> toAdjustmentLine(line, reversedBy.get(line.getId())))
                         .toList()
+        );
+    }
+
+    private InventoryAdjustmentResponse.Line toAdjustmentLine(
+            InventoryAdjustmentLine line,
+            InventoryAdjustmentLine reversalLine
+    ) {
+        return new InventoryAdjustmentResponse.Line(
+                line.getId(),
+                line.getCompanyItemId(),
+                line.getQuantityChangeBase(),
+                line.getReversalOfLineId(),
+                reversalLine == null ? null : reversalLine.getAdjustment().getId(),
+                reversalLine == null ? null : reversalLine.getAdjustment().getAdjustmentNumber()
         );
     }
 
@@ -70,16 +86,16 @@ public class InventoryMapper {
         );
     }
 
-    // 可用庫存 ＝ 可出貨實體數量 － 有效預留總量
-    public InventoryBalanceResponse toBalanceResponse(InventoryBalanceProjection row, BigDecimal reservedQty) {
+    //可用庫存 ＝ 可出貨實體數量 － 已預留數量
+    public InventoryBalanceResponse toBalanceResponse(InventoryBalanceProjection row) {
         return new InventoryBalanceResponse(
                 row.companyItemId(),
                 row.itemCode(),
                 row.name(),
                 row.baseUnit(),
                 row.onHandQty(),
-                reservedQty,
-                row.onHandQty().subtract(reservedQty),
+                row.reservedQty(),
+                row.onHandQty().subtract(row.reservedQty()),
                 row.safetyStockBaseQty()
         );
     }

@@ -43,13 +43,19 @@ public class InventoryAdjustmentLine {
     @Column(name = "quantity_change_base", nullable = false, precision = 15, scale = 3)
     private BigDecimal quantityChangeBase;
 
+    //更正單的明細指向它沖銷的原明細；unique 讓同一行最多只能被沖銷一次，兩人同時更正時由資料庫擋下後到的
+    @Column(name = "reversal_of_line_id", unique = true)
+    private Long reversalOfLineId;
+
     public InventoryAdjustmentLine(
             InventoryAdjustment adjustment,
             Long companyItemId,
-            BigDecimal quantityChangeBase
+            BigDecimal quantityChangeBase,
+            Long reversalOfLineId
     ) {
         this.adjustment = adjustment;
         this.companyItemId = companyItemId;
         this.quantityChangeBase = quantityChangeBase;
+        this.reversalOfLineId = reversalOfLineId;
     }
 }

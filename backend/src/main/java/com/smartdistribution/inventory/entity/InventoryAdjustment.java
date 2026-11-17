@@ -19,8 +19,9 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 
 /**
- * 庫存調整單表頭：建立即過帳，不另走核准；
- * 過帳後不修改，登錄錯誤時建立一張相反方向的調整並把原調整標記為 REVERSED
+ * 庫存調整單表頭：建立即過帳，不另走核准
+ * 過帳後不修改；登錄錯誤時建立一張更正單，沖銷指定的明細
+ * 一張調整可以分次更正，部分明細沖銷後是 PARTIALLY_REVERSED，全部沖完是 REVERSED
  */
 @Getter
 @Entity
@@ -46,8 +47,8 @@ public class InventoryAdjustment extends TimestampedEntity {
     @Column(nullable = false, length = 20)
     private AdjustmentStatus status;
 
-    //這張調整單如果是用於反向更正，指向被更正的原調整單
-    @Column(name = "reversal_of_id", unique = true)
+    //這張調整單如果是更正單，指向被更正的原調整單；一張原調整可以有多張更正單
+    @Column(name = "reversal_of_id")
     private Long reversalOfId;
 
     @Column(name = "posted_by", nullable = false)
@@ -95,12 +96,23 @@ public class InventoryAdjustment extends TimestampedEntity {
         return InventoryTransactionType.ADJUSTMENT;
     }
 
-    //只能更正一次，更正紀錄本身也不能再被更正，需要時另建一張新的調整
-    public void markReversed() {
-        if (status != AdjustmentStatus.POSTED || isReversal()) {
+    /**
+     * 更正單本身不能再被更正；全部明細都沖銷過的調整也不能再更正
+     *
+     * @throws BusinessException 不能更正時（INVENTORY_ADJUSTMENT_NOT_REVERSIBLE）
+     */
+    public void ensureReversible() {
+        if (status == AdjustmentStatus.REVERSED || isReversal()) {
             throw new BusinessException(ErrorCode.INVENTORY_ADJUSTMENT_NOT_REVERSIBLE);
         }
+    }
 
-        this.status = AdjustmentStatus.REVERSED;
+    /**
+     * 沖銷明細後更新狀態；呼叫前已經用 ensureReversible 檢查過
+     *
+     * @param allLinesReversed 這次更正之後，是否所有明細都已沖銷
+     */
+    public void markLinesReversed(boolean allLinesReversed) {
+        this.status = allLinesReversed ? AdjustmentStatus.REVERSED : AdjustmentStatus.PARTIALLY_REVERSED;
     }
 }

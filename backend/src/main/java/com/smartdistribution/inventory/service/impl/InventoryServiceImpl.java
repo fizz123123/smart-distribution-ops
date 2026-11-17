@@ -11,7 +11,6 @@ import com.smartdistribution.inventory.repository.InventoryBalanceRepository;
 import com.smartdistribution.inventory.repository.InventoryReservationEventRepository;
 import com.smartdistribution.inventory.repository.InventoryReservationRepository;
 import com.smartdistribution.inventory.repository.InventoryTransactionRepository;
-import com.smartdistribution.inventory.repository.QuantityByKeyProjection;
 import com.smartdistribution.inventory.service.InventoryBalanceLocks;
 import com.smartdistribution.inventory.service.InventoryService.DeliveryLine;
 import com.smartdistribution.inventory.service.InventoryService.ReceiptLine;
@@ -27,7 +26,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -63,18 +61,15 @@ public class InventoryServiceImpl implements InventoryService {
                 lines.stream().map(ReservationLine::companyItemId).toList()
         );
 
-        Map<Long, BigDecimal> availableByItem = new HashMap<>();
-        balances.forEach((companyItemId, balance) ->
-                availableByItem.put(companyItemId, inventoryBalanceLocks.availableQty(balance)));
-
         Instant now = Instant.now();
 
         for (ReservationLine line : lines) {
-            BigDecimal available = availableByItem.get(line.companyItemId());
+            //同一張 SO 有兩行同料號時，第二行看到的是第一行預留之後的可用量
+            InventoryBalance balance = balances.get(line.companyItemId());
 
             //可用量不足時只預留可用的部分，不得超額預留；資料不一致造成負數時視為 0
-            BigDecimal reservedQty = available.min(line.baseQty()).max(BigDecimal.ZERO);
-            availableByItem.put(line.companyItemId(), available.subtract(reservedQty));
+            BigDecimal reservedQty = balance.availableQty().min(line.baseQty()).max(BigDecimal.ZERO);
+            balance.increaseReserved(reservedQty);
 
             //每筆明細都建立預留列，預留量 0 也建，之後 PO 入庫補足時直接累加
             InventoryReservation reservation = new InventoryReservation(
@@ -109,8 +104,10 @@ public class InventoryServiceImpl implements InventoryService {
             Long cancellationId,
             Long actorId
     ) {
-        // 釋放預留也要先鎖定，避免和同一料號的預留或調整同時計算
-        inventoryBalanceLocks.lockInItemOrder(demands.stream().map(ReservationDemand::companyItemId).toList());
+        //釋放預留也要先鎖定，避免和同一料號的預留或調整同時計算
+        Map<Long, InventoryBalance> balances = inventoryBalanceLocks.lockInItemOrder(
+                demands.stream().map(ReservationDemand::companyItemId).toList()
+        );
 
         Map<Long, InventoryReservation> reservations = inventoryReservationRepository
                 .findAllBySalesOrderLineIdIn(demands.stream().map(ReservationDemand::salesOrderLineId).toList())
@@ -130,6 +127,7 @@ public class InventoryServiceImpl implements InventoryService {
 
             if (releasedQty.signum() > 0) {
                 reservation.decrease(releasedQty);
+                balances.get(demand.companyItemId()).decreaseReserved(releasedQty);
                 inventoryReservationEventRepository.save(new InventoryReservationEvent(
                         reservation,
                         ReservationEventType.RELEASE,
@@ -188,6 +186,7 @@ public class InventoryServiceImpl implements InventoryService {
 
             if (topUpQty.signum() > 0) {
                 reservation.increase(topUpQty);
+                balances.get(line.companyItemId()).increaseReserved(topUpQty);
                 inventoryReservationEventRepository.save(new InventoryReservationEvent(
                         reservation,
                         ReservationEventType.RESERVE,
@@ -224,7 +223,11 @@ public class InventoryServiceImpl implements InventoryService {
                 throw new BusinessException(ErrorCode.DO_RESERVATION_INSUFFICIENT);
             }
 
-            balances.get(line.companyItemId()).change(line.shippedBaseQty().negate());
+            //先扣預留再扣實體，過程中實體數量才不會低於已預留數量
+            InventoryBalance balance = balances.get(line.companyItemId());
+            reservation.decrease(line.shippedBaseQty());
+            balance.decreaseReserved(line.shippedBaseQty());
+            balance.change(line.shippedBaseQty().negate());
             inventoryTransactionRepository.save(new InventoryTransaction(
                     line.companyItemId(),
                     line.shippedBaseQty().negate(),
@@ -234,7 +237,6 @@ public class InventoryServiceImpl implements InventoryService {
                     now
             ));
 
-            reservation.decrease(line.shippedBaseQty());
             inventoryReservationEventRepository.save(new InventoryReservationEvent(
                     reservation,
                     ReservationEventType.CONSUME,
@@ -267,19 +269,8 @@ public class InventoryServiceImpl implements InventoryService {
             return Map.of();
         }
 
-        List<Long> ids = List.copyOf(companyItemIds);
-        Map<Long, BigDecimal> reservedByItem = inventoryReservationRepository
-                .sumOpenQtyByCompanyItemIds(ids)
+        return inventoryBalanceRepository.findAllByCompanyItemIdIn(List.copyOf(companyItemIds))
                 .stream()
-                .collect(Collectors.toMap(QuantityByKeyProjection::key, QuantityByKeyProjection::quantity));
-
-        return inventoryBalanceRepository.findAllByCompanyItemIdIn(ids)
-                .stream()
-                .collect(Collectors.toMap(
-                        InventoryBalance::getCompanyItemId,
-                        balance -> balance.getOnHandQty().subtract(
-                                reservedByItem.getOrDefault(balance.getCompanyItemId(), BigDecimal.ZERO)
-                        )
-                ));
+                .collect(Collectors.toMap(InventoryBalance::getCompanyItemId, InventoryBalance::availableQty));
     }
 }

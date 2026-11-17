@@ -263,7 +263,7 @@ public enum ErrorCode {
     ),
     INVENTORY_ADJUSTMENT_NOT_REVERSIBLE(
             HttpStatus.CONFLICT,
-            "此調整已更正過，或本身就是更正紀錄，不能再更正。"
+            "此調整的明細已全部沖銷，或本身就是更正紀錄，不能再更正。"
     ),
 
     // Purchase order
