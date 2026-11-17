@@ -87,7 +87,9 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
             Long adjustmentId,
             ReverseInventoryAdjustmentRequest request
     ) {
-        InventoryAdjustment original = findAdjustmentById(adjustmentId);
+        //先鎖原調整再鎖餘額列；只有更正會鎖調整表頭，取鎖順序固定，不會和其他流程互相等待
+        InventoryAdjustment original = inventoryAdjustmentRepository.findByIdForUpdate(adjustmentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVENTORY_ADJUSTMENT_NOT_FOUND));
 
         if (!Objects.equals(original.getVersion(), request.version())) {
             throw new BusinessException(ErrorCode.VERSION_CONFLICT);

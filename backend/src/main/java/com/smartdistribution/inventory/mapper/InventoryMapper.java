@@ -86,7 +86,7 @@ public class InventoryMapper {
         );
     }
 
-    // 可用庫存 ＝ 可出貨實體數量 － 有效預留總量
+    //可用庫存 ＝ 可出貨實體數量 － 已預留數量
     public InventoryBalanceResponse toBalanceResponse(InventoryBalanceProjection row) {
         return new InventoryBalanceResponse(
                 row.companyItemId(),

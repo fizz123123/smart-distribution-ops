@@ -97,7 +97,7 @@ public class InventoryQueryServiceImpl implements InventoryQueryService {
     public InventoryConsistencyResponse checkConsistency() {
         List<InventoryBalance> balances = inventoryBalanceRepository.findAll();
         Map<Long, BigDecimal> transactionSumByItem = toMap(inventoryTransactionRepository.sumQuantityByCompanyItem());
-        Map<Long, BigDecimal> reservedQtyByItem = toMap(inventoryReservationRepository.sumOpenQtyByCompanyItem());
+        Map<Long, BigDecimal> reservationSumByItem = toMap(inventoryReservationRepository.sumOpenQtyByCompanyItem());
         Map<Long, BigDecimal> eventSumByReservation = toMap(
                 inventoryReservationEventRepository.sumNetQuantityByReservation(ReservationEventType.RESERVE)
         );
@@ -110,7 +110,7 @@ public class InventoryQueryServiceImpl implements InventoryQueryService {
         for (InventoryBalance balance : balances) {
             Long companyItemId = balance.getCompanyItemId();
             BigDecimal transactionSum = transactionSumByItem.getOrDefault(companyItemId, BigDecimal.ZERO);
-            BigDecimal reservationSum = reservedQtyByItem.getOrDefault(companyItemId, BigDecimal.ZERO);
+            BigDecimal reservationSum = reservationSumByItem.getOrDefault(companyItemId, BigDecimal.ZERO);
 
             if (transactionSum.compareTo(balance.getOnHandQty()) != 0) {
                 issues.add(new Issue(companyItemId, null, IssueType.ON_HAND_MISMATCH,

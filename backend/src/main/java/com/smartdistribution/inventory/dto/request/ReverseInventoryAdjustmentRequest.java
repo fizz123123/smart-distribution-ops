@@ -13,6 +13,7 @@ import java.util.List;
  */
 public record ReverseInventoryAdjustmentRequest(
         @NotEmpty
+        @Size(max = 100)
         List<@NotNull Long> lineIds,
 
         @NotBlank

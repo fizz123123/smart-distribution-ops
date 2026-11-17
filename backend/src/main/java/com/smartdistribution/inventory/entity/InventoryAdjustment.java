@@ -108,12 +108,11 @@ public class InventoryAdjustment extends TimestampedEntity {
     }
 
     /**
-     * 沖銷明細後更新狀態
+     * 沖銷明細後更新狀態；呼叫前已經用 ensureReversible 檢查過
      *
      * @param allLinesReversed 這次更正之後，是否所有明細都已沖銷
      */
     public void markLinesReversed(boolean allLinesReversed) {
-        ensureReversible();
         this.status = allLinesReversed ? AdjustmentStatus.REVERSED : AdjustmentStatus.PARTIALLY_REVERSED;
     }
 }

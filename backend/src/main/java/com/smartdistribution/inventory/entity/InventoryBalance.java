@@ -53,6 +53,9 @@ public class InventoryBalance extends TimestampedEntity {
         this.reservedQty = BigDecimal.ZERO;
     }
 
+    /**
+     * 可用庫存 ＝ 可出貨實體數量 － 已預留數量；鎖定後讀取才是可以拿來預留的數字
+     */
     public BigDecimal availableQty() {
         return onHandQty.subtract(reservedQty);
     }
