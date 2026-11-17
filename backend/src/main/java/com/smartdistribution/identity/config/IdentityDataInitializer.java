@@ -125,10 +125,8 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "CUSTOMER_CREATE",
             "CUSTOMER_UPDATE",
             "CUSTOMER_SUBMIT",
+            //公司料號由採購維護，業務建立客戶料號對應、填 SO 時需要查看
             "COMPANY_ITEM_VIEW",
-            "COMPANY_ITEM_CREATE",
-            "COMPANY_ITEM_UPDATE",
-            "COMPANY_ITEM_SUBMIT",
             "CUSTOMER_ITEM_MAPPING_VIEW",
             "CUSTOMER_ITEM_MAPPING_CREATE",
             "CUSTOMER_ITEM_MAPPING_UPDATE",
@@ -151,8 +149,6 @@ public class IdentityDataInitializer implements ApplicationRunner {
     private static final List<String> SALES_MANAGER_PERMISSIONS = List.of(
             "CUSTOMER_APPROVE",
             "CUSTOMER_STATUS_MANAGE",
-            "COMPANY_ITEM_APPROVE",
-            "COMPANY_ITEM_STATUS_MANAGE",
             "CUSTOMER_ITEM_MAPPING_APPROVE",
             "CUSTOMER_ITEM_MAPPING_STATUS_MANAGE",
             "CUSTOMER_PRICE_APPROVE",
@@ -167,7 +163,11 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "SUPPLIER_CREATE",
             "SUPPLIER_UPDATE",
             "SUPPLIER_SUBMIT",
+            //公司料號由採購維護：採購最了解料號規格與供應商的單位
             "COMPANY_ITEM_VIEW",
+            "COMPANY_ITEM_CREATE",
+            "COMPANY_ITEM_UPDATE",
+            "COMPANY_ITEM_SUBMIT",
             "INVENTORY_VIEW",
             "INVENTORY_RESERVATION_VIEW",
             //由 SO 缺料建立 PO 時需要查看 SO
@@ -184,6 +184,8 @@ public class IdentityDataInitializer implements ApplicationRunner {
     private static final List<String> PURCHASING_MANAGER_PERMISSIONS = List.of(
             "SUPPLIER_APPROVE",
             "SUPPLIER_STATUS_MANAGE",
+            "COMPANY_ITEM_APPROVE",
+            "COMPANY_ITEM_STATUS_MANAGE",
             "INVENTORY_POLICY_MANAGE",
             "PO_APPROVE",
             "PO_CLOSE"
