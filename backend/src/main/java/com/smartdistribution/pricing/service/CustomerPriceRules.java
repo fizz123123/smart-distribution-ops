@@ -14,11 +14,10 @@ import com.smartdistribution.shared.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDate;
 import java.util.Optional;
 
 /**
- * 建立價格與核准價格都要檢查的規則，service 與 handler 共用：對應可用、計價單位、版本先後
+ * 建立價格與核准價格都要檢查的規則，service 與 handler 共用：對應可用、計價單位、最後一個版本
  * handler 不能依賴 CustomerPriceService（會形成循環依賴），所以抽成獨立元件
  */
 @Component
@@ -66,18 +65,5 @@ public class CustomerPriceRules {
                 .findVersionsNewestFirst(mappingId, pricingUnit, PriceStatus.APPROVED_VERSIONS)
                 .stream()
                 .findFirst();
-    }
-
-    /**
-     * 新版本只能排在最後一個版本之後：生效日不能早於最後一個版本的生效日
-     * 同一天也可以，前一版就直接被取代、不會生效
-     */
-    public void ensureNotBeforeLatest(Optional<CustomerPrice> latest, LocalDate effectiveFrom) {
-        if (latest.isPresent() && effectiveFrom.isBefore(latest.get().getEffectiveFrom())) {
-            throw new BusinessException(
-                    ErrorCode.PRICE_PERIOD_CONFLICT,
-                    "已有 " + latest.get().getEffectiveFrom() + " 起生效的價格，新價格的生效日不能早於這一天。"
-            );
-        }
     }
 }

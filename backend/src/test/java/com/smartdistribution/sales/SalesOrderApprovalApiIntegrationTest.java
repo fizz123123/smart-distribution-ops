@@ -120,9 +120,8 @@ class SalesOrderApprovalApiIntegrationTest extends SalesOrderTestSupport {
         mockMvc.perform(get("/api/v1/approval-requests/{id}", findPendingApprovalId(salesOrderId))
                         .header("Authorization", bearer(salesManager)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.warnings", hasItem(containsString(
-                        "訂單日期 " + orderDate.getMonthValue() + "/" + orderDate.getDayOfMonth()))))
-                .andExpect(jsonPath("$.warnings", hasItem(containsString("依今天的價格是 250"))));
+                .andExpect(jsonPath("$.warnings", hasItem(containsString("訂單日期 " + orderDate))))
+                .andExpect(jsonPath("$.warnings", hasItem(containsString("目前價格是 250"))));
     }
 
     @Test
@@ -164,7 +163,7 @@ class SalesOrderApprovalApiIntegrationTest extends SalesOrderTestSupport {
 
         mockMvc.perform(get("/api/v1/approval-requests/{id}", findPendingApprovalId(salesOrderId))
                         .header("Authorization", bearer(salesManager)))
-                .andExpect(jsonPath("$.warnings", hasItem(containsString("價格已更新"))));
+                .andExpect(jsonPath("$.warnings", hasItem(containsString("目前價格是 250"))));
 
         approve(salesManager, salesOrderId).andExpect(status().isOk());
 

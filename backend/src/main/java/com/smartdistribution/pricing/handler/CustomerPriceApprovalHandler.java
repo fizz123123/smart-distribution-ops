@@ -52,7 +52,8 @@ public class CustomerPriceApprovalHandler implements ApprovalHandler {
             LocalDate effectiveFrom = PricePeriods.resolveEffectiveFrom(price.getEffectiveFrom());
             Optional<CustomerPrice> latest = findLatestVersion(price);
 
-            if (latest.isPresent() && overlaps(latest.get(), effectiveFrom)) {
+            if (latest.isPresent()
+                    && PricePeriods.stillEffectiveOn(latest.get().getEffectiveTo(), effectiveFrom)) {
                 warnings.add("核准後將取代目前價格 " + priceText(latest.get())
                         + "，原價格於 " + effectiveFrom.minusDays(1) + " 結束");
             }
@@ -82,7 +83,7 @@ public class CustomerPriceApprovalHandler implements ApprovalHandler {
         PricePeriods.ensureNotEnded(effectiveFrom, price.getEffectiveTo());
 
         Optional<CustomerPrice> latest = findLatestVersion(price);
-        customerPriceRules.ensureNotBeforeLatest(latest, effectiveFrom);
+        PricePeriods.ensureNotBefore(latest.map(CustomerPrice::getEffectiveFrom).orElse(null), effectiveFrom);
         latest.ifPresent(previous -> previous.endBefore(effectiveFrom));
 
         price.approve(approverId, Instant.now(), effectiveFrom);
@@ -101,15 +102,12 @@ public class CustomerPriceApprovalHandler implements ApprovalHandler {
 
     //客戶價格是針對單一客戶的議價，主管核准時要知道它和公開的標準售價差多少
     private Optional<String> compareWithStandardPrice(CustomerPrice price, LocalDate effectiveFrom) {
-        Optional<StandardPrice> standardPrice = standardPriceRepository
-                .findEffectiveOn(
-                        price.getCustomerItemMapping().getCompanyItem().getId(),
-                        price.getPricingUnit(),
-                        effectiveFrom,
-                        PriceStatus.APPROVED_VERSIONS
-                )
-                .stream()
-                .findFirst();
+        Optional<StandardPrice> standardPrice = standardPriceRepository.findEffectiveOn(
+                price.getCustomerItemMapping().getCompanyItem().getId(),
+                price.getPricingUnit(),
+                effectiveFrom,
+                PriceStatus.APPROVED_VERSIONS
+        );
 
         if (standardPrice.isEmpty()) {
             return Optional.empty();
@@ -132,11 +130,6 @@ public class CustomerPriceApprovalHandler implements ApprovalHandler {
                 price.getCustomerItemMapping().getId(),
                 price.getPricingUnit()
         );
-    }
-
-    //最後一個版本在新生效日當天或之後仍然有效，核准後會被截短
-    private boolean overlaps(CustomerPrice latest, LocalDate effectiveFrom) {
-        return latest.getEffectiveTo() == null || !latest.getEffectiveTo().isBefore(effectiveFrom);
     }
 
     private String priceText(CustomerPrice price) {

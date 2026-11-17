@@ -43,7 +43,8 @@ public class StandardPriceApprovalHandler implements ApprovalHandler {
             LocalDate effectiveFrom = PricePeriods.resolveEffectiveFrom(price.getEffectiveFrom());
             Optional<StandardPrice> latest = findLatestVersion(price);
 
-            if (latest.isPresent() && overlaps(latest.get(), effectiveFrom)) {
+            if (latest.isPresent()
+                    && PricePeriods.stillEffectiveOn(latest.get().getEffectiveTo(), effectiveFrom)) {
                 warnings.add("核准後將取代目前價格 " + priceText(latest.get())
                         + "，原價格於 " + effectiveFrom.minusDays(1) + " 結束");
             }
@@ -66,7 +67,7 @@ public class StandardPriceApprovalHandler implements ApprovalHandler {
         PricePeriods.ensureNotEnded(effectiveFrom, price.getEffectiveTo());
 
         Optional<StandardPrice> latest = findLatestVersion(price);
-        standardPriceRules.ensureNotBeforeLatest(latest, effectiveFrom);
+        PricePeriods.ensureNotBefore(latest.map(StandardPrice::getEffectiveFrom).orElse(null), effectiveFrom);
         latest.ifPresent(previous -> previous.endBefore(effectiveFrom));
 
         price.approve(approverId, Instant.now(), effectiveFrom);
@@ -85,10 +86,6 @@ public class StandardPriceApprovalHandler implements ApprovalHandler {
 
     private Optional<StandardPrice> findLatestVersion(StandardPrice price) {
         return standardPriceRules.findLatestVersion(price.getCompanyItem().getId(), price.getPricingUnit());
-    }
-
-    private boolean overlaps(StandardPrice latest, LocalDate effectiveFrom) {
-        return latest.getEffectiveTo() == null || !latest.getEffectiveTo().isBefore(effectiveFrom);
     }
 
     private String priceText(StandardPrice price) {

@@ -109,7 +109,7 @@ public class CustomerPrice extends TimestampedEntity {
      */
     public void approve(Long reviewerId, Instant reviewedAt, LocalDate effectiveFrom) {
         if (status != PriceStatus.PENDING_REVIEW) {
-            throw new BusinessException(ErrorCode.MASTER_DATA_STATUS_CONFLICT);
+            throw new BusinessException(ErrorCode.PRICE_STATUS_CONFLICT);
         }
 
         this.effectiveFrom = effectiveFrom;
@@ -121,7 +121,7 @@ public class CustomerPrice extends TimestampedEntity {
     //價格覆核的退回即為拒絕，拒絕後不能重新送審，須另建新版本
     public void reject(Long reviewerId, Instant reviewedAt) {
         if (status != PriceStatus.PENDING_REVIEW) {
-            throw new BusinessException(ErrorCode.MASTER_DATA_STATUS_CONFLICT);
+            throw new BusinessException(ErrorCode.PRICE_STATUS_CONFLICT);
         }
 
         this.status = PriceStatus.REJECTED;
@@ -137,7 +137,7 @@ public class CustomerPrice extends TimestampedEntity {
      */
     public void endBefore(LocalDate nextEffectiveFrom) {
         if (!PriceStatus.APPROVED_VERSIONS.contains(status)) {
-            throw new BusinessException(ErrorCode.MASTER_DATA_STATUS_CONFLICT);
+            throw new BusinessException(ErrorCode.PRICE_STATUS_CONFLICT);
         }
 
         LocalDate lastDay = nextEffectiveFrom.minusDays(1);
@@ -160,7 +160,7 @@ public class CustomerPrice extends TimestampedEntity {
     //撤銷代表價格有誤；被取代但還沒到期的版本也能撤銷，空出的期間不會自動接回前一版
     public void revoke(Long revokerId, String reason, Instant revokedAt) {
         if (!PriceStatus.APPROVED_VERSIONS.contains(status)) {
-            throw new BusinessException(ErrorCode.MASTER_DATA_STATUS_CONFLICT);
+            throw new BusinessException(ErrorCode.PRICE_STATUS_CONFLICT);
         }
 
         this.status = PriceStatus.REVOKED;

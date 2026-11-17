@@ -35,21 +35,28 @@ public class StandardPriceController {
             @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC)
             Pageable pageable
     ) {
-        return ResponseEntity.ok(standardPriceService.findPrices(companyItemId, status, pageable));
+        PageResponse<StandardPriceResponse> pageResponse =
+                standardPriceService.findPrices(companyItemId, status, pageable);
+
+        return ResponseEntity.ok(pageResponse);
     }
 
     @GetMapping("/{priceId}")
     public ResponseEntity<StandardPriceResponse> findPrice(@PathVariable Long priceId) {
-        return ResponseEntity.ok(standardPriceService.findPrice(priceId));
+        StandardPriceResponse response = standardPriceService.findPrice(priceId);
+
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping
     public ResponseEntity<StandardPriceResponse> createPrice(
             @Valid @RequestBody CreateStandardPriceRequest request
     ) {
+        StandardPriceResponse response = standardPriceService.createPrice(request);
+
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(standardPriceService.createPrice(request));
+                .body(response);
     }
 
     @PostMapping("/{priceId}/revoke")
@@ -57,6 +64,8 @@ public class StandardPriceController {
             @PathVariable Long priceId,
             @Valid @RequestBody RevokePriceRequest request
     ) {
-        return ResponseEntity.ok(standardPriceService.revokePrice(priceId, request));
+        StandardPriceResponse response = standardPriceService.revokePrice(priceId, request);
+
+        return ResponseEntity.ok(response);
     }
 }

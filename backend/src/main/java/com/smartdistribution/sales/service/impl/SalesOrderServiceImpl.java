@@ -205,7 +205,8 @@ public class SalesOrderServiceImpl implements SalesOrderService {
 
     /**
      * 送審快照：對應、公司料號與客戶必須啟用；單位要是基準單位或已設定換算；
-     * 「對應＋訂購單位」要有 ACTIVE 價格，錯誤訊息帶行號，業務才知道要修哪一筆
+     * 訂單日期要取得到價格（客戶價格優先，沒有就用標準售價），業務填的單價不能低於它；
+     * 錯誤訊息帶行號，業務才知道要修哪一筆
      */
     private SalesOrderLine.Snapshot buildSnapshot(SalesOrderLine line, LocalDate orderDate) {
         CustomerItemMapping mapping = salesOrderMasterData.findMapping(line.getCustomerItemMappingId());
@@ -228,7 +229,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         ApplicablePrice price = priceLookupService
                 .findApplicablePrice(mapping.getId(), line.getUnit(), orderDate)
                 .orElseThrow(() -> new BusinessException(
-                        ErrorCode.SO_ACTIVE_PRICE_REQUIRED,
+                        ErrorCode.SO_PRICE_REQUIRED,
                         prefix + "訂單日期 " + orderDate + " 沒有有效的「" + line.getUnit().getDisplayName() + "」價格，請先完成價格建檔與覆核。"
                 ));
 

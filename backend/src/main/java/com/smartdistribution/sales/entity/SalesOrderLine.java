@@ -54,13 +54,13 @@ public class SalesOrderLine {
     @Column(nullable = false, precision = 15, scale = 3)
     private BigDecimal quantity;
 
-    //業務在草稿填的單價，null 代表用底價；和送審快照分開存，退回重送時才知道哪些是業務自己填的
-    @Column(name = "requested_unit_price", precision = 15, scale = 2)
-    private BigDecimal requestedUnitPrice;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "unit_code", nullable = false, length = 10)
     private UnitOfMeasure unit;
+
+    //業務在草稿填的單價，null 代表用底價；和送審快照分開存，退回重送時才知道哪些是業務自己填的
+    @Column(name = "requested_unit_price", precision = 15, scale = 2)
+    private BigDecimal requestedUnitPrice;
 
     // ===== 以下是送審快照 =====
 

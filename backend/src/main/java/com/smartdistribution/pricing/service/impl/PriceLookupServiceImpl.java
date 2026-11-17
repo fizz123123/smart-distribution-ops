@@ -59,8 +59,6 @@ public class PriceLookupServiceImpl implements PriceLookupService {
     private Optional<ApplicablePrice> findCustomerPrice(Long mappingId, UnitOfMeasure unit, LocalDate date) {
         return customerPriceRepository
                 .findEffectiveOn(mappingId, unit, date, PriceStatus.APPROVED_VERSIONS)
-                .stream()
-                .findFirst()
                 .map(price -> new ApplicablePrice(
                         PriceSource.CUSTOMER_PRICE,
                         price.getId(),
@@ -71,8 +69,6 @@ public class PriceLookupServiceImpl implements PriceLookupService {
     private Optional<ApplicablePrice> findStandardPrice(Long companyItemId, UnitOfMeasure unit, LocalDate date) {
         return standardPriceRepository
                 .findEffectiveOn(companyItemId, unit, date, PriceStatus.APPROVED_VERSIONS)
-                .stream()
-                .findFirst()
                 .map(price -> new ApplicablePrice(
                         PriceSource.STANDARD_PRICE,
                         price.getId(),

@@ -13,6 +13,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface StandardPriceRepository extends JpaRepository<StandardPrice, Long> {
 
@@ -37,7 +38,7 @@ public interface StandardPriceRepository extends JpaRepository<StandardPrice, Lo
             @Param("statuses") Collection<PriceStatus> statuses
     );
 
-    //某一天有效的版本；版本之間期間不重疊，正常只會有一筆
+    //某一天有效的版本；版本之間期間不重疊，最多一筆
     @Query("""
             SELECT price
             FROM StandardPrice price
@@ -46,9 +47,8 @@ public interface StandardPriceRepository extends JpaRepository<StandardPrice, Lo
               AND price.status IN :statuses
               AND price.effectiveFrom <= :date
               AND (price.effectiveTo IS NULL OR price.effectiveTo >= :date)
-            ORDER BY price.effectiveFrom DESC
             """)
-    List<StandardPrice> findEffectiveOn(
+    Optional<StandardPrice> findEffectiveOn(
             @Param("companyItemId") Long companyItemId,
             @Param("unit") UnitOfMeasure unit,
             @Param("date") LocalDate date,

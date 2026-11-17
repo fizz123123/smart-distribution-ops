@@ -26,7 +26,6 @@ import java.text.NumberFormat;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -39,7 +38,6 @@ import java.util.Optional;
 public class SalesOrderApprovalHandler implements ApprovalHandler {
 
     private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
-    private static final DateTimeFormatter MONTH_DAY = DateTimeFormatter.ofPattern("M/d");
 
     private final SalesOrderRepository salesOrderRepository;
     private final SalesOrderLineRepository salesOrderLineRepository;
@@ -132,10 +130,9 @@ public class SalesOrderApprovalHandler implements ApprovalHandler {
 
     /**
      * 核准前給主管的提示：
-     * - 訂單日期早於送審日
-     * - 依訂單日期重新取價和送審時不同（例如送審後換價）：仍以送審時的價格核准
-     * - 補登的訂單依今天取價會不同：讓主管知道補登影響了多少
+     * - 訂單日期早於送審日：價格是依訂單日期取的
      * - 業務改過單價：列出成交價與底價
+     * - 今天的價格和送審時的底價不同（補登的訂單、送審後換價）：仍以送審時的價格核准
      * - 依目前可用量試算可預留多少；只是提示，核准時會鎖定後重新計算
      */
     private List<String> buildWarnings(SalesOrder salesOrder, List<SalesOrderLine> lines) {
@@ -144,8 +141,8 @@ public class SalesOrderApprovalHandler implements ApprovalHandler {
         //補登的訂單：價格是依訂單日期取的，提醒主管確認日期合理
         LocalDate submittedDate = LocalDate.ofInstant(salesOrder.getSubmittedAt(), TAIPEI);
         if (salesOrder.getOrderDate().isBefore(submittedDate)) {
-            warnings.add("訂單日期 " + salesOrder.getOrderDate().format(MONTH_DAY)
-                    + "，送審日 " + submittedDate.format(MONTH_DAY) + "，價格依訂單日期計算");
+            warnings.add("訂單日期 " + salesOrder.getOrderDate()
+                    + "，送審日 " + submittedDate + "，價格依訂單日期計算");
         }
 
         LocalDate today = LocalDate.now(TAIPEI);
@@ -157,20 +154,15 @@ public class SalesOrderApprovalHandler implements ApprovalHandler {
                         + "，底價 " + line.getListUnitPrice().toPlainString());
             }
 
-            Optional<ApplicablePrice> onOrderDate = findPrice(line, salesOrder.getOrderDate());
+            Optional<ApplicablePrice> currentPrice = priceLookupService.findApplicablePrice(
+                    line.getCustomerItemMappingId(),
+                    line.getUnit(),
+                    today
+            );
 
-            if (onOrderDate.isPresent() && !isSnapshotPrice(line, onOrderDate.get())) {
-                warnings.add(prefix + "價格已更新為 " + onOrderDate.get().unitPriceExcludingTax().toPlainString()
-                        + " 元，本單仍以送審時的底價 " + line.getListUnitPrice().toPlainString() + " 元核准");
-            }
-
-            if (salesOrder.getOrderDate().isBefore(today)) {
-                Optional<ApplicablePrice> onToday = findPrice(line, today);
-
-                if (onToday.isPresent() && !isSnapshotPrice(line, onToday.get())) {
-                    warnings.add(prefix + "依今天的價格是 " + onToday.get().unitPriceExcludingTax().toPlainString()
-                            + " 元，本單依訂單日期的底價為 " + line.getListUnitPrice().toPlainString() + " 元");
-                }
+            if (currentPrice.isPresent() && !isSnapshotPrice(line, currentPrice.get())) {
+                warnings.add(prefix + "目前價格是 " + currentPrice.get().unitPriceExcludingTax().toPlainString()
+                        + " 元，本單以送審時的底價 " + line.getListUnitPrice().toPlainString() + " 元核准");
             }
         }
 
@@ -199,10 +191,6 @@ public class SalesOrderApprovalHandler implements ApprovalHandler {
     //來源與價格 ID 都相同才是同一筆價格；客戶價格與標準售價的 ID 各自編號
     private boolean isSnapshotPrice(SalesOrderLine line, ApplicablePrice price) {
         return price.source() == line.getPriceSource() && price.priceId().equals(line.getPriceId());
-    }
-
-    private Optional<ApplicablePrice> findPrice(SalesOrderLine line, LocalDate priceDate) {
-        return priceLookupService.findApplicablePrice(line.getCustomerItemMappingId(), line.getUnit(), priceDate);
     }
 
     private SalesOrder findSalesOrder(Long salesOrderId) {

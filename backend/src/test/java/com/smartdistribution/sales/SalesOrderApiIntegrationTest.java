@@ -59,7 +59,7 @@ class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
 
         submit(sales, draft)
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("SO_ACTIVE_PRICE_REQUIRED"))
+                .andExpect(jsonPath("$.code").value("SO_PRICE_REQUIRED"))
                 .andExpect(jsonPath("$.message").value(containsString("第 1 行")));
     }
 

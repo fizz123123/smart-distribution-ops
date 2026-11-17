@@ -171,6 +171,10 @@ public enum ErrorCode {
             HttpStatus.CONFLICT,
             "計價單位必須是料號的庫存基準單位或已設定換算的單位。"
     ),
+    PRICE_STATUS_CONFLICT(
+            HttpStatus.CONFLICT,
+            "價格目前的狀態不允許此操作，請重新載入。"
+    ),
     PRICE_PERIOD_INVALID(
             HttpStatus.BAD_REQUEST,
             "生效日不能早於今天，截止日不能早於生效日。"
@@ -241,7 +245,7 @@ public enum ErrorCode {
             HttpStatus.CONFLICT,
             "訂購單位必須是庫存基準單位或已設定換算的單位。"
     ),
-    SO_ACTIVE_PRICE_REQUIRED(
+    SO_PRICE_REQUIRED(
             HttpStatus.CONFLICT,
             "訂單日期當天沒有有效的價格，無法送審。"
     ),

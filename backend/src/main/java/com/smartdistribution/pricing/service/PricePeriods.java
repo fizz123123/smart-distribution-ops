@@ -52,6 +52,33 @@ public final class PricePeriods {
     }
 
     /**
+     * 新版本只能排在最後一個版本之後：生效日不能早於最後一個版本的生效日
+     * 同一天也可以，前一版就直接被取代、不會生效
+     *
+     * @param latestFrom 最後一個版本的生效日，沒有任何版本時為 null
+     * @param effectiveFrom 新版本的生效日
+     */
+    public static void ensureNotBefore(LocalDate latestFrom, LocalDate effectiveFrom) {
+        if (latestFrom != null && effectiveFrom.isBefore(latestFrom)) {
+            throw new BusinessException(
+                    ErrorCode.PRICE_PERIOD_CONFLICT,
+                    "已有 " + latestFrom + " 起生效的價格，新價格的生效日不能早於這一天。"
+            );
+        }
+    }
+
+    /**
+     * 版本在某一天是否還有效；用來判斷最後一個版本會不會被新版本截短
+     *
+     * @param effectiveTo 版本的截止日，null 代表不限期
+     * @param date 要判斷的日期
+     * @return 那一天仍有效時為 true
+     */
+    public static boolean stillEffectiveOn(LocalDate effectiveTo, LocalDate date) {
+        return effectiveTo == null || !effectiveTo.isBefore(date);
+    }
+
+    /**
      * 截止日不能早於生效日；核准拖太久、截止日已經過了也會在這裡擋下
      *
      * @param effectiveFrom 實際生效日
