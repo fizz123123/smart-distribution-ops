@@ -116,11 +116,11 @@ class CompanyItemApiIntegrationTest {
 
     @Test
     void createNormalizesCodeAndInitializesInventory() throws Exception {
-        String sales = login(createUser("create", "SALES"));
+        String purchasing = login(createUser("create", "PURCHASING"));
         String code = randomCode();
 
         MvcResult result = mockMvc.perform(post("/api/v1/company-items")
-                        .header("Authorization", bearer(sales))
+                        .header("Authorization", bearer(purchasing))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createBody("  " + code.toLowerCase(Locale.ROOT) + "  ", "STICK")))
                 .andExpect(status().isCreated())
@@ -143,13 +143,13 @@ class CompanyItemApiIntegrationTest {
 
     @Test
     void duplicateCodeIsRejectedRegardlessOfCase() throws Exception {
-        String sales = login(createUser("duplicate", "SALES"));
+        String purchasing = login(createUser("duplicate", "PURCHASING"));
         String code = randomCode();
 
-        createItem(sales, code, "STICK");
+        createItem(purchasing, code, "STICK");
 
         mockMvc.perform(post("/api/v1/company-items")
-                        .header("Authorization", bearer(sales))
+                        .header("Authorization", bearer(purchasing))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createBody(code.toLowerCase(Locale.ROOT), "STICK")))
                 .andExpect(status().isConflict())
@@ -158,11 +158,11 @@ class CompanyItemApiIntegrationTest {
 
     @Test
     void managerCanApproveButWarehouseCannot() throws Exception {
-        String sales = login(createUser("approve-creator", "SALES"));
+        String purchasing = login(createUser("approve-creator", "PURCHASING"));
         String warehouse = login(createUser("approve-warehouse", "WAREHOUSE"));
         String manager = login(createUser("approve-manager", "MANAGER"));
 
-        ItemVersion item = submit(sales, createItem(sales, randomCode(), "STICK"));
+        ItemVersion item = submit(purchasing, createItem(purchasing, randomCode(), "STICK"));
         Long approvalRequestId = findPendingApprovalId(item.id());
 
         mockMvc.perform(post("/api/v1/approval-requests/{id}/approve", approvalRequestId)
@@ -180,20 +180,20 @@ class CompanyItemApiIntegrationTest {
                 .andExpect(status().isOk());
 
         mockMvc.perform(get("/api/v1/company-items/{id}", item.id())
-                        .header("Authorization", bearer(sales)))
+                        .header("Authorization", bearer(purchasing)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
     }
 
     @Test
     void draftUnitConversionsAreReplacedAndBaseUnitIsRejected() throws Exception {
-        String sales = login(createUser("conversion", "SALES"));
+        String purchasing = login(createUser("conversion", "PURCHASING"));
 
-        ItemVersion item = createItem(sales, randomCode(), "STICK");
+        ItemVersion item = createItem(purchasing, randomCode(), "STICK");
 
         MvcResult result = mockMvc.perform(
                         put("/api/v1/company-items/{id}/unit-conversions", item.id())
-                                .header("Authorization", bearer(sales))
+                                .header("Authorization", bearer(purchasing))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(conversionsBody(
                                         "{\"unit\": \"PKG\", \"factor\": 5}, {\"unit\": \"BOX\", \"factor\": 10}",
@@ -208,7 +208,7 @@ class CompanyItemApiIntegrationTest {
         assertThat(readLong(result, "$.version")).isGreaterThan(item.version());
 
         mockMvc.perform(put("/api/v1/company-items/{id}/unit-conversions", item.id())
-                        .header("Authorization", bearer(sales))
+                        .header("Authorization", bearer(purchasing))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(conversionsBody(
                                 "{\"unit\": \"STICK\", \"factor\": 2}",
@@ -219,7 +219,7 @@ class CompanyItemApiIntegrationTest {
 
         // 已有換算時，草稿也不能改基準單位
         mockMvc.perform(patch("/api/v1/company-items/{id}", item.id())
-                        .header("Authorization", bearer(sales))
+                        .header("Authorization", bearer(purchasing))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(updateBody(item.code(), ITEM_NAME, "PCS", null, readLong(result, "$.version"))))
                 .andExpect(status().isConflict())
@@ -228,21 +228,21 @@ class CompanyItemApiIntegrationTest {
 
     @Test
     void activeItemLocksIdentityButAllowsSupplierAndConversionChanges() throws Exception {
-        String sales = login(createUser("active-creator", "SALES"));
-        String salesManager = login(createUser("active-approver", "SALES_MANAGER"));
+        String purchasing = login(createUser("active-creator", "PURCHASING"));
+        String purchasingManager = login(createUser("active-approver", "PURCHASING_MANAGER"));
         Supplier supplier = createActiveSupplier();
 
-        ItemVersion item = createActiveItem(sales, salesManager);
+        ItemVersion item = createActiveItem(purchasing, purchasingManager);
 
         mockMvc.perform(patch("/api/v1/company-items/{id}", item.id())
-                        .header("Authorization", bearer(sales))
+                        .header("Authorization", bearer(purchasing))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(updateBody(item.code(), ITEM_NAME + " 改名", "STICK", null, item.version())))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("MASTER_DATA_IDENTITY_LOCKED"));
 
         MvcResult updated = mockMvc.perform(patch("/api/v1/company-items/{id}", item.id())
-                        .header("Authorization", bearer(sales))
+                        .header("Authorization", bearer(purchasing))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(updateBody(item.code(), ITEM_NAME, "STICK", supplier.getId(), item.version())))
                 .andExpect(status().isOk())
@@ -250,7 +250,7 @@ class CompanyItemApiIntegrationTest {
                 .andReturn();
 
         mockMvc.perform(put("/api/v1/company-items/{id}/unit-conversions", item.id())
-                        .header("Authorization", bearer(sales))
+                        .header("Authorization", bearer(purchasing))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(conversionsBody(
                                 "{\"unit\": \"BOX\", \"factor\": 20}",
@@ -265,10 +265,10 @@ class CompanyItemApiIntegrationTest {
 
     @Test
     void onlyPurchasingManagerCanChangeSafetyStock() throws Exception {
-        String sales = login(createUser("policy-sales", "SALES"));
+        String purchasing = login(createUser("policy-purchasing", "PURCHASING"));
         String purchasingManager = login(createUser("policy-manager", "PURCHASING_MANAGER"));
 
-        ItemVersion item = createItem(sales, randomCode(), "STICK");
+        ItemVersion item = createItem(purchasing, randomCode(), "STICK");
 
         MvcResult policy = mockMvc.perform(
                         get("/api/v1/company-items/{id}/inventory-policy", item.id())
@@ -278,7 +278,7 @@ class CompanyItemApiIntegrationTest {
         Long policyVersion = readLong(policy, "$.version");
 
         mockMvc.perform(put("/api/v1/company-items/{id}/inventory-policy", item.id())
-                        .header("Authorization", bearer(sales))
+                        .header("Authorization", bearer(purchasing))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(policyBody("50", policyVersion)))
                 .andExpect(status().isForbidden())
@@ -292,6 +292,63 @@ class CompanyItemApiIntegrationTest {
                 .andExpect(jsonPath("$.safetyStockBaseQty").value(50));
 
         assertThat(countAudit(item.id(), "INVENTORY_POLICY_UPDATE")).isEqualTo(1);
+    }
+
+    @Test
+    void salesCanOnlyViewCompanyItemsAndPurchasingManagerApproves() throws Exception {
+        String purchasing = login(createUser("owner-purchasing", "PURCHASING"));
+        String purchasingManager = login(createUser("owner-purchasing-manager", "PURCHASING_MANAGER"));
+        String sales = login(createUser("owner-sales", "SALES"));
+        String salesManager = login(createUser("owner-sales-manager", "SALES_MANAGER"));
+
+        //業務只能查看，不能建立
+        mockMvc.perform(post("/api/v1/company-items")
+                        .header("Authorization", bearer(sales))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody(randomCode(), "STICK")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+
+        ItemVersion item = submit(purchasing, createItem(purchasing, randomCode(), "STICK"));
+        Long approvalRequestId = findPendingApprovalId(item.id());
+
+        mockMvc.perform(get("/api/v1/company-items/{id}", item.id())
+                        .header("Authorization", bearer(sales)))
+                .andExpect(status().isOk());
+
+        //業務主管不再核准公司料號
+        mockMvc.perform(post("/api/v1/approval-requests/{id}/approve", approvalRequestId)
+                        .header("Authorization", bearer(salesManager))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"));
+
+        mockMvc.perform(post("/api/v1/approval-requests/{id}/approve", approvalRequestId)
+                        .header("Authorization", bearer(purchasingManager))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk());
+
+        Long version = readLong(mockMvc.perform(get("/api/v1/company-items/{id}", item.id())
+                        .header("Authorization", bearer(purchasingManager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andReturn(), "$.version");
+
+        //停用也改由採購主管負責
+        mockMvc.perform(post("/api/v1/company-items/{id}/deactivate", item.id())
+                        .header("Authorization", bearer(salesManager))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(reasonBody(version)))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/v1/company-items/{id}/deactivate", item.id())
+                        .header("Authorization", bearer(purchasingManager))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(reasonBody(version)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("INACTIVE"));
     }
 
     private ItemVersion createActiveItem(String creatorToken, String approverToken) throws Exception {
@@ -425,6 +482,15 @@ class CompanyItemApiIntegrationTest {
                   "version": %d
                 }
                 """.formatted(safetyStock, version);
+    }
+
+    private String reasonBody(Long version) {
+        return """
+                {
+                  "reason": "停產",
+                  "version": %d
+                }
+                """.formatted(version);
     }
 
     private String randomCode() {
