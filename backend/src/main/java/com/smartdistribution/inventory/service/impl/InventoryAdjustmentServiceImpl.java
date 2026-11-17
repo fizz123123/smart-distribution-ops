@@ -28,10 +28,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -74,7 +77,7 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
                 Instant.now()
         );
 
-        return post(adjustment, changes, items, balances);
+        return post(adjustment, changes, Map.of(), items, balances);
     }
 
     @Override
@@ -90,12 +93,18 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
             throw new BusinessException(ErrorCode.VERSION_CONFLICT);
         }
 
-        original.markReversed();
+        original.ensureReversible();
 
+        List<InventoryAdjustmentLine> originalLines =
+                inventoryAdjustmentLineRepository.findAllByAdjustmentIdOrderByCompanyItemIdAsc(adjustmentId);
+        List<InventoryAdjustmentLine> selectedLines = selectLines(originalLines, request.lineIds());
+
+        //料號 → 沖銷量，以及料號 → 被沖銷的原明細；同一張調整的同一料號只會有一行
         Map<Long, BigDecimal> changes = new LinkedHashMap<>();
-        for (InventoryAdjustmentLine line :
-                inventoryAdjustmentLineRepository.findAllByAdjustmentIdOrderByCompanyItemIdAsc(adjustmentId)) {
+        Map<Long, Long> reversalOfLineIds = new LinkedHashMap<>();
+        for (InventoryAdjustmentLine line : selectedLines) {
             changes.put(line.getCompanyItemId(), line.getQuantityChangeBase().negate());
+            reversalOfLineIds.put(line.getCompanyItemId(), line.getId());
         }
 
         Map<Long, CompanyItem> items = loadItems(changes);
@@ -109,16 +118,60 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
                 Instant.now()
         );
 
-        return post(reversal, changes, items, balances);
+        InventoryAdjustmentResponse response = post(reversal, changes, reversalOfLineIds, items, balances);
+
+        int reversedCount = inventoryAdjustmentLineRepository.findAllByReversalOfLineIdIn(
+                originalLines.stream().map(InventoryAdjustmentLine::getId).toList()
+        ).size();
+        original.markLinesReversed(reversedCount == originalLines.size());
+
+        return response;
+    }
+
+    /**
+     * 要沖銷的明細必須屬於這張調整、不能重複，也不能已經被沖銷過
+     */
+    private List<InventoryAdjustmentLine> selectLines(
+            List<InventoryAdjustmentLine> originalLines,
+            List<Long> lineIds
+    ) {
+        Map<Long, InventoryAdjustmentLine> linesById = new LinkedHashMap<>();
+        for (InventoryAdjustmentLine line : originalLines) {
+            linesById.put(line.getId(), line);
+        }
+
+        Set<Long> uniqueIds = new LinkedHashSet<>(lineIds);
+        if (uniqueIds.size() != lineIds.size() || !linesById.keySet().containsAll(uniqueIds)) {
+            throw new BusinessException(
+                    ErrorCode.INVENTORY_ADJUSTMENT_LINES_INVALID,
+                    "要沖銷的明細必須屬於這張調整，而且不能重複。"
+            );
+        }
+
+        List<InventoryAdjustmentLine> alreadyReversed =
+                inventoryAdjustmentLineRepository.findAllByReversalOfLineIdIn(uniqueIds);
+        if (!alreadyReversed.isEmpty()) {
+            throw new BusinessException(
+                    ErrorCode.INVENTORY_ADJUSTMENT_NOT_REVERSIBLE,
+                    "有明細已經被 %s 沖銷過，不能再沖銷。".formatted(
+                            alreadyReversed.getFirst().getAdjustment().getAdjustmentNumber()
+                    )
+            );
+        }
+
+        return uniqueIds.stream().map(linesById::get).toList();
     }
 
     /**
      * 檢查數量後寫入調整、明細與異動，並更新餘額；呼叫前必須已鎖定所有相關餘額列
      * 任一料號不通過就丟出例外，整張調整都不會寫入
+     *
+     * @param reversalOfLineIds 更正單才有：料號 → 被沖銷的原明細 ID；一般調整傳空的 Map
      */
     private InventoryAdjustmentResponse post(
             InventoryAdjustment adjustment,
             Map<Long, BigDecimal> changes,
+            Map<Long, Long> reversalOfLineIds,
             Map<Long, CompanyItem> items,
             Map<Long, InventoryBalance> balances
     ) {
@@ -131,7 +184,7 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
 
         changes.forEach((companyItemId, change) -> {
             inventoryAdjustmentLineRepository.save(
-                    new InventoryAdjustmentLine(adjustment, companyItemId, change)
+                    new InventoryAdjustmentLine(adjustment, companyItemId, change, reversalOfLineIds.get(companyItemId))
             );
 
             inventoryTransactionRepository.save(new InventoryTransaction(
@@ -273,9 +326,16 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
     }
 
     private InventoryAdjustmentResponse toResponse(InventoryAdjustment adjustment) {
-        return inventoryMapper.toAdjustmentResponse(
-                adjustment,
-                inventoryAdjustmentLineRepository.findAllByAdjustmentIdOrderByCompanyItemIdAsc(adjustment.getId())
-        );
+        List<InventoryAdjustmentLine> lines =
+                inventoryAdjustmentLineRepository.findAllByAdjustmentIdOrderByCompanyItemIdAsc(adjustment.getId());
+
+        Map<Long, InventoryAdjustmentLine> reversedBy = new HashMap<>();
+        for (InventoryAdjustmentLine reversalLine : inventoryAdjustmentLineRepository.findAllByReversalOfLineIdIn(
+                lines.stream().map(InventoryAdjustmentLine::getId).toList()
+        )) {
+            reversedBy.put(reversalLine.getReversalOfLineId(), reversalLine);
+        }
+
+        return inventoryMapper.toAdjustmentResponse(adjustment, lines, reversedBy);
     }
 }

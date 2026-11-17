@@ -31,6 +31,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultActions;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -249,7 +250,7 @@ class InventoryAdjustmentApiIntegrationTest {
     }
 
     @Test
-    void reversalCreatesOppositeAdjustmentOnlyOnce() throws Exception {
+    void fullyReversedAdjustmentAndReversalCannotBeReversedAgain() throws Exception {
         String warehouseManager = login(createUser("reverse", "WAREHOUSE_MANAGER"));
         CompanyItem item = createItem(UnitOfMeasure.STICK);
 
@@ -259,14 +260,13 @@ class InventoryAdjustmentApiIntegrationTest {
                 adjustmentBody("COUNT_DIFFERENCE", line(item.getId(), "5"))
         );
         Long adjustmentId = readLong(adjustment, "$.id");
+        Long lineId = readLong(adjustment, "$.lines[0].id");
 
-        MvcResult reversal = mockMvc.perform(post("/api/v1/inventory/adjustments/{id}/reverse", adjustmentId)
-                        .header("Authorization", bearer(warehouseManager))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(reverseBody(readLong(adjustment, "$.version"))))
+        MvcResult reversal = reverse(warehouseManager, adjustmentId, readLong(adjustment, "$.version"), lineId)
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.reversalOfId").value(adjustmentId))
                 .andExpect(jsonPath("$.lines[0].quantityChangeBase").value(-5))
+                .andExpect(jsonPath("$.lines[0].reversalOfLineId").value(lineId))
                 .andReturn();
 
         assertThat(onHandQty(item)).isEqualByComparingTo("10");
@@ -275,25 +275,113 @@ class InventoryAdjustmentApiIntegrationTest {
                         .header("Authorization", bearer(warehouseManager)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("REVERSED"))
+                .andExpect(jsonPath("$.lines[0].reversedByAdjustmentId").value(readLong(reversal, "$.id")))
                 .andReturn();
 
-        // 已更正過的調整不能再更正
-        mockMvc.perform(post("/api/v1/inventory/adjustments/{id}/reverse", adjustmentId)
-                        .header("Authorization", bearer(warehouseManager))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(reverseBody(readLong(original, "$.version"))))
+        // 全部明細都沖銷過的調整不能再更正
+        reverse(warehouseManager, adjustmentId, readLong(original, "$.version"), lineId)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INVENTORY_ADJUSTMENT_NOT_REVERSIBLE"));
 
-        // 更正紀錄本身也不能再被更正
-        mockMvc.perform(post("/api/v1/inventory/adjustments/{id}/reverse", readLong(reversal, "$.id"))
-                        .header("Authorization", bearer(warehouseManager))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(reverseBody(readLong(reversal, "$.version"))))
+        // 更正單本身也不能再被更正
+        reverse(
+                warehouseManager,
+                readLong(reversal, "$.id"),
+                readLong(reversal, "$.version"),
+                readLong(reversal, "$.lines[0].id")
+        )
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INVENTORY_ADJUSTMENT_NOT_REVERSIBLE"));
 
         assertConsistent(warehouseManager, item);
+    }
+
+    @Test
+    void reversalOnlyTouchesSelectedLinesAndCanBeDoneInSteps() throws Exception {
+        String warehouseManager = login(createUser("reverse-lines", "WAREHOUSE_MANAGER"));
+        CompanyItem first = createItem(UnitOfMeasure.STICK);
+        CompanyItem second = createItem(UnitOfMeasure.STICK);
+
+        MvcResult adjustment = postAdjustment(warehouseManager, adjustmentBody(
+                "OPENING_BALANCE",
+                line(first.getId(), "5") + ", " + line(second.getId(), "3")
+        ));
+        Long adjustmentId = readLong(adjustment, "$.id");
+        Long firstLineId = lineIdOf(adjustment, first);
+        Long secondLineId = lineIdOf(adjustment, second);
+
+        reverse(warehouseManager, adjustmentId, readLong(adjustment, "$.version"), firstLineId)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.lines.length()").value(1));
+
+        assertThat(onHandQty(first)).isEqualByComparingTo("0");
+        assertThat(onHandQty(second)).isEqualByComparingTo("3");
+
+        MvcResult partial = mockMvc.perform(get("/api/v1/inventory/adjustments/{id}", adjustmentId)
+                        .header("Authorization", bearer(warehouseManager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PARTIALLY_REVERSED"))
+                .andReturn();
+
+        // 同一行不能沖銷兩次
+        reverse(warehouseManager, adjustmentId, readLong(partial, "$.version"), firstLineId)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INVENTORY_ADJUSTMENT_NOT_REVERSIBLE"));
+
+        // 不屬於這張調整的明細
+        reverse(warehouseManager, adjustmentId, readLong(partial, "$.version"), -1L)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVENTORY_ADJUSTMENT_LINES_INVALID"));
+
+        // 第二次更正沖完剩下的明細
+        reverse(warehouseManager, adjustmentId, readLong(partial, "$.version"), secondLineId)
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/v1/inventory/adjustments/{id}", adjustmentId)
+                        .header("Authorization", bearer(warehouseManager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REVERSED"));
+
+        assertConsistent(warehouseManager, first);
+        assertConsistent(warehouseManager, second);
+    }
+
+    @Test
+    void reservedUnrelatedLineDoesNotBlockReversal() throws Exception {
+        String warehouseManager = login(createUser("reverse-reserved", "WAREHOUSE_MANAGER"));
+        CompanyItem wrongItem = createItem(UnitOfMeasure.STICK);
+        CompanyItem reservedItem = createItem(UnitOfMeasure.STICK);
+
+        MvcResult adjustment = postAdjustment(warehouseManager, adjustmentBody(
+                "OPENING_BALANCE",
+                line(wrongItem.getId(), "4") + ", " + line(reservedItem.getId(), "6")
+        ));
+        // 正確那一行的貨已經全部被預留，整張沖回會侵蝕預留
+        createReservation(reservedItem, "6");
+
+        reverse(
+                warehouseManager,
+                readLong(adjustment, "$.id"),
+                readLong(adjustment, "$.version"),
+                lineIdOf(adjustment, wrongItem)
+        )
+                .andExpect(status().isCreated());
+
+        assertThat(onHandQty(wrongItem)).isEqualByComparingTo("0");
+        assertThat(onHandQty(reservedItem)).isEqualByComparingTo("6");
+
+        // 只選有預留的那一行時，照樣會被擋下
+        reverse(
+                warehouseManager,
+                readLong(adjustment, "$.id"),
+                readLong(adjustment, "$.version") + 1,
+                lineIdOf(adjustment, reservedItem)
+        )
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INVENTORY_RESERVATION_WOULD_BE_BREACHED"));
+
+        assertConsistent(warehouseManager, wrongItem);
+        assertConsistent(warehouseManager, reservedItem);
     }
 
     @Test
@@ -447,10 +535,22 @@ class InventoryAdjustmentApiIntegrationTest {
                 """.formatted(companyItemId, quantity);
     }
 
-    private String reverseBody(Long version) {
-        return """
-                {"reason": "數量登錄錯誤", "version": %d}
-                """.formatted(version);
+    private ResultActions reverse(String token, Long adjustmentId, Long version, Long lineId) throws Exception {
+        return mockMvc.perform(post("/api/v1/inventory/adjustments/{id}/reverse", adjustmentId)
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"lineIds": [%d], "reason": "數量登錄錯誤", "version": %d}
+                        """.formatted(lineId, version)));
+    }
+
+    private Long lineIdOf(MvcResult adjustment, CompanyItem item) throws Exception {
+        List<Number> ids = JsonPath.read(
+                adjustment.getResponse().getContentAsString(),
+                "$.lines[?(@.companyItemId == " + item.getId() + ")].id"
+        );
+
+        return ids.getFirst().longValue();
     }
 
     private AppUser createUser(String prefix, String roleCode) {
