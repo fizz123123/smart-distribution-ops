@@ -1,8 +1,8 @@
-package com.smartdistribution.masterdata.customerprice.mapper;
+package com.smartdistribution.pricing.customerprice.mapper;
 
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
-import com.smartdistribution.masterdata.customerprice.dto.response.CustomerPriceResponse;
-import com.smartdistribution.masterdata.customerprice.entity.CustomerPrice;
+import com.smartdistribution.pricing.customerprice.dto.response.CustomerPriceResponse;
+import com.smartdistribution.pricing.customerprice.entity.CustomerPrice;
 import org.springframework.stereotype.Component;
 
 @Component

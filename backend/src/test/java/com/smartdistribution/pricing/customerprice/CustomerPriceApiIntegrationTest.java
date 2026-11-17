@@ -1,4 +1,4 @@
-package com.smartdistribution.masterdata.customerprice;
+package com.smartdistribution.pricing.customerprice;
 
 import com.jayway.jsonpath.JsonPath;
 import com.smartdistribution.identity.entity.AppUser;

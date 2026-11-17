@@ -1,8 +1,8 @@
-package com.smartdistribution.masterdata.customerprice.repository;
+package com.smartdistribution.pricing.customerprice.repository;
 
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
-import com.smartdistribution.masterdata.customerprice.entity.CustomerPrice;
-import com.smartdistribution.masterdata.customerprice.entity.CustomerPriceStatus;
+import com.smartdistribution.pricing.customerprice.entity.CustomerPrice;
+import com.smartdistribution.pricing.customerprice.entity.CustomerPriceStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;

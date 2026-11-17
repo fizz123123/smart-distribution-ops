@@ -1,4 +1,4 @@
-package com.smartdistribution.masterdata.customerprice.entity;
+package com.smartdistribution.pricing.customerprice.entity;
 
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;

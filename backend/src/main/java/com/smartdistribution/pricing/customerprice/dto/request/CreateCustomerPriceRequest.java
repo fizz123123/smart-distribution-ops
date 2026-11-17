@@ -1,4 +1,4 @@
-package com.smartdistribution.masterdata.customerprice.dto.request;
+package com.smartdistribution.pricing.customerprice.dto.request;
 
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
 import jakarta.validation.constraints.DecimalMin;

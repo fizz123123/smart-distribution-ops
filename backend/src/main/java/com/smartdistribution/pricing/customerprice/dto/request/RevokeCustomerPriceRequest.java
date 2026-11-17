@@ -1,4 +1,4 @@
-package com.smartdistribution.masterdata.customerprice.dto.request;
+package com.smartdistribution.pricing.customerprice.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
