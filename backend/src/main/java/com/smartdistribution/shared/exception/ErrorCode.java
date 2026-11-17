@@ -155,6 +155,22 @@ public enum ErrorCode {
             HttpStatus.CONFLICT,
             "計價單位必須是料號的庫存基準單位或已設定換算的單位。"
     ),
+    STANDARD_PRICE_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "找不到指定的標準售價。"
+    ),
+    STANDARD_PRICE_PENDING_EXISTS(
+            HttpStatus.CONFLICT,
+            "此料號與計價單位已有待覆核的標準售價，請先完成覆核或拒絕。"
+    ),
+    STANDARD_PRICE_ITEM_INACTIVE(
+            HttpStatus.CONFLICT,
+            "公司料號尚未啟用或已停用。"
+    ),
+    STANDARD_PRICE_UNIT_INVALID(
+            HttpStatus.CONFLICT,
+            "計價單位必須是料號的庫存基準單位或已設定換算的單位。"
+    ),
     PRICE_PERIOD_INVALID(
             HttpStatus.BAD_REQUEST,
             "生效日不能早於今天，截止日不能早於生效日。"

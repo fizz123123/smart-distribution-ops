@@ -1,7 +1,7 @@
 package com.smartdistribution.pricing.service.impl;
 
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
-import com.smartdistribution.pricing.entity.CustomerPriceStatus;
+import com.smartdistribution.pricing.entity.PriceStatus;
 import com.smartdistribution.pricing.repository.CustomerPriceRepository;
 import com.smartdistribution.pricing.service.PriceLookupService;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +26,7 @@ public class PriceLookupServiceImpl implements PriceLookupService {
     ) {
         //版本之間期間不重疊，同一天只會有一個版本有效；被取代的舊版本在截止日之前仍然取得到
         return customerPriceRepository
-                .findEffectiveOn(customerItemMappingId, unit, priceDate, CustomerPriceStatus.APPROVED_VERSIONS)
+                .findEffectiveOn(customerItemMappingId, unit, priceDate, PriceStatus.APPROVED_VERSIONS)
                 .stream()
                 .findFirst()
                 .map(price -> new ApplicablePrice(
@@ -40,7 +40,7 @@ public class PriceLookupServiceImpl implements PriceLookupService {
     public boolean isRevoked(PriceSource source, Long priceId) {
         return switch (source) {
             case CUSTOMER_PRICE -> customerPriceRepository.findById(priceId)
-                    .map(price -> price.getStatus() == CustomerPriceStatus.REVOKED)
+                    .map(price -> price.getStatus() == PriceStatus.REVOKED)
                     .orElse(false);
         };
     }

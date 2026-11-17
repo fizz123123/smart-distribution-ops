@@ -7,7 +7,7 @@ import com.smartdistribution.masterdata.companyitem.repository.ItemUnitConversio
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.masterdata.customeritemmapping.repository.CustomerItemMappingRepository;
 import com.smartdistribution.pricing.entity.CustomerPrice;
-import com.smartdistribution.pricing.entity.CustomerPriceStatus;
+import com.smartdistribution.pricing.entity.PriceStatus;
 import com.smartdistribution.pricing.repository.CustomerPriceRepository;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
@@ -63,7 +63,7 @@ public class CustomerPriceRules {
      */
     public Optional<CustomerPrice> findLatestVersion(Long mappingId, UnitOfMeasure pricingUnit) {
         return customerPriceRepository
-                .findVersionsNewestFirst(mappingId, pricingUnit, CustomerPriceStatus.APPROVED_VERSIONS)
+                .findVersionsNewestFirst(mappingId, pricingUnit, PriceStatus.APPROVED_VERSIONS)
                 .stream()
                 .findFirst();
     }

@@ -58,7 +58,7 @@ public class CustomerPrice extends TimestampedEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private CustomerPriceStatus status;
+    private PriceStatus status;
 
     @Column(name = "created_by", nullable = false)
     private Long createdBy;
@@ -97,7 +97,7 @@ public class CustomerPrice extends TimestampedEntity {
         this.effectiveFrom = effectiveFrom;
         this.effectiveTo = effectiveTo;
         this.createdBy = createdBy;
-        this.status = CustomerPriceStatus.PENDING_REVIEW;
+        this.status = PriceStatus.PENDING_REVIEW;
     }
 
     /**
@@ -108,23 +108,23 @@ public class CustomerPrice extends TimestampedEntity {
      * @param effectiveFrom 實際生效日，由核准流程依申請的生效日與核准當天決定
      */
     public void approve(Long reviewerId, Instant reviewedAt, LocalDate effectiveFrom) {
-        if (status != CustomerPriceStatus.PENDING_REVIEW) {
+        if (status != PriceStatus.PENDING_REVIEW) {
             throw new BusinessException(ErrorCode.MASTER_DATA_STATUS_CONFLICT);
         }
 
         this.effectiveFrom = effectiveFrom;
-        this.status = CustomerPriceStatus.ACTIVE;
+        this.status = PriceStatus.ACTIVE;
         this.reviewedBy = reviewerId;
         this.reviewedAt = reviewedAt;
     }
 
     //價格覆核的退回即為拒絕，拒絕後不能重新送審，須另建新版本
     public void reject(Long reviewerId, Instant reviewedAt) {
-        if (status != CustomerPriceStatus.PENDING_REVIEW) {
+        if (status != PriceStatus.PENDING_REVIEW) {
             throw new BusinessException(ErrorCode.MASTER_DATA_STATUS_CONFLICT);
         }
 
-        this.status = CustomerPriceStatus.REJECTED;
+        this.status = PriceStatus.REJECTED;
         this.reviewedBy = reviewerId;
         this.reviewedAt = reviewedAt;
     }
@@ -136,7 +136,7 @@ public class CustomerPrice extends TimestampedEntity {
      * @param nextEffectiveFrom 下一個版本的生效日
      */
     public void endBefore(LocalDate nextEffectiveFrom) {
-        if (!CustomerPriceStatus.APPROVED_VERSIONS.contains(status)) {
+        if (!PriceStatus.APPROVED_VERSIONS.contains(status)) {
             throw new BusinessException(ErrorCode.MASTER_DATA_STATUS_CONFLICT);
         }
 
@@ -144,7 +144,7 @@ public class CustomerPrice extends TimestampedEntity {
         if (effectiveTo == null || effectiveTo.isAfter(lastDay)) {
             this.effectiveTo = lastDay;
         }
-        this.status = CustomerPriceStatus.REPLACED;
+        this.status = PriceStatus.REPLACED;
     }
 
     /**
@@ -159,11 +159,11 @@ public class CustomerPrice extends TimestampedEntity {
 
     //撤銷代表價格有誤；被取代但還沒到期的版本也能撤銷，空出的期間不會自動接回前一版
     public void revoke(Long revokerId, String reason, Instant revokedAt) {
-        if (!CustomerPriceStatus.APPROVED_VERSIONS.contains(status)) {
+        if (!PriceStatus.APPROVED_VERSIONS.contains(status)) {
             throw new BusinessException(ErrorCode.MASTER_DATA_STATUS_CONFLICT);
         }
 
-        this.status = CustomerPriceStatus.REVOKED;
+        this.status = PriceStatus.REVOKED;
         this.revokedBy = revokerId;
         this.revokeReason = reason.strip();
         this.revokedAt = revokedAt;

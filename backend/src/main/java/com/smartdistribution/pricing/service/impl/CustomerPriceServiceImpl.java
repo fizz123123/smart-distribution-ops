@@ -4,10 +4,10 @@ import com.smartdistribution.approval.entity.ApprovalTargetType;
 import com.smartdistribution.approval.service.ApprovalService;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.pricing.dto.request.CreateCustomerPriceRequest;
-import com.smartdistribution.pricing.dto.request.RevokeCustomerPriceRequest;
+import com.smartdistribution.pricing.dto.request.RevokePriceRequest;
 import com.smartdistribution.pricing.dto.response.CustomerPriceResponse;
 import com.smartdistribution.pricing.entity.CustomerPrice;
-import com.smartdistribution.pricing.entity.CustomerPriceStatus;
+import com.smartdistribution.pricing.entity.PriceStatus;
 import com.smartdistribution.pricing.mapper.CustomerPriceMapper;
 import com.smartdistribution.pricing.repository.CustomerPriceRepository;
 import com.smartdistribution.pricing.service.CustomerPriceRules;
@@ -42,7 +42,7 @@ public class CustomerPriceServiceImpl implements CustomerPriceService {
     @PreAuthorize("hasAuthority('CUSTOMER_PRICE_VIEW')")
     public PageResponse<CustomerPriceResponse> findPrices(
             Long customerItemMappingId,
-            CustomerPriceStatus status,
+            PriceStatus status,
             Pageable pageable
     ) {
         Page<CustomerPriceResponse> prices = customerPriceRepository
@@ -72,7 +72,7 @@ public class CustomerPriceServiceImpl implements CustomerPriceService {
         if (customerPriceRepository.existsByCustomerItemMappingIdAndPricingUnitAndStatus(
                 mapping.getId(),
                 request.pricingUnit(),
-                CustomerPriceStatus.PENDING_REVIEW
+                PriceStatus.PENDING_REVIEW
         )) {
             throw new BusinessException(ErrorCode.CUSTOMER_PRICE_PENDING_EXISTS);
         }
@@ -106,7 +106,7 @@ public class CustomerPriceServiceImpl implements CustomerPriceService {
     @Override
     @Transactional
     @PreAuthorize("hasAuthority('CUSTOMER_PRICE_REVOKE')")
-    public CustomerPriceResponse revokePrice(Long priceId, RevokeCustomerPriceRequest request) {
+    public CustomerPriceResponse revokePrice(Long priceId, RevokePriceRequest request) {
         CustomerPrice price = findPriceById(priceId);
 
         if (!Objects.equals(price.getVersion(), request.version())) {

@@ -1,7 +1,7 @@
 package com.smartdistribution.pricing.dto.response;
 
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
-import com.smartdistribution.pricing.entity.CustomerPriceStatus;
+import com.smartdistribution.pricing.entity.PriceStatus;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -18,7 +18,7 @@ public record CustomerPriceResponse(
         LocalDate effectiveFrom,
         LocalDate effectiveTo,
         boolean expired, //截止日已過；過期只看日期，不改狀態
-        CustomerPriceStatus status,
+        PriceStatus status,
         Long createdBy,
         Instant createdAt,
         Long reviewedBy,

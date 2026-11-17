@@ -5,7 +5,7 @@ import com.smartdistribution.approval.handler.ApprovalHandler;
 import com.smartdistribution.approval.handler.ApprovalTarget;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.pricing.entity.CustomerPrice;
-import com.smartdistribution.pricing.entity.CustomerPriceStatus;
+import com.smartdistribution.pricing.entity.PriceStatus;
 import com.smartdistribution.pricing.repository.CustomerPriceRepository;
 import com.smartdistribution.pricing.service.CustomerPriceRules;
 import com.smartdistribution.pricing.service.PricePeriods;
@@ -43,7 +43,7 @@ public class CustomerPriceApprovalHandler implements ApprovalHandler {
                 + priceText(price);
 
         List<String> warnings = new ArrayList<>();
-        if (price.getStatus() == CustomerPriceStatus.PENDING_REVIEW) {
+        if (price.getStatus() == PriceStatus.PENDING_REVIEW) {
             LocalDate effectiveFrom = PricePeriods.resolveEffectiveFrom(price.getEffectiveFrom());
             Optional<CustomerPrice> latest = findLatestVersion(price);
 
