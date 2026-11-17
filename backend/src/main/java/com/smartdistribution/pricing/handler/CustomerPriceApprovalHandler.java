@@ -1,13 +1,13 @@
-package com.smartdistribution.pricing.customerprice.handler;
+package com.smartdistribution.pricing.handler;
 
 import com.smartdistribution.approval.entity.ApprovalTargetType;
 import com.smartdistribution.approval.handler.ApprovalHandler;
 import com.smartdistribution.approval.handler.ApprovalTarget;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
-import com.smartdistribution.pricing.customerprice.entity.CustomerPrice;
-import com.smartdistribution.pricing.customerprice.entity.CustomerPriceStatus;
-import com.smartdistribution.pricing.customerprice.repository.CustomerPriceRepository;
-import com.smartdistribution.pricing.customerprice.service.CustomerPriceRules;
+import com.smartdistribution.pricing.entity.CustomerPrice;
+import com.smartdistribution.pricing.entity.CustomerPriceStatus;
+import com.smartdistribution.pricing.repository.CustomerPriceRepository;
+import com.smartdistribution.pricing.service.CustomerPriceRules;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;

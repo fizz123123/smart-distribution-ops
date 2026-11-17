@@ -1,9 +1,9 @@
-package com.smartdistribution.pricing.customerprice.service;
+package com.smartdistribution.pricing.service;
 
-import com.smartdistribution.pricing.customerprice.dto.request.CreateCustomerPriceRequest;
-import com.smartdistribution.pricing.customerprice.dto.request.RevokeCustomerPriceRequest;
-import com.smartdistribution.pricing.customerprice.dto.response.CustomerPriceResponse;
-import com.smartdistribution.pricing.customerprice.entity.CustomerPriceStatus;
+import com.smartdistribution.pricing.dto.request.CreateCustomerPriceRequest;
+import com.smartdistribution.pricing.dto.request.RevokeCustomerPriceRequest;
+import com.smartdistribution.pricing.dto.response.CustomerPriceResponse;
+import com.smartdistribution.pricing.entity.CustomerPriceStatus;
 import com.smartdistribution.shared.web.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 

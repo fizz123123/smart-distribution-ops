@@ -1,7 +1,7 @@
-package com.smartdistribution.pricing.customerprice.dto.response;
+package com.smartdistribution.pricing.dto.response;
 
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
-import com.smartdistribution.pricing.customerprice.entity.CustomerPriceStatus;
+import com.smartdistribution.pricing.entity.CustomerPriceStatus;
 
 import java.math.BigDecimal;
 import java.time.Instant;
