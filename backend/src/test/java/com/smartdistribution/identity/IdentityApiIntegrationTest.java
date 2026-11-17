@@ -364,6 +364,8 @@ class IdentityApiIntegrationTest {
                 "CUSTOMER_ITEM_MAPPING_APPROVE",
                 "CUSTOMER_PRICE_VIEW",
                 "CUSTOMER_PRICE_APPROVE",
+                "STANDARD_PRICE_VIEW",
+                "STANDARD_PRICE_APPROVE",
                 "SUPPLIER_VIEW",
                 "SUPPLIER_APPROVE",
                 "INVENTORY_VIEW",

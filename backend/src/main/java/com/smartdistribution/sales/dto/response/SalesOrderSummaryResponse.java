@@ -13,6 +13,7 @@ public record SalesOrderSummaryResponse(
         String customerCode,
         String customerName,
         String customerOrderNumber,
+        LocalDate orderDate,
         Long responsibleSalesUserId,
         String responsibleSalesName,
         SalesOrderStatus status,

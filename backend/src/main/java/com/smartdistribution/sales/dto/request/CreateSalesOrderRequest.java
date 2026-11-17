@@ -19,6 +19,9 @@ public record CreateSalesOrderRequest(
         @Size(max = 50)
         String customerOrderNumber,
 
+        //未填時是建立當天；不能是未來日期
+        LocalDate orderDate,
+
         //未指定時是建立者；主管代建時必須指定一位業務
         Long responsibleSalesUserId,
 
@@ -43,9 +46,16 @@ public record CreateSalesOrderRequest(
         List<@Valid @NotNull SalesOrderLineRequest> lines
 ) {
 
-    public SalesOrder.DraftFields toDraftFields() {
+    /**
+     * 組成草稿欄位
+     *
+     * @param resolvedOrderDate service 補上預設值並檢查過的訂單日期
+     * @return 草稿欄位
+     */
+    public SalesOrder.DraftFields toDraftFields(LocalDate resolvedOrderDate) {
         return new SalesOrder.DraftFields(
                 customerOrderNumber,
+                resolvedOrderDate,
                 requestedDeliveryDate,
                 deliveryMethod,
                 deliveryAddress,

@@ -7,14 +7,21 @@ import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.masterdata.customer.entity.PaymentTerm;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.pricing.entity.CustomerPrice;
+import com.smartdistribution.sales.service.SalesOrderBillingService;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.time.LocalDate;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.startsWith;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -27,6 +34,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
+
+    @Autowired
+    private SalesOrderBillingService salesOrderBillingService;
 
     @Test
     void draftWithoutActivePriceCanBeSavedButNotSubmitted() throws Exception {
@@ -49,7 +59,7 @@ class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
 
         submit(sales, draft)
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("SO_ACTIVE_PRICE_REQUIRED"))
+                .andExpect(jsonPath("$.code").value("SO_PRICE_REQUIRED"))
                 .andExpect(jsonPath("$.message").value(containsString("第 1 行")));
     }
 
@@ -89,9 +99,7 @@ class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
         // 送審後修改付款條件、啟用新版價格，既有 SO 的快照都不變（AT-012、AT-013）
         customer.changePaymentTerm(PaymentTerm.DUE_0);
         customerRepository.saveAndFlush(customer);
-        puPrice.replace();
-        customerPriceRepository.saveAndFlush(puPrice);
-        createActivePrice(puMapping, UnitOfMeasure.PCS, "250");
+        replacePrice(puPrice, "250", LocalDate.now(TAIPEI));
 
         getOrder(sales, salesOrderId)
                 .andExpect(jsonPath("$.paymentTerm").value("NET_30"))
@@ -295,15 +303,134 @@ class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
                 .andExpect(jsonPath("$.code").value("SO_CUSTOMER_INACTIVE"));
     }
 
+    @Test
+    void standardPriceIsUsedWhenNoCustomerPriceApplies() throws Exception {
+        String sales = login(createUser("standard-price", "SALES"));
+        Customer customer = createActiveCustomer(PaymentTerm.DUE_0);
+        CompanyItem item = createActiveItem(UnitOfMeasure.PCS);
+        CustomerItemMapping mapping = createActiveMapping(customer, item);
+        LocalDate today = LocalDate.now(TAIPEI);
+        createActiveStandardPrice(item, UnitOfMeasure.PCS, "300", LocalDate.of(2020, 1, 1));
+
+        //沒有客戶價格：用標準售價
+        Long standardOnlyId = createSubmittedOrder(sales, draftBody(customer, line(mapping, "1", UnitOfMeasure.PCS)));
+        getOrder(sales, standardOnlyId)
+                .andExpect(jsonPath("$.lines[0].priceSource").value("STANDARD_PRICE"))
+                .andExpect(jsonPath("$.lines[0].unitPriceExcludingTax").value(300));
+
+        //客戶價格只到 3 天前：訂單日期在期間內用客戶價格，之後改用標準售價
+        CustomerPrice customerPrice = createActivePrice(mapping, UnitOfMeasure.PCS, "280");
+        jdbcTemplate.update(
+                "UPDATE customer_price SET effective_to = ? WHERE id = ?",
+                today.minusDays(3),
+                customerPrice.getId()
+        );
+
+        Long withinContractId = createSubmittedOrder(
+                sales,
+                draftBody(customer, today.minusDays(5), line(mapping, "1", UnitOfMeasure.PCS))
+        );
+        getOrder(sales, withinContractId)
+                .andExpect(jsonPath("$.lines[0].priceSource").value("CUSTOMER_PRICE"))
+                .andExpect(jsonPath("$.lines[0].priceId").value(customerPrice.getId()))
+                .andExpect(jsonPath("$.lines[0].unitPriceExcludingTax").value(280));
+
+        Long afterContractId = createSubmittedOrder(sales, draftBody(customer, line(mapping, "1", UnitOfMeasure.PCS)));
+        getOrder(sales, afterContractId)
+                .andExpect(jsonPath("$.lines[0].priceSource").value("STANDARD_PRICE"))
+                .andExpect(jsonPath("$.lines[0].unitPriceExcludingTax").value(300));
+    }
+
+    @Test
+    void unitPriceCanBeRaisedButNotBelowListPrice() throws Exception {
+        String sales = login(createUser("override-sales", "SALES"));
+        String salesManager = login(createUser("override-manager", "SALES_MANAGER"));
+        Customer customer = createActiveCustomer(PaymentTerm.DUE_0);
+        CustomerItemMapping mapping = createActiveMapping(customer, createActiveItem(UnitOfMeasure.PCS));
+        createActivePrice(mapping, UnitOfMeasure.PCS, "200");
+
+        //低於底價：草稿可以存並提示，送審被擋
+        SalesOrderVersion below = createDraft(sales, draftBody(customer, line(mapping, "2", UnitOfMeasure.PCS, "180")));
+        getOrder(sales, below.id())
+                .andExpect(jsonPath("$.lines[0].listUnitPrice").value(200))
+                .andExpect(jsonPath("$.warnings[0]").value(containsString("低於底價 200")));
+        submit(sales, below)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("SO_PRICE_BELOW_LIST_PRICE"))
+                .andExpect(jsonPath("$.message").value(containsString("底價 200")));
+
+        //留空：成交價就是底價
+        Long listPriceId = createSubmittedOrder(sales, draftBody(customer, line(mapping, "2", UnitOfMeasure.PCS)));
+        getOrder(sales, listPriceId)
+                .andExpect(jsonPath("$.lines[0].requestedUnitPrice").doesNotExist())
+                .andExpect(jsonPath("$.lines[0].listUnitPrice").value(200))
+                .andExpect(jsonPath("$.lines[0].unitPriceExcludingTax").value(200));
+
+        //往上調：金額與應收照成交價，主管核准時看得到差異
+        Long raisedId = createSubmittedOrder(sales, draftBody(customer, line(mapping, "2", UnitOfMeasure.PCS, "230")));
+        getOrder(sales, raisedId)
+                .andExpect(jsonPath("$.lines[0].listUnitPrice").value(200))
+                .andExpect(jsonPath("$.lines[0].unitPriceExcludingTax").value(230))
+                .andExpect(jsonPath("$.lines[0].lineAmountExcludingTax").value(460));
+
+        mockMvc.perform(get("/api/v1/approval-requests/{id}", findPendingApprovalId(raisedId))
+                        .header("Authorization", bearer(salesManager)))
+                .andExpect(jsonPath("$.warnings", hasItem(containsString("成交價 230.00，底價 200.00"))));
+
+        assertThat(salesOrderBillingService.findForBilling(raisedId).lines().get(0).unitPriceExcludingTax())
+                .isEqualByComparingTo("230");
+    }
+
+    @Test
+    void orderDateDefaultsToTodayAndCannotBeInTheFuture() throws Exception {
+        String sales = login(createUser("order-date", "SALES"));
+        Customer customer = createActiveCustomer(PaymentTerm.DUE_0);
+        CustomerItemMapping mapping = createActiveMapping(customer, createActiveItem(UnitOfMeasure.PCS));
+        LocalDate today = LocalDate.now(TAIPEI);
+
+        //沒填就是建立當天
+        SalesOrderVersion draft = createDraft(sales, draftBody(customer, line(mapping, "1", UnitOfMeasure.PCS)));
+        getOrder(sales, draft.id())
+                .andExpect(jsonPath("$.orderDate").value(today.toString()));
+
+        //往前補登可以
+        mockMvc.perform(post("/api/v1/sales-orders")
+                        .header("Authorization", bearer(sales))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(draftBody(customer, today.minusDays(7), line(mapping, "1", UnitOfMeasure.PCS))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.orderDate").value(today.minusDays(7).toString()));
+
+        //未來日期建立與修改都被擋
+        mockMvc.perform(post("/api/v1/sales-orders")
+                        .header("Authorization", bearer(sales))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(draftBody(customer, today.plusDays(1), line(mapping, "1", UnitOfMeasure.PCS))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("SO_ORDER_DATE_INVALID"));
+
+        mockMvc.perform(patch("/api/v1/sales-orders/{id}", draft.id())
+                        .header("Authorization", bearer(sales))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updateBody(customer, today.plusDays(1), line(mapping, "1", UnitOfMeasure.PCS), draft.version())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("SO_ORDER_DATE_INVALID"));
+    }
+
     private String updateBody(Customer customer, String lines, Long version) {
+        return updateBody(customer, LocalDate.now(TAIPEI), lines, version);
+    }
+
+    private String updateBody(Customer customer, LocalDate orderDate, String lines, Long version) {
         return """
                 {
                   "customerId": %d,
+                  "orderDate": "%s",
                   "requestedDeliveryDate": "2026-11-20",
                   "deliveryMethod": "CUSTOMER_PICKUP",
                   "lines": [%s],
                   "version": %d
                 }
-                """.formatted(customer.getId(), lines, version);
+                """.formatted(customer.getId(), orderDate, lines, version);
     }
 }

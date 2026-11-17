@@ -155,6 +155,34 @@ public enum ErrorCode {
             HttpStatus.CONFLICT,
             "計價單位必須是料號的庫存基準單位或已設定換算的單位。"
     ),
+    STANDARD_PRICE_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "找不到指定的標準售價。"
+    ),
+    STANDARD_PRICE_PENDING_EXISTS(
+            HttpStatus.CONFLICT,
+            "此料號與計價單位已有待覆核的標準售價，請先完成覆核或拒絕。"
+    ),
+    STANDARD_PRICE_ITEM_INACTIVE(
+            HttpStatus.CONFLICT,
+            "公司料號尚未啟用或已停用。"
+    ),
+    STANDARD_PRICE_UNIT_INVALID(
+            HttpStatus.CONFLICT,
+            "計價單位必須是料號的庫存基準單位或已設定換算的單位。"
+    ),
+    PRICE_STATUS_CONFLICT(
+            HttpStatus.CONFLICT,
+            "價格目前的狀態不允許此操作，請重新載入。"
+    ),
+    PRICE_PERIOD_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "生效日不能早於今天，截止日不能早於生效日。"
+    ),
+    PRICE_PERIOD_CONFLICT(
+            HttpStatus.CONFLICT,
+            "生效日不能早於目前最後一個價格版本的生效日。"
+    ),
     COMPANY_ITEM_UNIT_CONVERSIONS_EXIST(
             HttpStatus.CONFLICT,
             "已設定其他單位換算，請先清除換算再修改庫存基準單位。"
@@ -197,6 +225,10 @@ public enum ErrorCode {
             HttpStatus.BAD_REQUEST,
             "銷售訂單明細不正確。"
     ),
+    SO_ORDER_DATE_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "訂單日期不能是未來的日期。"
+    ),
     SO_DELIVERY_INFO_INCOMPLETE(
             HttpStatus.BAD_REQUEST,
             "請填寫要求交期與交貨方式；外送時另需交貨地址、收貨聯絡人與電話。"
@@ -213,9 +245,13 @@ public enum ErrorCode {
             HttpStatus.CONFLICT,
             "訂購單位必須是庫存基準單位或已設定換算的單位。"
     ),
-    SO_ACTIVE_PRICE_REQUIRED(
+    SO_PRICE_REQUIRED(
             HttpStatus.CONFLICT,
-            "尚無已覆核的客戶價格，無法送審。"
+            "訂單日期當天沒有有效的價格，無法送審。"
+    ),
+    SO_PRICE_BELOW_LIST_PRICE(
+            HttpStatus.BAD_REQUEST,
+            "單價不能低於底價。"
     ),
     SO_PRICE_REVOKED(
             HttpStatus.CONFLICT,

@@ -6,13 +6,18 @@ import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.companyitem.repository.ItemUnitConversionRepository;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.masterdata.customeritemmapping.repository.CustomerItemMappingRepository;
+import com.smartdistribution.pricing.entity.CustomerPrice;
+import com.smartdistribution.pricing.entity.PriceStatus;
+import com.smartdistribution.pricing.repository.CustomerPriceRepository;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
+
 /**
- * 建立價格與核准價格都要檢查的規則，service 與 handler 共用
+ * 建立價格與核准價格都要檢查的規則，service 與 handler 共用：對應可用、計價單位、最後一個版本
  * handler 不能依賴 CustomerPriceService（會形成循環依賴），所以抽成獨立元件
  */
 @Component
@@ -21,6 +26,7 @@ public class CustomerPriceRules {
 
     private final CustomerItemMappingRepository customerItemMappingRepository;
     private final ItemUnitConversionRepository itemUnitConversionRepository;
+    private final CustomerPriceRepository customerPriceRepository;
 
     /**
      * 鎖定對應列，同一對應的價格操作依序執行；對應、客戶與公司料號都必須仍為啟用
@@ -49,5 +55,15 @@ public class CustomerPriceRules {
         if (!itemUnitConversionRepository.existsByCompanyItemIdAndUnit(companyItem.getId(), pricingUnit)) {
             throw new BusinessException(ErrorCode.CUSTOMER_PRICE_UNIT_INVALID);
         }
+    }
+
+    /**
+     * 同一對應＋單位的最後一個版本（生效日最晚的已核准版本）
+     */
+    public Optional<CustomerPrice> findLatestVersion(Long mappingId, UnitOfMeasure pricingUnit) {
+        return customerPriceRepository
+                .findVersionsNewestFirst(mappingId, pricingUnit, PriceStatus.APPROVED_VERSIONS)
+                .stream()
+                .findFirst();
     }
 }

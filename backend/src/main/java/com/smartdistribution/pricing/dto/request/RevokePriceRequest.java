@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
-public record RevokeCustomerPriceRequest(
+public record RevokePriceRequest(
         @NotBlank
         @Size(max = 500)
         String reason,

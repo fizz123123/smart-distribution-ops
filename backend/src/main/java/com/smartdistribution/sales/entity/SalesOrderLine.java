@@ -1,6 +1,7 @@
 package com.smartdistribution.sales.entity;
 
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
+import com.smartdistribution.pricing.service.PriceSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -57,6 +58,10 @@ public class SalesOrderLine {
     @Column(name = "unit_code", nullable = false, length = 10)
     private UnitOfMeasure unit;
 
+    //業務在草稿填的單價，null 代表用底價；和送審快照分開存，退回重送時才知道哪些是業務自己填的
+    @Column(name = "requested_unit_price", precision = 15, scale = 2)
+    private BigDecimal requestedUnitPrice;
+
     // ===== 以下是送審快照 =====
 
     @Column(name = "company_item_id")
@@ -72,8 +77,13 @@ public class SalesOrderLine {
     @Column(name = "base_qty", precision = 15, scale = 3)
     private BigDecimal baseQty;
 
-    @Column(name = "customer_price_id")
-    private Long customerPriceId;
+    //引用的價格：來源決定 price_id 指的是客戶價格還是標準售價
+    @Enumerated(EnumType.STRING)
+    @Column(name = "price_source", length = 20)
+    private PriceSource priceSource;
+
+    @Column(name = "price_id")
+    private Long priceId;
 
     //計價單位與訂購單位相同，仍分開保存，讓快照完整說明金額怎麼算
     @Column(name = "pricing_qty", precision = 15, scale = 3)
@@ -83,6 +93,11 @@ public class SalesOrderLine {
     @Column(name = "pricing_unit_code", length = 10)
     private UnitOfMeasure pricingUnit;
 
+    //送審當下取價服務找到的價格，也就是底價
+    @Column(name = "list_unit_price", precision = 15, scale = 2)
+    private BigDecimal listUnitPrice;
+
+    //實際成交價，金額與應收都照它計算
     @Column(name = "unit_price_excluding_tax", precision = 15, scale = 2)
     private BigDecimal unitPriceExcludingTax;
 
@@ -97,13 +112,35 @@ public class SalesOrderLine {
             int lineNo,
             Long customerItemMappingId,
             BigDecimal quantity,
-            UnitOfMeasure unit
+            UnitOfMeasure unit,
+            BigDecimal requestedUnitPrice
     ) {
         this.salesOrder = salesOrder;
         this.lineNo = lineNo;
         this.customerItemMappingId = customerItemMappingId;
         this.quantity = quantity;
         this.unit = unit;
+        this.requestedUnitPrice = requestedUnitPrice;
+    }
+
+    /**
+     * 成交價：業務有填就用業務填的，沒填就用底價
+     *
+     * @param listUnitPrice 底價，找不到價格時為 null
+     * @return 成交價
+     */
+    public BigDecimal dealUnitPrice(BigDecimal listUnitPrice) {
+        return requestedUnitPrice != null ? requestedUnitPrice : listUnitPrice;
+    }
+
+    /**
+     * 業務填的單價是否低於底價；只限制下限，往上調不限
+     *
+     * @param listUnitPrice 底價
+     * @return 低於底價時為 true
+     */
+    public boolean isBelowListPrice(BigDecimal listUnitPrice) {
+        return requestedUnitPrice != null && requestedUnitPrice.compareTo(listUnitPrice) < 0;
     }
 
     public void applySnapshot(Snapshot snapshot) {
@@ -111,7 +148,9 @@ public class SalesOrderLine {
         this.customerItemCode = snapshot.customerItemCode();
         this.conversionFactor = snapshot.conversionFactor();
         this.baseQty = snapshot.baseQty();
-        this.customerPriceId = snapshot.customerPriceId();
+        this.priceSource = snapshot.priceSource();
+        this.priceId = snapshot.priceId();
+        this.listUnitPrice = snapshot.listUnitPrice();
         this.pricingQty = quantity;
         this.pricingUnit = unit;
         this.unitPriceExcludingTax = snapshot.unitPriceExcludingTax();
@@ -124,7 +163,9 @@ public class SalesOrderLine {
             String customerItemCode,
             BigDecimal conversionFactor,
             BigDecimal baseQty,
-            Long customerPriceId,
+            PriceSource priceSource,
+            Long priceId,
+            BigDecimal listUnitPrice,
             BigDecimal unitPriceExcludingTax,
             BigDecimal lineAmountExcludingTax,
             BigDecimal taxRate

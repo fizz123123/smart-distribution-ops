@@ -5,15 +5,20 @@ import com.smartdistribution.approval.handler.ApprovalHandler;
 import com.smartdistribution.approval.handler.ApprovalTarget;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.pricing.entity.CustomerPrice;
-import com.smartdistribution.pricing.entity.CustomerPriceStatus;
+import com.smartdistribution.pricing.entity.PriceStatus;
+import com.smartdistribution.pricing.entity.StandardPrice;
 import com.smartdistribution.pricing.repository.CustomerPriceRepository;
+import com.smartdistribution.pricing.repository.StandardPriceRepository;
 import com.smartdistribution.pricing.service.CustomerPriceRules;
+import com.smartdistribution.pricing.service.PricePeriods;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -24,13 +29,15 @@ public class CustomerPriceApprovalHandler implements ApprovalHandler {
 
     private final CustomerPriceRepository customerPriceRepository;
     private final CustomerPriceRules customerPriceRules;
+    private final StandardPriceRepository standardPriceRepository;
 
     @Override
     public ApprovalTargetType targetType() {
         return ApprovalTargetType.CUSTOMER_PRICE;
     }
 
-    //顯示名稱範例：CUS-000003 A-100 125.00 元／個 ；待覆核時以警示顯示將被取代的現行價格
+    //顯示名稱範例：CUS-000003 A-100 125.00 元／個
+    //待覆核時提示：目前價格會在哪一天結束、和生效日的標準售價差多少
     @Override
     public ApprovalTarget loadTarget(Long targetId) {
         CustomerPrice price = findPrice(targetId);
@@ -41,33 +48,45 @@ public class CustomerPriceApprovalHandler implements ApprovalHandler {
                 + priceText(price);
 
         List<String> warnings = new ArrayList<>();
-        if (price.getStatus() == CustomerPriceStatus.PENDING_REVIEW) {
-            Optional<CustomerPrice> currentPrice = findActivePrice(price);
+        if (price.getStatus() == PriceStatus.PENDING_REVIEW) {
+            LocalDate effectiveFrom = PricePeriods.resolveEffectiveFrom(price.getEffectiveFrom());
+            Optional<CustomerPrice> latest = findLatestVersion(price);
 
-            if (currentPrice.isPresent()) {
-                warnings.add("核准後將取代目前價格 " + priceText(currentPrice.get()));
+            if (latest.isPresent()
+                    && PricePeriods.stillEffectiveOn(latest.get().getEffectiveTo(), effectiveFrom)) {
+                warnings.add("核准後將取代目前價格 " + priceText(latest.get())
+                        + "，原價格於 " + effectiveFrom.minusDays(1) + " 結束");
             }
+
+            compareWithStandardPrice(price, effectiveFrom).ifPresent(warnings::add);
         }
 
         return new ApprovalTarget(price.getCreatedBy(), label, warnings);
     }
 
-    //核准後新價格立即生效，舊價格在同一交易中轉為 REPLACED
+    /**
+     * 核准：
+     * 1. 決定生效日：沒填或已經過了就是今天，價格不溯及既往
+     * 2. 生效日不能早於最後一個版本的生效日
+     * 3. 最後一個版本截到新生效日的前一天，轉 REPLACED
+     */
     @Override
     public void onApproved(Long targetId, Long approverId, Long approvalRequestId) {
         CustomerPrice price = findPrice(targetId);
 
+        //先鎖對應，同一對應的價格核准依序進行，最後一個版本才不會被兩筆同時截斷
         CustomerItemMapping mapping =
                 customerPriceRules.lockUsableMapping(price.getCustomerItemMapping().getId());
         customerPriceRules.ensurePricingUnitAllowed(mapping, price.getPricingUnit());
 
-        Optional<CustomerPrice> currentPrice = findActivePrice(price);
+        LocalDate effectiveFrom = PricePeriods.resolveEffectiveFrom(price.getEffectiveFrom());
+        PricePeriods.ensureNotEnded(effectiveFrom, price.getEffectiveTo());
 
-        if (currentPrice.isPresent()) {
-            currentPrice.get().replace();
-        }
+        Optional<CustomerPrice> latest = findLatestVersion(price);
+        PricePeriods.ensureNotBefore(latest.map(CustomerPrice::getEffectiveFrom).orElse(null), effectiveFrom);
+        latest.ifPresent(previous -> previous.endBefore(effectiveFrom));
 
-        price.approve(approverId, Instant.now());
+        price.approve(approverId, Instant.now(), effectiveFrom);
     }
 
     //價格覆核的退回即為拒絕
@@ -81,11 +100,35 @@ public class CustomerPriceApprovalHandler implements ApprovalHandler {
                 .orElseThrow(() -> new BusinessException(ErrorCode.CUSTOMER_PRICE_NOT_FOUND));
     }
 
-    private Optional<CustomerPrice> findActivePrice(CustomerPrice price) {
-        return customerPriceRepository.findByCustomerItemMappingIdAndPricingUnitAndStatus(
-                price.getCustomerItemMapping().getId(),
+    //客戶價格是針對單一客戶的議價，主管核准時要知道它和公開的標準售價差多少
+    private Optional<String> compareWithStandardPrice(CustomerPrice price, LocalDate effectiveFrom) {
+        Optional<StandardPrice> standardPrice = standardPriceRepository.findEffectiveOn(
+                price.getCustomerItemMapping().getCompanyItem().getId(),
                 price.getPricingUnit(),
-                CustomerPriceStatus.ACTIVE
+                effectiveFrom,
+                PriceStatus.APPROVED_VERSIONS
+        );
+
+        if (standardPrice.isEmpty()) {
+            return Optional.empty();
+        }
+
+        BigDecimal standard = standardPrice.get().getUnitPriceExcludingTax();
+        BigDecimal difference = price.getUnitPriceExcludingTax().subtract(standard);
+        String comparison = switch (difference.signum()) {
+            case 0 -> "相同";
+            case 1 -> "高 " + difference.toPlainString() + " 元";
+            default -> "低 " + difference.negate().toPlainString() + " 元";
+        };
+
+        return Optional.of("生效日的標準售價為 " + standard.toPlainString() + " 元／"
+                + price.getPricingUnit().getDisplayName() + "，此客戶價格" + comparison);
+    }
+
+    private Optional<CustomerPrice> findLatestVersion(CustomerPrice price) {
+        return customerPriceRules.findLatestVersion(
+                price.getCustomerItemMapping().getId(),
+                price.getPricingUnit()
         );
     }
 

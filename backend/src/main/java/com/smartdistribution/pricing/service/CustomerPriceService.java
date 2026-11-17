@@ -1,9 +1,9 @@
 package com.smartdistribution.pricing.service;
 
 import com.smartdistribution.pricing.dto.request.CreateCustomerPriceRequest;
-import com.smartdistribution.pricing.dto.request.RevokeCustomerPriceRequest;
+import com.smartdistribution.pricing.dto.request.RevokePriceRequest;
 import com.smartdistribution.pricing.dto.response.CustomerPriceResponse;
-import com.smartdistribution.pricing.entity.CustomerPriceStatus;
+import com.smartdistribution.pricing.entity.PriceStatus;
 import com.smartdistribution.shared.web.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 
@@ -11,7 +11,7 @@ public interface CustomerPriceService {
 
     PageResponse<CustomerPriceResponse> findPrices(
             Long customerItemMappingId,
-            CustomerPriceStatus status,
+            PriceStatus status,
             Pageable pageable
     );
 
@@ -19,5 +19,5 @@ public interface CustomerPriceService {
 
     CustomerPriceResponse createPrice(CreateCustomerPriceRequest request);
 
-    CustomerPriceResponse revokePrice(Long priceId, RevokeCustomerPriceRequest request);
+    CustomerPriceResponse revokePrice(Long priceId, RevokePriceRequest request);
 }

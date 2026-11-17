@@ -21,7 +21,9 @@ import com.smartdistribution.masterdata.customer.repository.CustomerRepository;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.masterdata.customeritemmapping.repository.CustomerItemMappingRepository;
 import com.smartdistribution.pricing.entity.CustomerPrice;
+import com.smartdistribution.pricing.entity.StandardPrice;
 import com.smartdistribution.pricing.repository.CustomerPriceRepository;
+import com.smartdistribution.pricing.repository.StandardPriceRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +36,8 @@ import org.springframework.test.web.servlet.ResultActions;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -87,6 +91,9 @@ public abstract class SalesOrderTestSupport {
 
     @Autowired
     protected CustomerPriceRepository customerPriceRepository;
+
+    @Autowired
+    protected StandardPriceRepository standardPriceRepository;
 
     @Autowired
     protected InventoryService inventoryService;
@@ -201,6 +208,7 @@ public abstract class SalesOrderTestSupport {
         jdbcTemplate.update("DELETE FROM customer WHERE name LIKE ?", CUSTOMER_NAME_PREFIX + "%");
 
         for (Long itemId : itemIds) {
+            jdbcTemplate.update("DELETE FROM standard_price WHERE company_item_id = ?", itemId);
             jdbcTemplate.update("DELETE FROM item_unit_conversion WHERE company_item_id = ?", itemId);
             jdbcTemplate.update("DELETE FROM inventory_policy WHERE company_item_id = ?", itemId);
             jdbcTemplate.update("DELETE FROM inventory_balance WHERE company_item_id = ?", itemId);
@@ -272,11 +280,46 @@ public abstract class SalesOrderTestSupport {
         return customerItemMappingRepository.saveAndFlush(mapping);
     }
 
+    //預設從很早以前就生效，補登訂單日期的測試也取得到
     protected CustomerPrice createActivePrice(CustomerItemMapping mapping, UnitOfMeasure unit, String unitPrice) {
-        CustomerPrice price = new CustomerPrice(mapping, unit, new BigDecimal(unitPrice), 1L);
-        price.approve(1L, Instant.now());
+        return createActivePrice(mapping, unit, unitPrice, LocalDate.of(2020, 1, 1));
+    }
+
+    protected CustomerPrice createActivePrice(
+            CustomerItemMapping mapping,
+            UnitOfMeasure unit,
+            String unitPrice,
+            LocalDate effectiveFrom
+    ) {
+        CustomerPrice price = new CustomerPrice(mapping, unit, new BigDecimal(unitPrice), null, null, 1L);
+        price.approve(1L, Instant.now(), effectiveFrom);
 
         return customerPriceRepository.saveAndFlush(price);
+    }
+
+    protected StandardPrice createActiveStandardPrice(
+            CompanyItem item,
+            UnitOfMeasure unit,
+            String unitPrice,
+            LocalDate effectiveFrom
+    ) {
+        StandardPrice price = new StandardPrice(item, unit, new BigDecimal(unitPrice), null, null, 1L);
+        price.approve(1L, Instant.now(), effectiveFrom);
+
+        return standardPriceRepository.saveAndFlush(price);
+    }
+
+    //模擬新版本從 nextEffectiveFrom 起接手：舊版本截到前一天，新版本從那天生效
+    protected CustomerPrice replacePrice(CustomerPrice current, String unitPrice, LocalDate nextEffectiveFrom) {
+        current.endBefore(nextEffectiveFrom);
+        customerPriceRepository.saveAndFlush(current);
+
+        return createActivePrice(
+                current.getCustomerItemMapping(),
+                current.getPricingUnit(),
+                unitPrice,
+                nextEffectiveFrom
+        );
     }
 
     // 期初庫存透過 API 建立，異動與餘額才會一致
@@ -297,15 +340,30 @@ public abstract class SalesOrderTestSupport {
     // ===== SO =====
 
     protected String line(CustomerItemMapping mapping, String quantity, UnitOfMeasure unit) {
-        return """
-                {"customerItemMappingId": %d, "quantity": %s, "unit": "%s"}
-                """.formatted(mapping.getId(), quantity, unit.name());
+        return line(mapping, quantity, unit, null);
     }
 
+    //requestedUnitPrice 為 null 時用底價
+    protected String line(CustomerItemMapping mapping, String quantity, UnitOfMeasure unit, String requestedUnitPrice) {
+        return """
+                {"customerItemMappingId": %d, "quantity": %s, "unit": "%s", "requestedUnitPrice": %s}
+                """.formatted(mapping.getId(), quantity, unit.name(), requestedUnitPrice);
+    }
+
+    protected static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
+
     protected String draftBody(Customer customer, String lines) {
+        return draftBody(customer, null, lines);
+    }
+
+    //orderDate 為 null 時不送這個欄位，由系統帶入建立當天
+    protected String draftBody(Customer customer, LocalDate orderDate, String lines) {
+        String orderDateField = orderDate == null ? "" : "\"orderDate\": \"%s\",".formatted(orderDate);
+
         return """
                 {
                   "customerId": %d,
+                  %s
                   "customerOrderNumber": "CUS-PO-1008",
                   "requestedDeliveryDate": "2026-11-20",
                   "deliveryMethod": "DELIVERY",
@@ -314,7 +372,7 @@ public abstract class SalesOrderTestSupport {
                   "contactPhone": "0912000000",
                   "lines": [%s]
                 }
-                """.formatted(customer.getId(), lines);
+                """.formatted(customer.getId(), orderDateField, lines);
     }
 
     protected SalesOrderVersion createDraft(String token, String body) throws Exception {

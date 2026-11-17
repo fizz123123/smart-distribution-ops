@@ -28,7 +28,6 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -43,8 +42,6 @@ import java.util.Set;
 @Component
 @RequiredArgsConstructor
 public class SalesOrderAssembler {
-
-    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
 
     private final SalesOrderLineRepository salesOrderLineRepository;
     private final SalesOrderMasterData salesOrderMasterData;
@@ -75,6 +72,7 @@ public class SalesOrderAssembler {
                     customer == null ? null : customer.getCustomerCode(),
                     customer == null ? null : customer.getName(),
                     salesOrder.getCustomerOrderNumber(),
+                    salesOrder.getOrderDate(),
                     salesOrder.getResponsibleSalesUserId(),
                     userNames.get(salesOrder.getResponsibleSalesUserId()),
                     salesOrder.getStatus(),
@@ -105,7 +103,9 @@ public class SalesOrderAssembler {
             if (customer.getStatus() != MasterDataStatus.ACTIVE) {
                 previewWarnings.add("客戶 " + customer.getCustomerCode() + " 已停用，無法送審");
             }
-            lineResponses = lines.stream().map(line -> toPreviewLine(line, previewWarnings)).toList();
+            lineResponses = lines.stream()
+                    .map(line -> toPreviewLine(line, salesOrder.getOrderDate(), previewWarnings))
+                    .toList();
             amounts = previewAmounts(lineResponses);
         } else {
             lineResponses = toSnapshotLines(salesOrder, lines);
@@ -127,6 +127,7 @@ public class SalesOrderAssembler {
                         customer.getName()
                 ),
                 salesOrder.getCustomerOrderNumber(),
+                salesOrder.getOrderDate(),
                 userRef(salesOrder.getResponsibleSalesUserId()),
                 userRef(salesOrder.getCreatedBy()),
                 //草稿時顯示客戶目前的付款條件，送審後是快照
@@ -151,7 +152,7 @@ public class SalesOrderAssembler {
     }
 
     //草稿試算：依目前的主檔計算基準數量與金額，同時列出送審會被擋下的問題
-    private Line toPreviewLine(SalesOrderLine line, List<String> warnings) {
+    private Line toPreviewLine(SalesOrderLine line, LocalDate orderDate, List<String> warnings) {
         CustomerItemMapping mapping = salesOrderMasterData.findMapping(line.getCustomerItemMappingId());
         CompanyItem item = mapping.getCompanyItem();
         String prefix = "第 " + line.getLineNo() + " 行 " + mapping.getCustomerItemCode() + "：";
@@ -165,17 +166,22 @@ public class SalesOrderAssembler {
             warnings.add(prefix + "公司料號沒有設定「" + line.getUnit().getDisplayName() + "」的換算");
         }
 
-        //只能用有價格的單位下單，計價單位就是訂購單位
+        //只能用有價格的單位下單，計價單位就是訂購單位；依訂單日期取價，和送審時相同
         Optional<ApplicablePrice> price = priceLookupService.findApplicablePrice(
                 mapping.getId(),
                 line.getUnit(),
-                LocalDate.now(TAIPEI)
+                orderDate
         );
         if (price.isEmpty()) {
-            warnings.add(prefix + "尚無已覆核的「" + line.getUnit().getDisplayName() + "」價格，無法送審");
+            warnings.add(prefix + "訂單日期沒有有效的「" + line.getUnit().getDisplayName() + "」價格，無法送審");
         }
 
-        BigDecimal unitPrice = price.map(ApplicablePrice::unitPriceExcludingTax).orElse(null);
+        BigDecimal listUnitPrice = price.map(ApplicablePrice::unitPriceExcludingTax).orElse(null);
+        if (listUnitPrice != null && line.isBelowListPrice(listUnitPrice)) {
+            warnings.add(prefix + "單價 " + line.getRequestedUnitPrice().toPlainString()
+                    + " 元低於底價 " + listUnitPrice.toPlainString() + " 元，無法送審");
+        }
+        BigDecimal unitPrice = line.dealUnitPrice(listUnitPrice);
 
         return new Line(
                 line.getId(),
@@ -190,7 +196,10 @@ public class SalesOrderAssembler {
                 line.getUnit(),
                 factor.orElse(null),
                 factor.map(f -> SalesOrderAmounts.baseQty(line.getQuantity(), f)).orElse(null),
+                price.map(ApplicablePrice::source).orElse(null),
                 price.map(ApplicablePrice::priceId).orElse(null),
+                line.getRequestedUnitPrice(),
+                listUnitPrice,
                 unitPrice,
                 unitPrice == null ? null : SalesOrderAmounts.lineAmount(line.getQuantity(), unitPrice),
                 null
@@ -251,7 +260,10 @@ public class SalesOrderAssembler {
                             line.getUnit(),
                             line.getConversionFactor(),
                             line.getBaseQty(),
-                            line.getCustomerPriceId(),
+                            line.getPriceSource(),
+                            line.getPriceId(),
+                            line.getRequestedUnitPrice(),
+                            line.getListUnitPrice(),
                             line.getUnitPriceExcludingTax(),
                             line.getLineAmountExcludingTax(),
                             approved

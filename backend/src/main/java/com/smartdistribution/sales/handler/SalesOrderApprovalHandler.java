@@ -9,7 +9,7 @@ import com.smartdistribution.masterdata.common.MasterDataStatus;
 import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.pricing.service.PriceLookupService;
-import com.smartdistribution.pricing.service.PriceLookupService.PriceSource;
+import com.smartdistribution.pricing.service.PriceLookupService.ApplicablePrice;
 import com.smartdistribution.sales.entity.SalesOrder;
 import com.smartdistribution.sales.entity.SalesOrderLine;
 import com.smartdistribution.sales.entity.SalesOrderStatus;
@@ -24,15 +24,20 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
 public class SalesOrderApprovalHandler implements ApprovalHandler {
+
+    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
 
     private final SalesOrderRepository salesOrderRepository;
     private final SalesOrderLineRepository salesOrderLineRepository;
@@ -56,7 +61,7 @@ public class SalesOrderApprovalHandler implements ApprovalHandler {
                 + " 含稅 " + NumberFormat.getIntegerInstance(Locale.TAIWAN).format(salesOrder.getTotalAmount()) + " 元";
 
         List<String> warnings = salesOrder.getStatus() == SalesOrderStatus.PENDING_APPROVAL
-                ? buildWarnings(findLines(targetId))
+                ? buildWarnings(salesOrder, findLines(targetId))
                 : List.of();
 
         return new ApprovalTarget(salesOrder.getCreatedBy(), label, warnings);
@@ -93,7 +98,7 @@ public class SalesOrderApprovalHandler implements ApprovalHandler {
                 );
             }
 
-            if (priceLookupService.isRevoked(PriceSource.CUSTOMER_PRICE, line.getCustomerPriceId())) {
+            if (priceLookupService.isRevoked(line.getPriceSource(), line.getPriceId())) {
                 throw new BusinessException(
                         ErrorCode.SO_PRICE_REVOKED,
                         prefix + "引用的價格已撤銷，請退回後由業務依目前價格重新送審。"
@@ -125,17 +130,39 @@ public class SalesOrderApprovalHandler implements ApprovalHandler {
 
     /**
      * 核准前給主管的提示：
-     * - 引用價格已被新版取代：仍以送審時的價格核准
+     * - 訂單日期早於送審日：價格是依訂單日期取的
+     * - 業務改過單價：列出成交價與底價
+     * - 今天的價格和送審時的底價不同（補登的訂單、送審後換價）：仍以送審時的價格核准
      * - 依目前可用量試算可預留多少；只是提示，核准時會鎖定後重新計算
      */
-    private List<String> buildWarnings(List<SalesOrderLine> lines) {
+    private List<String> buildWarnings(SalesOrder salesOrder, List<SalesOrderLine> lines) {
         List<String> warnings = new ArrayList<>();
 
+        //補登的訂單：價格是依訂單日期取的，提醒主管確認日期合理
+        LocalDate submittedDate = LocalDate.ofInstant(salesOrder.getSubmittedAt(), TAIPEI);
+        if (salesOrder.getOrderDate().isBefore(submittedDate)) {
+            warnings.add("訂單日期 " + salesOrder.getOrderDate()
+                    + "，送審日 " + submittedDate + "，價格依訂單日期計算");
+        }
+
+        LocalDate today = LocalDate.now(TAIPEI);
         for (SalesOrderLine line : lines) {
-            if (priceLookupService.isReplaced(PriceSource.CUSTOMER_PRICE, line.getCustomerPriceId())) {
-                warnings.add("第 " + line.getLineNo() + " 行 " + line.getCustomerItemCode()
-                        + "：價格已更新，本單仍以送審時的 "
-                        + line.getUnitPriceExcludingTax().toPlainString() + " 元核准");
+            String prefix = "第 " + line.getLineNo() + " 行 " + line.getCustomerItemCode() + "：";
+
+            if (line.getUnitPriceExcludingTax().compareTo(line.getListUnitPrice()) != 0) {
+                warnings.add(prefix + "成交價 " + line.getUnitPriceExcludingTax().toPlainString()
+                        + "，底價 " + line.getListUnitPrice().toPlainString());
+            }
+
+            Optional<ApplicablePrice> currentPrice = priceLookupService.findApplicablePrice(
+                    line.getCustomerItemMappingId(),
+                    line.getUnit(),
+                    today
+            );
+
+            if (currentPrice.isPresent() && !isSnapshotPrice(line, currentPrice.get())) {
+                warnings.add(prefix + "目前價格是 " + currentPrice.get().unitPriceExcludingTax().toPlainString()
+                        + " 元，本單以送審時的底價 " + line.getListUnitPrice().toPlainString() + " 元核准");
             }
         }
 
@@ -159,6 +186,11 @@ public class SalesOrderApprovalHandler implements ApprovalHandler {
         }
 
         return warnings;
+    }
+
+    //來源與價格 ID 都相同才是同一筆價格；客戶價格與標準售價的 ID 各自編號
+    private boolean isSnapshotPrice(SalesOrderLine line, ApplicablePrice price) {
+        return price.source() == line.getPriceSource() && price.priceId().equals(line.getPriceId());
     }
 
     private SalesOrder findSalesOrder(Long salesOrderId) {

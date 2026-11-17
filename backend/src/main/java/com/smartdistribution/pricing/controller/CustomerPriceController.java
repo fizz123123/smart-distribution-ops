@@ -1,9 +1,9 @@
 package com.smartdistribution.pricing.controller;
 
 import com.smartdistribution.pricing.dto.request.CreateCustomerPriceRequest;
-import com.smartdistribution.pricing.dto.request.RevokeCustomerPriceRequest;
+import com.smartdistribution.pricing.dto.request.RevokePriceRequest;
 import com.smartdistribution.pricing.dto.response.CustomerPriceResponse;
-import com.smartdistribution.pricing.entity.CustomerPriceStatus;
+import com.smartdistribution.pricing.entity.PriceStatus;
 import com.smartdistribution.pricing.service.CustomerPriceService;
 import com.smartdistribution.shared.web.response.PageResponse;
 import jakarta.validation.Valid;
@@ -31,7 +31,7 @@ public class CustomerPriceController {
     @GetMapping
     public ResponseEntity<PageResponse<CustomerPriceResponse>> findPrices(
             @RequestParam(required = false) Long customerItemMappingId,
-            @RequestParam(required = false) CustomerPriceStatus status,
+            @RequestParam(required = false) PriceStatus status,
             @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC)
             Pageable pageable
     ) {
@@ -62,7 +62,7 @@ public class CustomerPriceController {
     @PostMapping("/{priceId}/revoke")
     public ResponseEntity<CustomerPriceResponse> revokePrice(
             @PathVariable Long priceId,
-            @Valid @RequestBody RevokeCustomerPriceRequest request
+            @Valid @RequestBody RevokePriceRequest request
     ) {
         CustomerPriceResponse response = customerPriceService.revokePrice(priceId, request);
 

@@ -16,6 +16,11 @@ import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.masterdata.customer.repository.CustomerRepository;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.masterdata.customeritemmapping.repository.CustomerItemMappingRepository;
+import com.smartdistribution.pricing.entity.StandardPrice;
+import com.smartdistribution.pricing.repository.StandardPriceRepository;
+import com.smartdistribution.pricing.service.PriceLookupService;
+import com.smartdistribution.pricing.service.PriceLookupService.ApplicablePrice;
+import com.smartdistribution.pricing.service.PricePeriods;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,12 +36,16 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -82,6 +91,12 @@ class CustomerPriceApiIntegrationTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private PriceLookupService priceLookupService;
+
+    @Autowired
+    private StandardPriceRepository standardPriceRepository;
+
     @BeforeEach
     @AfterEach
     void cleanTestData() {
@@ -124,6 +139,14 @@ class CustomerPriceApiIntegrationTest {
                 CUSTOMER_NAME_PREFIX + "%"
         );
         jdbcTemplate.update("DELETE FROM customer WHERE name LIKE ?", CUSTOMER_NAME_PREFIX + "%");
+        jdbcTemplate.update(
+                """
+                DELETE price FROM standard_price price
+                JOIN company_item item ON item.id = price.company_item_id
+                WHERE item.item_code LIKE ?
+                """,
+                ITEM_CODE_PREFIX + "%"
+        );
         jdbcTemplate.update(
                 """
                 DELETE conversion FROM item_unit_conversion conversion
@@ -261,6 +284,121 @@ class CustomerPriceApiIntegrationTest {
     }
 
     @Test
+    void scheduledPriceEndsCurrentPriceTheDayBefore() throws Exception {
+        String sales = login(createUser("schedule-sales", "SALES"));
+        String manager = login(createUser("schedule-manager", "SALES_MANAGER"));
+        CustomerItemMapping mapping = createActiveMapping();
+        LocalDate today = PricePeriods.today();
+
+        Long currentId = createPrice(sales, mapping.getId(), "PCS", "120.00");
+        approve(manager, findPendingApprovalId(currentId)).andExpect(status().isOk());
+
+        //預先排定 10 天後調價
+        MvcResult created = performCreate(sales, mapping.getId(), "PCS", "130.00", today.plusDays(10), null)
+                .andExpect(status().isCreated())
+                .andReturn();
+        Long scheduledId = ((Number) JsonPath.read(created.getResponse().getContentAsString(), "$.id")).longValue();
+        Long approvalId = findPendingApprovalId(scheduledId);
+
+        mockMvc.perform(get("/api/v1/approval-requests/{id}", approvalId)
+                        .header("Authorization", bearer(manager)))
+                .andExpect(jsonPath("$.warnings[0]").value(containsString("於 " + today.plusDays(9) + " 結束")));
+
+        approve(manager, approvalId).andExpect(status().isOk());
+
+        assertThat(priceStatus(currentId)).isEqualTo("REPLACED");
+        assertThat(effectiveTo(currentId)).isEqualTo(today.plusDays(9));
+
+        //生效日之前仍取用舊價格，生效日當天起取用新價格
+        assertThat(applicablePriceId(mapping, today)).contains(currentId);
+        assertThat(applicablePriceId(mapping, today.plusDays(9))).contains(currentId);
+        assertThat(applicablePriceId(mapping, today.plusDays(10))).contains(scheduledId);
+
+        //被取代但還沒到期的版本也能撤銷，空出的期間不會接回前一版
+        mockMvc.perform(post("/api/v1/customer-prices/{id}/revoke", currentId)
+                        .header("Authorization", bearer(manager))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(revokeBody(priceVersion(currentId))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REVOKED"));
+        assertThat(applicablePriceId(mapping, today)).isEmpty();
+    }
+
+    @Test
+    void invalidOrOverlappingPeriodIsRejected() throws Exception {
+        String sales = login(createUser("period-sales", "SALES"));
+        String manager = login(createUser("period-manager", "SALES_MANAGER"));
+        CustomerItemMapping mapping = createActiveMapping();
+        LocalDate today = PricePeriods.today();
+
+        //不溯及既往、截止日不能早於生效日
+        performCreate(sales, mapping.getId(), "PCS", "120.00", today.minusDays(1), null)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PRICE_PERIOD_INVALID"));
+        performCreate(sales, mapping.getId(), "PCS", "120.00", today.plusDays(5), today.plusDays(4))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PRICE_PERIOD_INVALID"));
+
+        //已排定 10 天後的版本，新版本不能排在它前面
+        MvcResult created = performCreate(sales, mapping.getId(), "PCS", "120.00", today.plusDays(10), null)
+                .andExpect(status().isCreated())
+                .andReturn();
+        Long scheduledId = ((Number) JsonPath.read(created.getResponse().getContentAsString(), "$.id")).longValue();
+        approve(manager, findPendingApprovalId(scheduledId)).andExpect(status().isOk());
+
+        performCreate(sales, mapping.getId(), "PCS", "110.00", today.plusDays(5), null)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PRICE_PERIOD_CONFLICT"));
+    }
+
+    @Test
+    void expiredPriceIsNotApplied() throws Exception {
+        String sales = login(createUser("expired-sales", "SALES"));
+        String manager = login(createUser("expired-manager", "SALES_MANAGER"));
+        CustomerItemMapping mapping = createActiveMapping();
+        LocalDate today = PricePeriods.today();
+
+        Long priceId = createPrice(sales, mapping.getId(), "PCS", "120.00");
+        approve(manager, findPendingApprovalId(priceId)).andExpect(status().isOk());
+
+        //模擬一筆一個月前生效、昨天到期的價格
+        jdbcTemplate.update(
+                "UPDATE customer_price SET effective_from = ?, effective_to = ? WHERE id = ?",
+                today.minusDays(30),
+                today.minusDays(1),
+                priceId
+        );
+
+        mockMvc.perform(get("/api/v1/customer-prices/{id}", priceId)
+                        .header("Authorization", bearer(sales)))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.expired").value(true));
+
+        assertThat(applicablePriceId(mapping, today.minusDays(1))).contains(priceId);
+        assertThat(applicablePriceId(mapping, today)).isEmpty();
+    }
+
+    @Test
+    void approvalShowsDifferenceFromStandardPrice() throws Exception {
+        String sales = login(createUser("compare-sales", "SALES"));
+        String manager = login(createUser("compare-manager", "SALES_MANAGER"));
+        CustomerItemMapping mapping = createActiveMapping();
+
+        StandardPrice standardPrice = new StandardPrice(
+                mapping.getCompanyItem(), UnitOfMeasure.PCS, new BigDecimal("130.00"), null, null, 1L
+        );
+        standardPrice.approve(1L, Instant.now(), PricePeriods.today());
+        standardPriceRepository.saveAndFlush(standardPrice);
+
+        Long priceId = createPrice(sales, mapping.getId(), "PCS", "125.00");
+
+        mockMvc.perform(get("/api/v1/approval-requests/{id}", findPendingApprovalId(priceId))
+                        .header("Authorization", bearer(manager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.warnings", hasItem(containsString("標準售價為 130.00 元／個，此客戶價格低 5.00 元"))));
+    }
+
+    @Test
     void mappingMustBeActive() throws Exception {
         String sales = login(createUser("inactive-mapping", "SALES"));
         CustomerItemMapping mapping = createActiveMapping();
@@ -290,6 +428,17 @@ class CustomerPriceApiIntegrationTest {
             String unit,
             String price
     ) throws Exception {
+        return performCreate(token, mappingId, unit, price, null, null);
+    }
+
+    private ResultActions performCreate(
+            String token,
+            Long mappingId,
+            String unit,
+            String price,
+            LocalDate effectiveFrom,
+            LocalDate effectiveTo
+    ) throws Exception {
         return mockMvc.perform(post("/api/v1/customer-prices")
                 .header("Authorization", bearer(token))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -297,9 +446,28 @@ class CustomerPriceApiIntegrationTest {
                         {
                           "customerItemMappingId": %d,
                           "pricingUnit": "%s",
-                          "unitPriceExcludingTax": %s
+                          "unitPriceExcludingTax": %s,
+                          "effectiveFrom": %s,
+                          "effectiveTo": %s
                         }
-                        """.formatted(mappingId, unit, price)));
+                        """.formatted(mappingId, unit, price, jsonDate(effectiveFrom), jsonDate(effectiveTo))));
+    }
+
+    private String jsonDate(LocalDate date) {
+        return date == null ? "null" : "\"" + date + "\"";
+    }
+
+    private LocalDate effectiveTo(Long priceId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT effective_to FROM customer_price WHERE id = ?",
+                LocalDate.class,
+                priceId
+        );
+    }
+
+    private Optional<Long> applicablePriceId(CustomerItemMapping mapping, LocalDate date) {
+        return priceLookupService.findApplicablePrice(mapping.getId(), UnitOfMeasure.PCS, date)
+                .map(ApplicablePrice::priceId);
     }
 
     private ResultActions approve(String token, Long approvalRequestId) throws Exception {
