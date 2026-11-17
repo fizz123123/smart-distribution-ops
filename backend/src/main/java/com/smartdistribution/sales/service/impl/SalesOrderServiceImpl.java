@@ -97,7 +97,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 responsibleSalesUserId,
                 currentUserId,
                 SalesOrderChannel.WEB,
-                request.toDraftFields()
+                request.toDraftFields(resolveOrderDate(request.orderDate()))
         );
 
         //SO 編號依 ID 產生，所以要先 insert 取得 id 再回填
@@ -130,7 +130,12 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         //明細整批取代：先刪除舊明細再寫入，行號才不會和舊資料的唯一約束衝突
         salesOrderLineRepository.deleteAllBySalesOrderId(salesOrderId);
         saveLines(salesOrder, request.lines());
-        salesOrder.updateDraft(customer.getId(), responsibleSalesUserId, request.toDraftFields(), Instant.now());
+        salesOrder.updateDraft(
+                customer.getId(),
+                responsibleSalesUserId,
+                request.toDraftFields(resolveOrderDate(request.orderDate())),
+                Instant.now()
+        );
         salesOrderRepository.flush();
 
         return salesOrderAssembler.toDetail(salesOrder);
@@ -166,7 +171,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         //每筆明細依目前主檔寫入快照；任何一筆不通過，整張 SO 都不會送審
         List<BigDecimal> lineAmounts = new ArrayList<>();
         for (SalesOrderLine line : lines) {
-            line.applySnapshot(buildSnapshot(line));
+            line.applySnapshot(buildSnapshot(line, salesOrder.getOrderDate()));
             lineAmounts.add(line.getLineAmountExcludingTax());
         }
 
@@ -202,7 +207,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
      * 送審快照：對應、公司料號與客戶必須啟用；單位要是基準單位或已設定換算；
      * 「對應＋訂購單位」要有 ACTIVE 價格，錯誤訊息帶行號，業務才知道要修哪一筆
      */
-    private SalesOrderLine.Snapshot buildSnapshot(SalesOrderLine line) {
+    private SalesOrderLine.Snapshot buildSnapshot(SalesOrderLine line, LocalDate orderDate) {
         CustomerItemMapping mapping = salesOrderMasterData.findMapping(line.getCustomerItemMappingId());
         CompanyItem item = mapping.getCompanyItem();
         String prefix = "第 " + line.getLineNo() + " 行 " + mapping.getCustomerItemCode() + "：";
@@ -221,7 +226,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 ));
 
         ApplicablePrice price = priceLookupService
-                .findApplicablePrice(mapping.getId(), line.getUnit(), LocalDate.now(TAIPEI))
+                .findApplicablePrice(mapping.getId(), line.getUnit(), orderDate)
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.SO_ACTIVE_PRICE_REQUIRED,
                         prefix + "尚無已覆核的「" + line.getUnit().getDisplayName() + "」價格，請先完成價格建檔與覆核。"
@@ -237,6 +242,21 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 SalesOrderAmounts.lineAmount(line.getQuantity(), price.unitPriceExcludingTax()),
                 SalesOrderAmounts.TAX_RATE
         );
+    }
+
+    //訂單日期沒填就是今天；不能是未來日期，往前不限，由主管核准時判斷
+    private LocalDate resolveOrderDate(LocalDate orderDate) {
+        LocalDate today = LocalDate.now(TAIPEI);
+
+        if (orderDate == null) {
+            return today;
+        }
+
+        if (orderDate.isAfter(today)) {
+            throw new BusinessException(ErrorCode.SO_ORDER_DATE_INVALID);
+        }
+
+        return orderDate;
     }
 
     //要求交期與交貨方式必填；外送時另外需要地址、收貨聯絡人與電話

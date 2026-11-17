@@ -20,6 +20,10 @@ public record UpdateSalesOrderRequest(
         @Size(max = 50)
         String customerOrderNumber,
 
+        //整份送出，畫面會帶出目前的訂單日期，所以必填
+        @NotNull
+        LocalDate orderDate,
+
         Long responsibleSalesUserId,
 
         LocalDate requestedDeliveryDate,
@@ -47,9 +51,16 @@ public record UpdateSalesOrderRequest(
         Long version
 ) {
 
-    public SalesOrder.DraftFields toDraftFields() {
+    /**
+     * 組成草稿欄位
+     *
+     * @param resolvedOrderDate service 補上預設值並檢查過的訂單日期
+     * @return 草稿欄位
+     */
+    public SalesOrder.DraftFields toDraftFields(LocalDate resolvedOrderDate) {
         return new SalesOrder.DraftFields(
                 customerOrderNumber,
+                resolvedOrderDate,
                 requestedDeliveryDate,
                 deliveryMethod,
                 deliveryAddress,

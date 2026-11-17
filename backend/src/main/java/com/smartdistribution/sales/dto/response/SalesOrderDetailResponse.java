@@ -22,6 +22,7 @@ public record SalesOrderDetailResponse(
         SalesOrderChannel channel,
         CustomerRef customer,
         String customerOrderNumber,
+        LocalDate orderDate,
         UserRef responsibleSales,
         UserRef createdBy,
         PaymentTerm paymentTerm,

@@ -13,6 +13,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.Instant;
+import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -92,6 +93,27 @@ class SalesOrderApprovalApiIntegrationTest extends SalesOrderTestSupport {
                 .andExpect(jsonPath("$.code").value("INVENTORY_RESERVATION_WOULD_BE_BREACHED"));
 
         assertConsistent(warehouseManager, pe, pu);
+    }
+
+    @Test
+    void backdatedOrderShowsOrderDateWarning() throws Exception {
+        String sales = login(createUser("backdated-sales", "SALES"));
+        String salesManager = login(createUser("backdated-manager", "SALES_MANAGER"));
+        Customer customer = createActiveCustomer(PaymentTerm.DUE_0);
+        CustomerItemMapping mapping = createActiveMapping(customer, createActiveItem(UnitOfMeasure.PCS));
+        createActivePrice(mapping, UnitOfMeasure.PCS, "200");
+        LocalDate orderDate = LocalDate.now(TAIPEI).minusDays(6);
+
+        Long salesOrderId = createSubmittedOrder(
+                sales,
+                draftBody(customer, orderDate, line(mapping, "1", UnitOfMeasure.PCS))
+        );
+
+        mockMvc.perform(get("/api/v1/approval-requests/{id}", findPendingApprovalId(salesOrderId))
+                        .header("Authorization", bearer(salesManager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.warnings", hasItem(containsString(
+                        "訂單日期 " + orderDate.getMonthValue() + "/" + orderDate.getDayOfMonth()))));
     }
 
     @Test

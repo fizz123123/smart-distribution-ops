@@ -24,6 +24,9 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -33,6 +36,9 @@ import java.util.Map;
 @Component
 @RequiredArgsConstructor
 public class SalesOrderApprovalHandler implements ApprovalHandler {
+
+    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
+    private static final DateTimeFormatter MONTH_DAY = DateTimeFormatter.ofPattern("M/d");
 
     private final SalesOrderRepository salesOrderRepository;
     private final SalesOrderLineRepository salesOrderLineRepository;
@@ -56,7 +62,7 @@ public class SalesOrderApprovalHandler implements ApprovalHandler {
                 + " 含稅 " + NumberFormat.getIntegerInstance(Locale.TAIWAN).format(salesOrder.getTotalAmount()) + " 元";
 
         List<String> warnings = salesOrder.getStatus() == SalesOrderStatus.PENDING_APPROVAL
-                ? buildWarnings(findLines(targetId))
+                ? buildWarnings(salesOrder, findLines(targetId))
                 : List.of();
 
         return new ApprovalTarget(salesOrder.getCreatedBy(), label, warnings);
@@ -128,8 +134,15 @@ public class SalesOrderApprovalHandler implements ApprovalHandler {
      * - 引用價格已被新版取代：仍以送審時的價格核准
      * - 依目前可用量試算可預留多少；只是提示，核准時會鎖定後重新計算
      */
-    private List<String> buildWarnings(List<SalesOrderLine> lines) {
+    private List<String> buildWarnings(SalesOrder salesOrder, List<SalesOrderLine> lines) {
         List<String> warnings = new ArrayList<>();
+
+        //補登的訂單：價格是依訂單日期取的，提醒主管確認日期合理
+        LocalDate submittedDate = LocalDate.ofInstant(salesOrder.getSubmittedAt(), TAIPEI);
+        if (salesOrder.getOrderDate().isBefore(submittedDate)) {
+            warnings.add("訂單日期 " + salesOrder.getOrderDate().format(MONTH_DAY)
+                    + "，送審日 " + submittedDate.format(MONTH_DAY) + "，價格依訂單日期計算");
+        }
 
         for (SalesOrderLine line : lines) {
             if (priceLookupService.isReplaced(PriceSource.CUSTOMER_PRICE, line.getCustomerPriceId())) {

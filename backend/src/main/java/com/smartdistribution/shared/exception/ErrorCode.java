@@ -197,6 +197,10 @@ public enum ErrorCode {
             HttpStatus.BAD_REQUEST,
             "銷售訂單明細不正確。"
     ),
+    SO_ORDER_DATE_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "訂單日期不能是未來的日期。"
+    ),
     SO_DELIVERY_INFO_INCOMPLETE(
             HttpStatus.BAD_REQUEST,
             "請填寫要求交期與交貨方式；外送時另需交貨地址、收貨聯絡人與電話。"

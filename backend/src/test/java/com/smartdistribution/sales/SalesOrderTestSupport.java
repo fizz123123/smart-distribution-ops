@@ -34,6 +34,8 @@ import org.springframework.test.web.servlet.ResultActions;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -302,10 +304,20 @@ public abstract class SalesOrderTestSupport {
                 """.formatted(mapping.getId(), quantity, unit.name());
     }
 
+    protected static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
+
     protected String draftBody(Customer customer, String lines) {
+        return draftBody(customer, null, lines);
+    }
+
+    //orderDate 為 null 時不送這個欄位，由系統帶入建立當天
+    protected String draftBody(Customer customer, LocalDate orderDate, String lines) {
+        String orderDateField = orderDate == null ? "" : "\"orderDate\": \"%s\",".formatted(orderDate);
+
         return """
                 {
                   "customerId": %d,
+                  %s
                   "customerOrderNumber": "CUS-PO-1008",
                   "requestedDeliveryDate": "2026-11-20",
                   "deliveryMethod": "DELIVERY",
@@ -314,7 +326,7 @@ public abstract class SalesOrderTestSupport {
                   "contactPhone": "0912000000",
                   "lines": [%s]
                 }
-                """.formatted(customer.getId(), lines);
+                """.formatted(customer.getId(), orderDateField, lines);
     }
 
     protected SalesOrderVersion createDraft(String token, String body) throws Exception {

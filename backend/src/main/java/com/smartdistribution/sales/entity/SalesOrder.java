@@ -44,6 +44,10 @@ public class SalesOrder extends TimestampedEntity {
     @Column(name = "customer_order_number", length = 50)
     private String customerOrderNumber;
 
+    //客戶下單的日期，也是取價日期；資料庫允許 null 只為了讓既有資料補值，程式一定會寫入
+    @Column(name = "order_date")
+    private LocalDate orderDate;
+
     //資料歸屬與儀表板依業務統計使用，和建立者分開保存
     @Column(name = "responsible_sales_user_id", nullable = false)
     private Long responsibleSalesUserId;
@@ -195,6 +199,7 @@ public class SalesOrder extends TimestampedEntity {
 
     private void applyDraftFields(DraftFields fields) {
         this.customerOrderNumber = normalizeOptional(fields.customerOrderNumber());
+        this.orderDate = fields.orderDate();
         this.requestedDeliveryDate = fields.requestedDeliveryDate();
         this.deliveryMethod = fields.deliveryMethod();
         this.deliveryAddress = normalizeOptional(fields.deliveryAddress());
@@ -212,6 +217,7 @@ public class SalesOrder extends TimestampedEntity {
      */
     public record DraftFields(
             String customerOrderNumber,
+            LocalDate orderDate,
             LocalDate requestedDeliveryDate,
             DeliveryMethod deliveryMethod,
             String deliveryAddress,

@@ -13,6 +13,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.time.LocalDate;
+
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -295,15 +297,56 @@ class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
                 .andExpect(jsonPath("$.code").value("SO_CUSTOMER_INACTIVE"));
     }
 
+    @Test
+    void orderDateDefaultsToTodayAndCannotBeInTheFuture() throws Exception {
+        String sales = login(createUser("order-date", "SALES"));
+        Customer customer = createActiveCustomer(PaymentTerm.DUE_0);
+        CustomerItemMapping mapping = createActiveMapping(customer, createActiveItem(UnitOfMeasure.PCS));
+        LocalDate today = LocalDate.now(TAIPEI);
+
+        //沒填就是建立當天
+        SalesOrderVersion draft = createDraft(sales, draftBody(customer, line(mapping, "1", UnitOfMeasure.PCS)));
+        getOrder(sales, draft.id())
+                .andExpect(jsonPath("$.orderDate").value(today.toString()));
+
+        //往前補登可以
+        mockMvc.perform(post("/api/v1/sales-orders")
+                        .header("Authorization", bearer(sales))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(draftBody(customer, today.minusDays(7), line(mapping, "1", UnitOfMeasure.PCS))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.orderDate").value(today.minusDays(7).toString()));
+
+        //未來日期建立與修改都被擋
+        mockMvc.perform(post("/api/v1/sales-orders")
+                        .header("Authorization", bearer(sales))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(draftBody(customer, today.plusDays(1), line(mapping, "1", UnitOfMeasure.PCS))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("SO_ORDER_DATE_INVALID"));
+
+        mockMvc.perform(patch("/api/v1/sales-orders/{id}", draft.id())
+                        .header("Authorization", bearer(sales))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updateBody(customer, today.plusDays(1), line(mapping, "1", UnitOfMeasure.PCS), draft.version())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("SO_ORDER_DATE_INVALID"));
+    }
+
     private String updateBody(Customer customer, String lines, Long version) {
+        return updateBody(customer, LocalDate.now(TAIPEI), lines, version);
+    }
+
+    private String updateBody(Customer customer, LocalDate orderDate, String lines, Long version) {
         return """
                 {
                   "customerId": %d,
+                  "orderDate": "%s",
                   "requestedDeliveryDate": "2026-11-20",
                   "deliveryMethod": "CUSTOMER_PICKUP",
                   "lines": [%s],
                   "version": %d
                 }
-                """.formatted(customer.getId(), lines, version);
+                """.formatted(customer.getId(), orderDate, lines, version);
     }
 }
