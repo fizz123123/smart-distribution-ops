@@ -6,7 +6,9 @@ import com.smartdistribution.approval.handler.ApprovalTarget;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.pricing.entity.CustomerPrice;
 import com.smartdistribution.pricing.entity.PriceStatus;
+import com.smartdistribution.pricing.entity.StandardPrice;
 import com.smartdistribution.pricing.repository.CustomerPriceRepository;
+import com.smartdistribution.pricing.repository.StandardPriceRepository;
 import com.smartdistribution.pricing.service.CustomerPriceRules;
 import com.smartdistribution.pricing.service.PricePeriods;
 import com.smartdistribution.shared.exception.BusinessException;
@@ -14,6 +16,7 @@ import com.smartdistribution.shared.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -26,13 +29,15 @@ public class CustomerPriceApprovalHandler implements ApprovalHandler {
 
     private final CustomerPriceRepository customerPriceRepository;
     private final CustomerPriceRules customerPriceRules;
+    private final StandardPriceRepository standardPriceRepository;
 
     @Override
     public ApprovalTargetType targetType() {
         return ApprovalTargetType.CUSTOMER_PRICE;
     }
 
-    //顯示名稱範例：CUS-000003 A-100 125.00 元／個 ；待覆核時提示目前價格會在哪一天結束
+    //顯示名稱範例：CUS-000003 A-100 125.00 元／個
+    //待覆核時提示：目前價格會在哪一天結束、和生效日的標準售價差多少
     @Override
     public ApprovalTarget loadTarget(Long targetId) {
         CustomerPrice price = findPrice(targetId);
@@ -51,6 +56,8 @@ public class CustomerPriceApprovalHandler implements ApprovalHandler {
                 warnings.add("核准後將取代目前價格 " + priceText(latest.get())
                         + "，原價格於 " + effectiveFrom.minusDays(1) + " 結束");
             }
+
+            compareWithStandardPrice(price, effectiveFrom).ifPresent(warnings::add);
         }
 
         return new ApprovalTarget(price.getCreatedBy(), label, warnings);
@@ -90,6 +97,34 @@ public class CustomerPriceApprovalHandler implements ApprovalHandler {
     private CustomerPrice findPrice(Long priceId) {
         return customerPriceRepository.findById(priceId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CUSTOMER_PRICE_NOT_FOUND));
+    }
+
+    //客戶價格是針對單一客戶的議價，主管核准時要知道它和公開的標準售價差多少
+    private Optional<String> compareWithStandardPrice(CustomerPrice price, LocalDate effectiveFrom) {
+        Optional<StandardPrice> standardPrice = standardPriceRepository
+                .findEffectiveOn(
+                        price.getCustomerItemMapping().getCompanyItem().getId(),
+                        price.getPricingUnit(),
+                        effectiveFrom,
+                        PriceStatus.APPROVED_VERSIONS
+                )
+                .stream()
+                .findFirst();
+
+        if (standardPrice.isEmpty()) {
+            return Optional.empty();
+        }
+
+        BigDecimal standard = standardPrice.get().getUnitPriceExcludingTax();
+        BigDecimal difference = price.getUnitPriceExcludingTax().subtract(standard);
+        String comparison = switch (difference.signum()) {
+            case 0 -> "相同";
+            case 1 -> "高 " + difference.toPlainString() + " 元";
+            default -> "低 " + difference.negate().toPlainString() + " 元";
+        };
+
+        return Optional.of("生效日的標準售價為 " + standard.toPlainString() + " 元／"
+                + price.getPricingUnit().getDisplayName() + "，此客戶價格" + comparison);
     }
 
     private Optional<CustomerPrice> findLatestVersion(CustomerPrice price) {

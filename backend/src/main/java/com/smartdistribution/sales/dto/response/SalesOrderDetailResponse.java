@@ -2,6 +2,7 @@ package com.smartdistribution.sales.dto.response;
 
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
 import com.smartdistribution.masterdata.customer.entity.PaymentTerm;
+import com.smartdistribution.pricing.service.PriceSource;
 import com.smartdistribution.sales.entity.DeliveryMethod;
 import com.smartdistribution.sales.entity.SalesOrderChannel;
 import com.smartdistribution.sales.entity.SalesOrderStatus;
@@ -70,7 +71,8 @@ public record SalesOrderDetailResponse(
             UnitOfMeasure unit,
             BigDecimal conversionFactor,
             BigDecimal baseQty,
-            Long customerPriceId,
+            PriceSource priceSource, //客戶價格或標準售價
+            Long priceId,
             BigDecimal unitPriceExcludingTax,
             BigDecimal lineAmountExcludingTax,
             Supply supply //核准後才有值

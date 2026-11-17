@@ -10,7 +10,6 @@ import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.pricing.service.PriceLookupService;
 import com.smartdistribution.pricing.service.PriceLookupService.ApplicablePrice;
-import com.smartdistribution.pricing.service.PriceLookupService.PriceSource;
 import com.smartdistribution.sales.entity.SalesOrder;
 import com.smartdistribution.sales.entity.SalesOrderLine;
 import com.smartdistribution.sales.entity.SalesOrderStatus;
@@ -101,7 +100,7 @@ public class SalesOrderApprovalHandler implements ApprovalHandler {
                 );
             }
 
-            if (priceLookupService.isRevoked(PriceSource.CUSTOMER_PRICE, line.getCustomerPriceId())) {
+            if (priceLookupService.isRevoked(line.getPriceSource(), line.getPriceId())) {
                 throw new BusinessException(
                         ErrorCode.SO_PRICE_REVOKED,
                         prefix + "引用的價格已撤銷，請退回後由業務依目前價格重新送審。"
@@ -153,7 +152,7 @@ public class SalesOrderApprovalHandler implements ApprovalHandler {
             String prefix = "第 " + line.getLineNo() + " 行 " + line.getCustomerItemCode() + "：";
             Optional<ApplicablePrice> onOrderDate = findPrice(line, salesOrder.getOrderDate());
 
-            if (onOrderDate.isPresent() && !onOrderDate.get().priceId().equals(line.getCustomerPriceId())) {
+            if (onOrderDate.isPresent() && !isSnapshotPrice(line, onOrderDate.get())) {
                 warnings.add(prefix + "價格已更新為 " + onOrderDate.get().unitPriceExcludingTax().toPlainString()
                         + " 元，本單仍以送審時的 " + line.getUnitPriceExcludingTax().toPlainString() + " 元核准");
             }
@@ -161,7 +160,7 @@ public class SalesOrderApprovalHandler implements ApprovalHandler {
             if (salesOrder.getOrderDate().isBefore(today)) {
                 Optional<ApplicablePrice> onToday = findPrice(line, today);
 
-                if (onToday.isPresent() && !onToday.get().priceId().equals(line.getCustomerPriceId())) {
+                if (onToday.isPresent() && !isSnapshotPrice(line, onToday.get())) {
                     warnings.add(prefix + "依今天的價格是 " + onToday.get().unitPriceExcludingTax().toPlainString()
                             + " 元，本單依訂單日期為 " + line.getUnitPriceExcludingTax().toPlainString() + " 元");
                 }
@@ -188,6 +187,11 @@ public class SalesOrderApprovalHandler implements ApprovalHandler {
         }
 
         return warnings;
+    }
+
+    //來源與價格 ID 都相同才是同一筆價格；客戶價格與標準售價的 ID 各自編號
+    private boolean isSnapshotPrice(SalesOrderLine line, ApplicablePrice price) {
+        return price.source() == line.getPriceSource() && price.priceId().equals(line.getPriceId());
     }
 
     private Optional<ApplicablePrice> findPrice(SalesOrderLine line, LocalDate priceDate) {

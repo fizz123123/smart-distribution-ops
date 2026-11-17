@@ -191,6 +191,7 @@ public class SalesOrderAssembler {
                 line.getUnit(),
                 factor.orElse(null),
                 factor.map(f -> SalesOrderAmounts.baseQty(line.getQuantity(), f)).orElse(null),
+                price.map(ApplicablePrice::source).orElse(null),
                 price.map(ApplicablePrice::priceId).orElse(null),
                 unitPrice,
                 unitPrice == null ? null : SalesOrderAmounts.lineAmount(line.getQuantity(), unitPrice),
@@ -252,7 +253,8 @@ public class SalesOrderAssembler {
                             line.getUnit(),
                             line.getConversionFactor(),
                             line.getBaseQty(),
-                            line.getCustomerPriceId(),
+                            line.getPriceSource(),
+                            line.getPriceId(),
                             line.getUnitPriceExcludingTax(),
                             line.getLineAmountExcludingTax(),
                             approved

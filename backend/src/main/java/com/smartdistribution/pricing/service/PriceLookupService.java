@@ -13,8 +13,10 @@ import java.util.Optional;
 public interface PriceLookupService {
 
     /**
-     * 找出客戶料號對應在某個單位、某一天適用的價格
-     * 目前只有客戶價格：找那一天在有效期間內、核准過且沒有撤銷的版本
+     * 找出客戶料號對應在某個單位、某一天適用的價格，順序：
+     * 1. 那一天有效的客戶價格
+     * 2. 沒有就用那一天有效的標準售價（依對應的公司料號）
+     * 兩種都沒有就回傳空的，SO 不能送審
      *
      * @param customerItemMappingId 客戶料號對應 ID，已經決定了客戶與公司料號
      * @param unit 計價單位，也就是訂購單位
@@ -35,13 +37,6 @@ public interface PriceLookupService {
      * @return 已撤銷時為 true
      */
     boolean isRevoked(PriceSource source, Long priceId);
-
-    /**
-     * 價格從哪裡來
-     */
-    enum PriceSource {
-        CUSTOMER_PRICE
-    }
 
     /**
      * 取價結果：來源與價格 ID 讓單據之後能追溯用的是哪一筆價格

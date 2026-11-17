@@ -21,7 +21,9 @@ import com.smartdistribution.masterdata.customer.repository.CustomerRepository;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.masterdata.customeritemmapping.repository.CustomerItemMappingRepository;
 import com.smartdistribution.pricing.entity.CustomerPrice;
+import com.smartdistribution.pricing.entity.StandardPrice;
 import com.smartdistribution.pricing.repository.CustomerPriceRepository;
+import com.smartdistribution.pricing.repository.StandardPriceRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -89,6 +91,9 @@ public abstract class SalesOrderTestSupport {
 
     @Autowired
     protected CustomerPriceRepository customerPriceRepository;
+
+    @Autowired
+    protected StandardPriceRepository standardPriceRepository;
 
     @Autowired
     protected InventoryService inventoryService;
@@ -203,6 +208,7 @@ public abstract class SalesOrderTestSupport {
         jdbcTemplate.update("DELETE FROM customer WHERE name LIKE ?", CUSTOMER_NAME_PREFIX + "%");
 
         for (Long itemId : itemIds) {
+            jdbcTemplate.update("DELETE FROM standard_price WHERE company_item_id = ?", itemId);
             jdbcTemplate.update("DELETE FROM item_unit_conversion WHERE company_item_id = ?", itemId);
             jdbcTemplate.update("DELETE FROM inventory_policy WHERE company_item_id = ?", itemId);
             jdbcTemplate.update("DELETE FROM inventory_balance WHERE company_item_id = ?", itemId);
@@ -289,6 +295,18 @@ public abstract class SalesOrderTestSupport {
         price.approve(1L, Instant.now(), effectiveFrom);
 
         return customerPriceRepository.saveAndFlush(price);
+    }
+
+    protected StandardPrice createActiveStandardPrice(
+            CompanyItem item,
+            UnitOfMeasure unit,
+            String unitPrice,
+            LocalDate effectiveFrom
+    ) {
+        StandardPrice price = new StandardPrice(item, unit, new BigDecimal(unitPrice), null, null, 1L);
+        price.approve(1L, Instant.now(), effectiveFrom);
+
+        return standardPriceRepository.saveAndFlush(price);
     }
 
     //模擬新版本從 nextEffectiveFrom 起接手：舊版本截到前一天，新版本從那天生效

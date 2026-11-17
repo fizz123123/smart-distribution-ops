@@ -16,6 +16,8 @@ import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.masterdata.customer.repository.CustomerRepository;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.masterdata.customeritemmapping.repository.CustomerItemMappingRepository;
+import com.smartdistribution.pricing.entity.StandardPrice;
+import com.smartdistribution.pricing.repository.StandardPriceRepository;
 import com.smartdistribution.pricing.service.PriceLookupService;
 import com.smartdistribution.pricing.service.PriceLookupService.ApplicablePrice;
 import com.smartdistribution.pricing.service.PricePeriods;
@@ -34,6 +36,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
@@ -42,6 +45,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -90,6 +94,9 @@ class CustomerPriceApiIntegrationTest {
     @Autowired
     private PriceLookupService priceLookupService;
 
+    @Autowired
+    private StandardPriceRepository standardPriceRepository;
+
     @BeforeEach
     @AfterEach
     void cleanTestData() {
@@ -132,6 +139,14 @@ class CustomerPriceApiIntegrationTest {
                 CUSTOMER_NAME_PREFIX + "%"
         );
         jdbcTemplate.update("DELETE FROM customer WHERE name LIKE ?", CUSTOMER_NAME_PREFIX + "%");
+        jdbcTemplate.update(
+                """
+                DELETE price FROM standard_price price
+                JOIN company_item item ON item.id = price.company_item_id
+                WHERE item.item_code LIKE ?
+                """,
+                ITEM_CODE_PREFIX + "%"
+        );
         jdbcTemplate.update(
                 """
                 DELETE conversion FROM item_unit_conversion conversion
@@ -361,6 +376,26 @@ class CustomerPriceApiIntegrationTest {
 
         assertThat(applicablePriceId(mapping, today.minusDays(1))).contains(priceId);
         assertThat(applicablePriceId(mapping, today)).isEmpty();
+    }
+
+    @Test
+    void approvalShowsDifferenceFromStandardPrice() throws Exception {
+        String sales = login(createUser("compare-sales", "SALES"));
+        String manager = login(createUser("compare-manager", "SALES_MANAGER"));
+        CustomerItemMapping mapping = createActiveMapping();
+
+        StandardPrice standardPrice = new StandardPrice(
+                mapping.getCompanyItem(), UnitOfMeasure.PCS, new BigDecimal("130.00"), null, null, 1L
+        );
+        standardPrice.approve(1L, Instant.now(), PricePeriods.today());
+        standardPriceRepository.saveAndFlush(standardPrice);
+
+        Long priceId = createPrice(sales, mapping.getId(), "PCS", "125.00");
+
+        mockMvc.perform(get("/api/v1/approval-requests/{id}", findPendingApprovalId(priceId))
+                        .header("Authorization", bearer(manager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.warnings", hasItem(containsString("標準售價為 130.00 元／個，此客戶價格低 5.00 元"))));
     }
 
     @Test

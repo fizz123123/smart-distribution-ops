@@ -237,6 +237,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 mapping.getCustomerItemCode(),
                 factor,
                 SalesOrderAmounts.baseQty(line.getQuantity(), factor),
+                price.source(),
                 price.priceId(),
                 price.unitPriceExcludingTax(),
                 SalesOrderAmounts.lineAmount(line.getQuantity(), price.unitPriceExcludingTax()),

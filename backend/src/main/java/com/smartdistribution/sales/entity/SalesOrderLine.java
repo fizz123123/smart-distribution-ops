@@ -1,6 +1,7 @@
 package com.smartdistribution.sales.entity;
 
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
+import com.smartdistribution.pricing.service.PriceSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -72,8 +73,13 @@ public class SalesOrderLine {
     @Column(name = "base_qty", precision = 15, scale = 3)
     private BigDecimal baseQty;
 
-    @Column(name = "customer_price_id")
-    private Long customerPriceId;
+    //引用的價格：來源決定 price_id 指的是客戶價格還是標準售價
+    @Enumerated(EnumType.STRING)
+    @Column(name = "price_source", length = 20)
+    private PriceSource priceSource;
+
+    @Column(name = "price_id")
+    private Long priceId;
 
     //計價單位與訂購單位相同，仍分開保存，讓快照完整說明金額怎麼算
     @Column(name = "pricing_qty", precision = 15, scale = 3)
@@ -111,7 +117,8 @@ public class SalesOrderLine {
         this.customerItemCode = snapshot.customerItemCode();
         this.conversionFactor = snapshot.conversionFactor();
         this.baseQty = snapshot.baseQty();
-        this.customerPriceId = snapshot.customerPriceId();
+        this.priceSource = snapshot.priceSource();
+        this.priceId = snapshot.priceId();
         this.pricingQty = quantity;
         this.pricingUnit = unit;
         this.unitPriceExcludingTax = snapshot.unitPriceExcludingTax();
@@ -124,7 +131,8 @@ public class SalesOrderLine {
             String customerItemCode,
             BigDecimal conversionFactor,
             BigDecimal baseQty,
-            Long customerPriceId,
+            PriceSource priceSource,
+            Long priceId,
             BigDecimal unitPriceExcludingTax,
             BigDecimal lineAmountExcludingTax,
             BigDecimal taxRate

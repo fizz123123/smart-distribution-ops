@@ -296,6 +296,44 @@ class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
     }
 
     @Test
+    void standardPriceIsUsedWhenNoCustomerPriceApplies() throws Exception {
+        String sales = login(createUser("standard-price", "SALES"));
+        Customer customer = createActiveCustomer(PaymentTerm.DUE_0);
+        CompanyItem item = createActiveItem(UnitOfMeasure.PCS);
+        CustomerItemMapping mapping = createActiveMapping(customer, item);
+        LocalDate today = LocalDate.now(TAIPEI);
+        createActiveStandardPrice(item, UnitOfMeasure.PCS, "300", LocalDate.of(2020, 1, 1));
+
+        //沒有客戶價格：用標準售價
+        Long standardOnlyId = createSubmittedOrder(sales, draftBody(customer, line(mapping, "1", UnitOfMeasure.PCS)));
+        getOrder(sales, standardOnlyId)
+                .andExpect(jsonPath("$.lines[0].priceSource").value("STANDARD_PRICE"))
+                .andExpect(jsonPath("$.lines[0].unitPriceExcludingTax").value(300));
+
+        //客戶價格只到 3 天前：訂單日期在期間內用客戶價格，之後改用標準售價
+        CustomerPrice customerPrice = createActivePrice(mapping, UnitOfMeasure.PCS, "280");
+        jdbcTemplate.update(
+                "UPDATE customer_price SET effective_to = ? WHERE id = ?",
+                today.minusDays(3),
+                customerPrice.getId()
+        );
+
+        Long withinContractId = createSubmittedOrder(
+                sales,
+                draftBody(customer, today.minusDays(5), line(mapping, "1", UnitOfMeasure.PCS))
+        );
+        getOrder(sales, withinContractId)
+                .andExpect(jsonPath("$.lines[0].priceSource").value("CUSTOMER_PRICE"))
+                .andExpect(jsonPath("$.lines[0].priceId").value(customerPrice.getId()))
+                .andExpect(jsonPath("$.lines[0].unitPriceExcludingTax").value(280));
+
+        Long afterContractId = createSubmittedOrder(sales, draftBody(customer, line(mapping, "1", UnitOfMeasure.PCS)));
+        getOrder(sales, afterContractId)
+                .andExpect(jsonPath("$.lines[0].priceSource").value("STANDARD_PRICE"))
+                .andExpect(jsonPath("$.lines[0].unitPriceExcludingTax").value(300));
+    }
+
+    @Test
     void orderDateDefaultsToTodayAndCannotBeInTheFuture() throws Exception {
         String sales = login(createUser("order-date", "SALES"));
         Customer customer = createActiveCustomer(PaymentTerm.DUE_0);

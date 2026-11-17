@@ -6,6 +6,7 @@ import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.masterdata.customer.entity.PaymentTerm;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.pricing.entity.CustomerPrice;
+import com.smartdistribution.pricing.entity.StandardPrice;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -170,6 +171,25 @@ class SalesOrderApprovalApiIntegrationTest extends SalesOrderTestSupport {
         getOrder(sales, salesOrderId)
                 .andExpect(jsonPath("$.status").value("APPROVED"))
                 .andExpect(jsonPath("$.lines[0].unitPriceExcludingTax").value(200));
+    }
+
+    @Test
+    void revokedStandardPriceBlocksApproval() throws Exception {
+        String sales = login(createUser("revoked-std-sales", "SALES"));
+        String salesManager = login(createUser("revoked-std-manager", "SALES_MANAGER"));
+        Customer customer = createActiveCustomer(PaymentTerm.DUE_0);
+        CompanyItem item = createActiveItem(UnitOfMeasure.PCS);
+        CustomerItemMapping mapping = createActiveMapping(customer, item);
+        StandardPrice price = createActiveStandardPrice(item, UnitOfMeasure.PCS, "300", LocalDate.of(2020, 1, 1));
+
+        Long salesOrderId = createSubmittedOrder(sales, draftBody(customer, line(mapping, "1", UnitOfMeasure.PCS)));
+
+        price.revoke(1L, "單價登錄錯誤", Instant.now());
+        standardPriceRepository.saveAndFlush(price);
+
+        approve(salesManager, salesOrderId)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SO_PRICE_REVOKED"));
     }
 
     @Test
