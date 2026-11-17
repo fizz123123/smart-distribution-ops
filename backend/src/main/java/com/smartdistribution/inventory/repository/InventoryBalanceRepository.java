@@ -30,6 +30,7 @@ public interface InventoryBalanceRepository extends JpaRepository<InventoryBalan
                 item.name,
                 item.baseUnit,
                 balance.onHandQty,
+                balance.reservedQty,
                 policy.safetyStockBaseQty
             )
             FROM InventoryBalance balance

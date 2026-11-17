@@ -245,7 +245,7 @@ public class InventoryAdjustmentServiceImpl implements InventoryAdjustmentServic
             return;
         }
 
-        BigDecimal reservedQty = inventoryBalanceLocks.reservedQty(item.getId());
+        BigDecimal reservedQty = balance.getReservedQty();
         if (newOnHandQty.compareTo(reservedQty) < 0) {
             List<String> salesOrderNumbers =
                     inventoryReservationRepository.findOpenSalesOrderNumbers(item.getId());

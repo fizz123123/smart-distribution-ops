@@ -13,6 +13,7 @@ public record InventoryBalanceProjection(
         String name,
         UnitOfMeasure baseUnit,
         BigDecimal onHandQty,
+        BigDecimal reservedQty,
         BigDecimal safetyStockBaseQty
 ) {
 }

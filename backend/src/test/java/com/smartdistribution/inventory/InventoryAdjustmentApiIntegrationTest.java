@@ -385,6 +385,35 @@ class InventoryAdjustmentApiIntegrationTest {
     }
 
     @Test
+    void consistencyCheckFindsReservedQtyMismatch() throws Exception {
+        String warehouseManager = login(createUser("reserved-mismatch", "WAREHOUSE_MANAGER"));
+        CompanyItem item = createItem(UnitOfMeasure.STICK);
+        postAdjustment(warehouseManager, adjustmentBody("OPENING_BALANCE", line(item.getId(), "5")));
+        createReservation(item, "2");
+
+        mockMvc.perform(get("/api/v1/inventory/balances")
+                        .param("keyword", item.getItemCode())
+                        .header("Authorization", bearer(warehouseManager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].reservedQty").value(2))
+                .andExpect(jsonPath("$.content[0].availableQty").value(3));
+        assertConsistent(warehouseManager, item);
+
+        //模擬餘額列沒有跟著預留同步
+        jdbcTemplate.update("UPDATE inventory_balance SET reserved_qty = 1 WHERE company_item_id = ?", item.getId());
+
+        MvcResult result = mockMvc.perform(get("/api/v1/inventory/consistency-check")
+                        .header("Authorization", bearer(warehouseManager)))
+                .andExpect(status().isOk())
+                .andReturn();
+        List<String> issueTypes = JsonPath.read(
+                result.getResponse().getContentAsString(),
+                "$.issues[?(@.companyItemId == " + item.getId() + ")].issueType"
+        );
+        assertThat(issueTypes).containsExactly("RESERVED_QTY_MISMATCH");
+    }
+
+    @Test
     void invalidLinesAreRejected() throws Exception {
         String warehouseManager = login(createUser("invalid", "WAREHOUSE_MANAGER"));
         CompanyItem item = createItem(UnitOfMeasure.STICK);
@@ -476,6 +505,12 @@ class InventoryAdjustmentApiIntegrationTest {
         BigDecimal reservedQty = new BigDecimal(quantity);
         reservation.increase(reservedQty);
         inventoryReservationRepository.saveAndFlush(reservation);
+        //預留表與餘額列的已預留數量要同步，和正式流程一樣
+        jdbcTemplate.update(
+                "UPDATE inventory_balance SET reserved_qty = reserved_qty + ? WHERE company_item_id = ?",
+                reservedQty,
+                item.getId()
+        );
 
         if (reservedQty.signum() > 0) {
             inventoryReservationEventRepository.saveAndFlush(new InventoryReservationEvent(
