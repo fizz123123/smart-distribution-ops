@@ -12,6 +12,7 @@ import com.smartdistribution.pricing.mapper.CustomerPriceMapper;
 import com.smartdistribution.pricing.repository.CustomerPriceRepository;
 import com.smartdistribution.pricing.service.CustomerPriceRules;
 import com.smartdistribution.pricing.service.CustomerPriceService;
+import com.smartdistribution.pricing.service.PricePeriods;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import com.smartdistribution.shared.security.currentuser.CurrentUserProvider;
@@ -65,6 +66,7 @@ public class CustomerPriceServiceImpl implements CustomerPriceService {
         CustomerItemMapping mapping =
                 customerPriceRules.lockUsableMapping(request.customerItemMappingId());
         customerPriceRules.ensurePricingUnitAllowed(mapping, request.pricingUnit());
+        PricePeriods.validateRequested(request.effectiveFrom(), request.effectiveTo());
 
         //同一客戶料號與計價單位同時最多一筆待覆核
         if (customerPriceRepository.existsByCustomerItemMappingIdAndPricingUnitAndStatus(
@@ -75,10 +77,18 @@ public class CustomerPriceServiceImpl implements CustomerPriceService {
             throw new BusinessException(ErrorCode.CUSTOMER_PRICE_PENDING_EXISTS);
         }
 
+        //先擋明顯排不進去的生效日；核准時會依實際生效日再檢查一次
+        customerPriceRules.ensureNotBeforeLatest(
+                customerPriceRules.findLatestVersion(mapping.getId(), request.pricingUnit()),
+                PricePeriods.resolveEffectiveFrom(request.effectiveFrom())
+        );
+
         CustomerPrice price = new CustomerPrice(
                 mapping,
                 request.pricingUnit(),
                 request.unitPriceExcludingTax(),
+                request.effectiveFrom(),
+                request.effectiveTo(),
                 currentUserProvider.getCurrentUserId()
         );
         customerPriceRepository.saveAndFlush(price);

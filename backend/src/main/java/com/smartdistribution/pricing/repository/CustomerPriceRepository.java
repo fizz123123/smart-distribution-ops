@@ -10,7 +10,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.util.Optional;
+import java.time.LocalDate;
+import java.util.Collection;
+import java.util.List;
 
 public interface CustomerPriceRepository extends JpaRepository<CustomerPrice, Long> {
 
@@ -20,10 +22,37 @@ public interface CustomerPriceRepository extends JpaRepository<CustomerPrice, Lo
             CustomerPriceStatus status
     );
 
-    Optional<CustomerPrice> findByCustomerItemMappingIdAndPricingUnitAndStatus(
-            Long customerItemMappingId,
-            UnitOfMeasure pricingUnit,
-            CustomerPriceStatus status
+    //同一對應＋單位的版本，生效日新的在前；第一筆就是最後一個版本
+    @Query("""
+            SELECT price
+            FROM CustomerPrice price
+            WHERE price.customerItemMapping.id = :mappingId
+              AND price.pricingUnit = :unit
+              AND price.status IN :statuses
+            ORDER BY price.effectiveFrom DESC, price.id DESC
+            """)
+    List<CustomerPrice> findVersionsNewestFirst(
+            @Param("mappingId") Long mappingId,
+            @Param("unit") UnitOfMeasure unit,
+            @Param("statuses") Collection<CustomerPriceStatus> statuses
+    );
+
+    //某一天有效的版本；版本之間期間不重疊，正常只會有一筆
+    @Query("""
+            SELECT price
+            FROM CustomerPrice price
+            WHERE price.customerItemMapping.id = :mappingId
+              AND price.pricingUnit = :unit
+              AND price.status IN :statuses
+              AND price.effectiveFrom <= :date
+              AND (price.effectiveTo IS NULL OR price.effectiveTo >= :date)
+            ORDER BY price.effectiveFrom DESC
+            """)
+    List<CustomerPrice> findEffectiveOn(
+            @Param("mappingId") Long mappingId,
+            @Param("unit") UnitOfMeasure unit,
+            @Param("date") LocalDate date,
+            @Param("statuses") Collection<CustomerPriceStatus> statuses
     );
 
     //價格歷史清單要顯示客戶與料號，一起載入避免 N+1

@@ -24,13 +24,11 @@ public class PriceLookupServiceImpl implements PriceLookupService {
             UnitOfMeasure unit,
             LocalDate priceDate
     ) {
-        //同一對應＋單位同時只會有一筆 ACTIVE，核准新價格時舊的會轉 REPLACED
+        //版本之間期間不重疊，同一天只會有一個版本有效；被取代的舊版本在截止日之前仍然取得到
         return customerPriceRepository
-                .findByCustomerItemMappingIdAndPricingUnitAndStatus(
-                        customerItemMappingId,
-                        unit,
-                        CustomerPriceStatus.ACTIVE
-                )
+                .findEffectiveOn(customerItemMappingId, unit, priceDate, CustomerPriceStatus.APPROVED_VERSIONS)
+                .stream()
+                .findFirst()
                 .map(price -> new ApplicablePrice(
                         PriceSource.CUSTOMER_PRICE,
                         price.getId(),
@@ -40,18 +38,9 @@ public class PriceLookupServiceImpl implements PriceLookupService {
 
     @Override
     public boolean isRevoked(PriceSource source, Long priceId) {
-        return hasStatus(source, priceId, CustomerPriceStatus.REVOKED);
-    }
-
-    @Override
-    public boolean isReplaced(PriceSource source, Long priceId) {
-        return hasStatus(source, priceId, CustomerPriceStatus.REPLACED);
-    }
-
-    private boolean hasStatus(PriceSource source, Long priceId, CustomerPriceStatus status) {
         return switch (source) {
             case CUSTOMER_PRICE -> customerPriceRepository.findById(priceId)
-                    .map(price -> price.getStatus() == status)
+                    .map(price -> price.getStatus() == CustomerPriceStatus.REVOKED)
                     .orElse(false);
         };
     }

@@ -173,7 +173,7 @@ public class SalesOrderAssembler {
                 orderDate
         );
         if (price.isEmpty()) {
-            warnings.add(prefix + "尚無已覆核的「" + line.getUnit().getDisplayName() + "」價格，無法送審");
+            warnings.add(prefix + "訂單日期沒有有效的「" + line.getUnit().getDisplayName() + "」價格，無法送審");
         }
 
         BigDecimal unitPrice = price.map(ApplicablePrice::unitPriceExcludingTax).orElse(null);

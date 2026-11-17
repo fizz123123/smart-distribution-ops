@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 public record CreateCustomerPriceRequest(
         @NotNull
@@ -21,6 +22,12 @@ public record CreateCustomerPriceRequest(
         @NotNull
         @DecimalMin(value = "0", inclusive = false)
         @Digits(integer = 13, fraction = 2)
-        BigDecimal unitPriceExcludingTax
+        BigDecimal unitPriceExcludingTax,
+
+        //不填代表核准當天生效；可以填未來日期預先排定調價
+        LocalDate effectiveFrom,
+
+        //不填代表不限期，直到下一個版本接手
+        LocalDate effectiveTo
 ) {
 }

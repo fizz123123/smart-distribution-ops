@@ -23,6 +23,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 
 @Getter
 @Entity
@@ -45,6 +46,15 @@ public class CustomerPrice extends TimestampedEntity {
     //未稅 TWD 單價，保存至小數 2 位
     @Column(name = "unit_price_excluding_tax", nullable = false, precision = 15, scale = 2)
     private BigDecimal unitPriceExcludingTax;
+
+    //待覆核時是申請的生效日，null 代表核准當天；核准後一定有值
+    //資料庫允許 null 是為了讓既有資料補值
+    @Column(name = "effective_from")
+    private LocalDate effectiveFrom;
+
+    //null 代表不限期，直到被下一個版本接手
+    @Column(name = "effective_to")
+    private LocalDate effectiveTo;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -77,20 +87,32 @@ public class CustomerPrice extends TimestampedEntity {
             CustomerItemMapping customerItemMapping,
             UnitOfMeasure pricingUnit,
             BigDecimal unitPriceExcludingTax,
+            LocalDate effectiveFrom,
+            LocalDate effectiveTo,
             Long createdBy
     ) {
         this.customerItemMapping = customerItemMapping;
         this.pricingUnit = pricingUnit;
         this.unitPriceExcludingTax = unitPriceExcludingTax;
+        this.effectiveFrom = effectiveFrom;
+        this.effectiveTo = effectiveTo;
         this.createdBy = createdBy;
         this.status = CustomerPriceStatus.PENDING_REVIEW;
     }
 
-    public void approve(Long reviewerId, Instant reviewedAt) {
+    /**
+     * 核准並確定生效日
+     *
+     * @param reviewerId 核准者
+     * @param reviewedAt 核准時間
+     * @param effectiveFrom 實際生效日，由核准流程依申請的生效日與核准當天決定
+     */
+    public void approve(Long reviewerId, Instant reviewedAt, LocalDate effectiveFrom) {
         if (status != CustomerPriceStatus.PENDING_REVIEW) {
             throw new BusinessException(ErrorCode.MASTER_DATA_STATUS_CONFLICT);
         }
 
+        this.effectiveFrom = effectiveFrom;
         this.status = CustomerPriceStatus.ACTIVE;
         this.reviewedBy = reviewerId;
         this.reviewedAt = reviewedAt;
@@ -107,18 +129,37 @@ public class CustomerPrice extends TimestampedEntity {
         this.reviewedAt = reviewedAt;
     }
 
-    //新版本核准時，同一對應與計價單位的舊 ACTIVE 價格轉為 REPLACED
-    public void replace() {
-        if (status != CustomerPriceStatus.ACTIVE) {
+    /**
+     * 下一個版本核准時呼叫：本版本最晚只到下一版生效日的前一天，並轉為 REPLACED
+     * 本來就更早結束的，截止日不變
+     *
+     * @param nextEffectiveFrom 下一個版本的生效日
+     */
+    public void endBefore(LocalDate nextEffectiveFrom) {
+        if (!CustomerPriceStatus.APPROVED_VERSIONS.contains(status)) {
             throw new BusinessException(ErrorCode.MASTER_DATA_STATUS_CONFLICT);
         }
 
+        LocalDate lastDay = nextEffectiveFrom.minusDays(1);
+        if (effectiveTo == null || effectiveTo.isAfter(lastDay)) {
+            this.effectiveTo = lastDay;
+        }
         this.status = CustomerPriceStatus.REPLACED;
     }
 
-    //價格撤銷後不得供新的 SO 送審
+    /**
+     * 截止日已經過了；過期只看日期，不改狀態
+     *
+     * @param today 今天
+     * @return 已過期時為 true
+     */
+    public boolean isExpiredOn(LocalDate today) {
+        return effectiveTo != null && effectiveTo.isBefore(today);
+    }
+
+    //撤銷代表價格有誤；被取代但還沒到期的版本也能撤銷，空出的期間不會自動接回前一版
     public void revoke(Long revokerId, String reason, Instant revokedAt) {
-        if (status != CustomerPriceStatus.ACTIVE) {
+        if (!CustomerPriceStatus.APPROVED_VERSIONS.contains(status)) {
             throw new BusinessException(ErrorCode.MASTER_DATA_STATUS_CONFLICT);
         }
 

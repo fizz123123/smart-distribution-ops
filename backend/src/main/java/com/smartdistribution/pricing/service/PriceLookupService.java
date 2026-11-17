@@ -14,7 +14,7 @@ public interface PriceLookupService {
 
     /**
      * 找出客戶料號對應在某個單位、某一天適用的價格
-     * 目前只有客戶價格，找 ACTIVE 的那一筆；日期等價格效期上線後才會用到
+     * 目前只有客戶價格：找那一天在有效期間內、核准過且沒有撤銷的版本
      *
      * @param customerItemMappingId 客戶料號對應 ID，已經決定了客戶與公司料號
      * @param unit 計價單位，也就是訂購單位
@@ -35,15 +35,6 @@ public interface PriceLookupService {
      * @return 已撤銷時為 true
      */
     boolean isRevoked(PriceSource source, Long priceId);
-
-    /**
-     * 引用的價格是否已被新版取代；取代是正常換價，只用來提示
-     *
-     * @param source 價格來源
-     * @param priceId 價格 ID
-     * @return 已被取代時為 true
-     */
-    boolean isReplaced(PriceSource source, Long priceId);
 
     /**
      * 價格從哪裡來

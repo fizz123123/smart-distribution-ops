@@ -229,7 +229,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 .findApplicablePrice(mapping.getId(), line.getUnit(), orderDate)
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.SO_ACTIVE_PRICE_REQUIRED,
-                        prefix + "尚無已覆核的「" + line.getUnit().getDisplayName() + "」價格，請先完成價格建檔與覆核。"
+                        prefix + "訂單日期 " + orderDate + " 沒有有效的「" + line.getUnit().getDisplayName() + "」價格，請先完成價格建檔與覆核。"
                 ));
 
         return new SalesOrderLine.Snapshot(

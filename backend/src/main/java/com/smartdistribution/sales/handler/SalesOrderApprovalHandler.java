@@ -9,6 +9,7 @@ import com.smartdistribution.masterdata.common.MasterDataStatus;
 import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.pricing.service.PriceLookupService;
+import com.smartdistribution.pricing.service.PriceLookupService.ApplicablePrice;
 import com.smartdistribution.pricing.service.PriceLookupService.PriceSource;
 import com.smartdistribution.sales.entity.SalesOrder;
 import com.smartdistribution.sales.entity.SalesOrderLine;
@@ -32,6 +33,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
@@ -131,7 +133,9 @@ public class SalesOrderApprovalHandler implements ApprovalHandler {
 
     /**
      * 核准前給主管的提示：
-     * - 引用價格已被新版取代：仍以送審時的價格核准
+     * - 訂單日期早於送審日
+     * - 依訂單日期重新取價和送審時不同（例如送審後換價）：仍以送審時的價格核准
+     * - 補登的訂單依今天取價會不同：讓主管知道補登影響了多少
      * - 依目前可用量試算可預留多少；只是提示，核准時會鎖定後重新計算
      */
     private List<String> buildWarnings(SalesOrder salesOrder, List<SalesOrderLine> lines) {
@@ -144,11 +148,23 @@ public class SalesOrderApprovalHandler implements ApprovalHandler {
                     + "，送審日 " + submittedDate.format(MONTH_DAY) + "，價格依訂單日期計算");
         }
 
+        LocalDate today = LocalDate.now(TAIPEI);
         for (SalesOrderLine line : lines) {
-            if (priceLookupService.isReplaced(PriceSource.CUSTOMER_PRICE, line.getCustomerPriceId())) {
-                warnings.add("第 " + line.getLineNo() + " 行 " + line.getCustomerItemCode()
-                        + "：價格已更新，本單仍以送審時的 "
-                        + line.getUnitPriceExcludingTax().toPlainString() + " 元核准");
+            String prefix = "第 " + line.getLineNo() + " 行 " + line.getCustomerItemCode() + "：";
+            Optional<ApplicablePrice> onOrderDate = findPrice(line, salesOrder.getOrderDate());
+
+            if (onOrderDate.isPresent() && !onOrderDate.get().priceId().equals(line.getCustomerPriceId())) {
+                warnings.add(prefix + "價格已更新為 " + onOrderDate.get().unitPriceExcludingTax().toPlainString()
+                        + " 元，本單仍以送審時的 " + line.getUnitPriceExcludingTax().toPlainString() + " 元核准");
+            }
+
+            if (salesOrder.getOrderDate().isBefore(today)) {
+                Optional<ApplicablePrice> onToday = findPrice(line, today);
+
+                if (onToday.isPresent() && !onToday.get().priceId().equals(line.getCustomerPriceId())) {
+                    warnings.add(prefix + "依今天的價格是 " + onToday.get().unitPriceExcludingTax().toPlainString()
+                            + " 元，本單依訂單日期為 " + line.getUnitPriceExcludingTax().toPlainString() + " 元");
+                }
             }
         }
 
@@ -172,6 +188,10 @@ public class SalesOrderApprovalHandler implements ApprovalHandler {
         }
 
         return warnings;
+    }
+
+    private Optional<ApplicablePrice> findPrice(SalesOrderLine line, LocalDate priceDate) {
+        return priceLookupService.findApplicablePrice(line.getCustomerItemMappingId(), line.getUnit(), priceDate);
     }
 
     private SalesOrder findSalesOrder(Long salesOrderId) {

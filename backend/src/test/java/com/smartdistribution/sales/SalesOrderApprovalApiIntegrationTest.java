@@ -96,24 +96,56 @@ class SalesOrderApprovalApiIntegrationTest extends SalesOrderTestSupport {
     }
 
     @Test
-    void backdatedOrderShowsOrderDateWarning() throws Exception {
+    void backdatedOrderUsesPriceOnOrderDateAndWarns() throws Exception {
         String sales = login(createUser("backdated-sales", "SALES"));
         String salesManager = login(createUser("backdated-manager", "SALES_MANAGER"));
         Customer customer = createActiveCustomer(PaymentTerm.DUE_0);
         CustomerItemMapping mapping = createActiveMapping(customer, createActiveItem(UnitOfMeasure.PCS));
-        createActivePrice(mapping, UnitOfMeasure.PCS, "200");
-        LocalDate orderDate = LocalDate.now(TAIPEI).minusDays(6);
+        LocalDate today = LocalDate.now(TAIPEI);
+
+        //200 元到 3 天前為止，250 元從前天開始
+        CustomerPrice oldPrice = createActivePrice(mapping, UnitOfMeasure.PCS, "200");
+        replacePrice(oldPrice, "250", today.minusDays(2));
+        LocalDate orderDate = today.minusDays(6);
 
         Long salesOrderId = createSubmittedOrder(
                 sales,
                 draftBody(customer, orderDate, line(mapping, "1", UnitOfMeasure.PCS))
         );
 
+        getOrder(sales, salesOrderId)
+                .andExpect(jsonPath("$.lines[0].unitPriceExcludingTax").value(200));
+
         mockMvc.perform(get("/api/v1/approval-requests/{id}", findPendingApprovalId(salesOrderId))
                         .header("Authorization", bearer(salesManager)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.warnings", hasItem(containsString(
-                        "訂單日期 " + orderDate.getMonthValue() + "/" + orderDate.getDayOfMonth()))));
+                        "訂單日期 " + orderDate.getMonthValue() + "/" + orderDate.getDayOfMonth()))))
+                .andExpect(jsonPath("$.warnings", hasItem(containsString("依今天的價格是 250"))));
+    }
+
+    @Test
+    void priceExpiredAfterSubmissionDoesNotBlockApproval() throws Exception {
+        String sales = login(createUser("expired-sales", "SALES"));
+        String salesManager = login(createUser("expired-manager", "SALES_MANAGER"));
+        Customer customer = createActiveCustomer(PaymentTerm.DUE_0);
+        CustomerItemMapping mapping = createActiveMapping(customer, createActiveItem(UnitOfMeasure.PCS));
+        CustomerPrice price = createActivePrice(mapping, UnitOfMeasure.PCS, "200");
+
+        Long salesOrderId = createSubmittedOrder(sales, draftBody(customer, line(mapping, "1", UnitOfMeasure.PCS)));
+
+        //送審後價格過期：照送審時的快照核准
+        jdbcTemplate.update(
+                "UPDATE customer_price SET effective_to = ? WHERE id = ?",
+                LocalDate.now(TAIPEI).minusDays(1),
+                price.getId()
+        );
+
+        approve(salesManager, salesOrderId).andExpect(status().isOk());
+
+        getOrder(sales, salesOrderId)
+                .andExpect(jsonPath("$.status").value("APPROVED"))
+                .andExpect(jsonPath("$.lines[0].unitPriceExcludingTax").value(200));
     }
 
     @Test
@@ -126,10 +158,8 @@ class SalesOrderApprovalApiIntegrationTest extends SalesOrderTestSupport {
 
         Long salesOrderId = createSubmittedOrder(sales, draftBody(customer, line(mapping, "1", UnitOfMeasure.PCS)));
 
-        // 送審後正常換價：舊版 REPLACED、新版 ACTIVE（AT-017）
-        price.replace();
-        customerPriceRepository.saveAndFlush(price);
-        createActivePrice(mapping, UnitOfMeasure.PCS, "250");
+        // 送審後正常換價：舊版截到昨天轉 REPLACED、新版今天起生效（AT-017）
+        replacePrice(price, "250", LocalDate.now(TAIPEI));
 
         mockMvc.perform(get("/api/v1/approval-requests/{id}", findPendingApprovalId(salesOrderId))
                         .header("Authorization", bearer(salesManager)))

@@ -91,9 +91,7 @@ class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
         // 送審後修改付款條件、啟用新版價格，既有 SO 的快照都不變（AT-012、AT-013）
         customer.changePaymentTerm(PaymentTerm.DUE_0);
         customerRepository.saveAndFlush(customer);
-        puPrice.replace();
-        customerPriceRepository.saveAndFlush(puPrice);
-        createActivePrice(puMapping, UnitOfMeasure.PCS, "250");
+        replacePrice(puPrice, "250", LocalDate.now(TAIPEI));
 
         getOrder(sales, salesOrderId)
                 .andExpect(jsonPath("$.paymentTerm").value("NET_30"))

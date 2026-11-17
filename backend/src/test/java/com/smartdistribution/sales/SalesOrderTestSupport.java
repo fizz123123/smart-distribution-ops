@@ -274,11 +274,34 @@ public abstract class SalesOrderTestSupport {
         return customerItemMappingRepository.saveAndFlush(mapping);
     }
 
+    //預設從很早以前就生效，補登訂單日期的測試也取得到
     protected CustomerPrice createActivePrice(CustomerItemMapping mapping, UnitOfMeasure unit, String unitPrice) {
-        CustomerPrice price = new CustomerPrice(mapping, unit, new BigDecimal(unitPrice), 1L);
-        price.approve(1L, Instant.now());
+        return createActivePrice(mapping, unit, unitPrice, LocalDate.of(2020, 1, 1));
+    }
+
+    protected CustomerPrice createActivePrice(
+            CustomerItemMapping mapping,
+            UnitOfMeasure unit,
+            String unitPrice,
+            LocalDate effectiveFrom
+    ) {
+        CustomerPrice price = new CustomerPrice(mapping, unit, new BigDecimal(unitPrice), null, null, 1L);
+        price.approve(1L, Instant.now(), effectiveFrom);
 
         return customerPriceRepository.saveAndFlush(price);
+    }
+
+    //模擬新版本從 nextEffectiveFrom 起接手：舊版本截到前一天，新版本從那天生效
+    protected CustomerPrice replacePrice(CustomerPrice current, String unitPrice, LocalDate nextEffectiveFrom) {
+        current.endBefore(nextEffectiveFrom);
+        customerPriceRepository.saveAndFlush(current);
+
+        return createActivePrice(
+                current.getCustomerItemMapping(),
+                current.getPricingUnit(),
+                unitPrice,
+                nextEffectiveFrom
+        );
     }
 
     // 期初庫存透過 API 建立，異動與餘額才會一致
