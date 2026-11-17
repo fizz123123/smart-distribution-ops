@@ -54,6 +54,10 @@ public class SalesOrderLine {
     @Column(nullable = false, precision = 15, scale = 3)
     private BigDecimal quantity;
 
+    //業務在草稿填的單價，null 代表用底價；和送審快照分開存，退回重送時才知道哪些是業務自己填的
+    @Column(name = "requested_unit_price", precision = 15, scale = 2)
+    private BigDecimal requestedUnitPrice;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "unit_code", nullable = false, length = 10)
     private UnitOfMeasure unit;
@@ -89,6 +93,11 @@ public class SalesOrderLine {
     @Column(name = "pricing_unit_code", length = 10)
     private UnitOfMeasure pricingUnit;
 
+    //送審當下取價服務找到的價格，也就是底價
+    @Column(name = "list_unit_price", precision = 15, scale = 2)
+    private BigDecimal listUnitPrice;
+
+    //實際成交價，金額與應收都照它計算
     @Column(name = "unit_price_excluding_tax", precision = 15, scale = 2)
     private BigDecimal unitPriceExcludingTax;
 
@@ -103,13 +112,35 @@ public class SalesOrderLine {
             int lineNo,
             Long customerItemMappingId,
             BigDecimal quantity,
-            UnitOfMeasure unit
+            UnitOfMeasure unit,
+            BigDecimal requestedUnitPrice
     ) {
         this.salesOrder = salesOrder;
         this.lineNo = lineNo;
         this.customerItemMappingId = customerItemMappingId;
         this.quantity = quantity;
         this.unit = unit;
+        this.requestedUnitPrice = requestedUnitPrice;
+    }
+
+    /**
+     * 成交價：業務有填就用業務填的，沒填就用底價
+     *
+     * @param listUnitPrice 底價，找不到價格時為 null
+     * @return 成交價
+     */
+    public BigDecimal dealUnitPrice(BigDecimal listUnitPrice) {
+        return requestedUnitPrice != null ? requestedUnitPrice : listUnitPrice;
+    }
+
+    /**
+     * 業務填的單價是否低於底價；只限制下限，往上調不限
+     *
+     * @param listUnitPrice 底價
+     * @return 低於底價時為 true
+     */
+    public boolean isBelowListPrice(BigDecimal listUnitPrice) {
+        return requestedUnitPrice != null && requestedUnitPrice.compareTo(listUnitPrice) < 0;
     }
 
     public void applySnapshot(Snapshot snapshot) {
@@ -119,6 +150,7 @@ public class SalesOrderLine {
         this.baseQty = snapshot.baseQty();
         this.priceSource = snapshot.priceSource();
         this.priceId = snapshot.priceId();
+        this.listUnitPrice = snapshot.listUnitPrice();
         this.pricingQty = quantity;
         this.pricingUnit = unit;
         this.unitPriceExcludingTax = snapshot.unitPriceExcludingTax();
@@ -133,6 +165,7 @@ public class SalesOrderLine {
             BigDecimal baseQty,
             PriceSource priceSource,
             Long priceId,
+            BigDecimal listUnitPrice,
             BigDecimal unitPriceExcludingTax,
             BigDecimal lineAmountExcludingTax,
             BigDecimal taxRate

@@ -340,9 +340,14 @@ public abstract class SalesOrderTestSupport {
     // ===== SO =====
 
     protected String line(CustomerItemMapping mapping, String quantity, UnitOfMeasure unit) {
+        return line(mapping, quantity, unit, null);
+    }
+
+    //requestedUnitPrice 為 null 時用底價
+    protected String line(CustomerItemMapping mapping, String quantity, UnitOfMeasure unit, String requestedUnitPrice) {
         return """
-                {"customerItemMappingId": %d, "quantity": %s, "unit": "%s"}
-                """.formatted(mapping.getId(), quantity, unit.name());
+                {"customerItemMappingId": %d, "quantity": %s, "unit": "%s", "requestedUnitPrice": %s}
+                """.formatted(mapping.getId(), quantity, unit.name(), requestedUnitPrice);
     }
 
     protected static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");

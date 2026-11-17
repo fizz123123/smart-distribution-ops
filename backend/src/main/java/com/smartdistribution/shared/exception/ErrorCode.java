@@ -245,6 +245,10 @@ public enum ErrorCode {
             HttpStatus.CONFLICT,
             "訂單日期當天沒有有效的價格，無法送審。"
     ),
+    SO_PRICE_BELOW_LIST_PRICE(
+            HttpStatus.BAD_REQUEST,
+            "單價不能低於底價。"
+    ),
     SO_PRICE_REVOKED(
             HttpStatus.CONFLICT,
             "引用的價格已撤銷，請退回後依目前價格重新送審。"

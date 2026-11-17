@@ -232,6 +232,17 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                         prefix + "訂單日期 " + orderDate + " 沒有有效的「" + line.getUnit().getDisplayName() + "」價格，請先完成價格建檔與覆核。"
                 ));
 
+        //取到的價格就是底價；業務可以往上調，不能往下
+        BigDecimal listUnitPrice = price.unitPriceExcludingTax();
+        if (line.isBelowListPrice(listUnitPrice)) {
+            throw new BusinessException(
+                    ErrorCode.SO_PRICE_BELOW_LIST_PRICE,
+                    prefix + "單價 " + line.getRequestedUnitPrice().toPlainString()
+                            + " 元低於底價 " + listUnitPrice.toPlainString() + " 元；要降價請先建立新價格並經主管覆核。"
+            );
+        }
+        BigDecimal dealUnitPrice = line.dealUnitPrice(listUnitPrice);
+
         return new SalesOrderLine.Snapshot(
                 item.getId(),
                 mapping.getCustomerItemCode(),
@@ -239,8 +250,9 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 SalesOrderAmounts.baseQty(line.getQuantity(), factor),
                 price.source(),
                 price.priceId(),
-                price.unitPriceExcludingTax(),
-                SalesOrderAmounts.lineAmount(line.getQuantity(), price.unitPriceExcludingTax()),
+                listUnitPrice,
+                dealUnitPrice,
+                SalesOrderAmounts.lineAmount(line.getQuantity(), dealUnitPrice),
                 SalesOrderAmounts.TAX_RATE
         );
     }
@@ -317,7 +329,8 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                     index + 1,
                     line.customerItemMappingId(),
                     line.quantity(),
-                    line.unit()
+                    line.unit(),
+                    line.requestedUnitPrice()
             ));
         }
     }

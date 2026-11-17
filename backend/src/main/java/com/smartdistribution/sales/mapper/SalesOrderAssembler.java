@@ -176,7 +176,12 @@ public class SalesOrderAssembler {
             warnings.add(prefix + "訂單日期沒有有效的「" + line.getUnit().getDisplayName() + "」價格，無法送審");
         }
 
-        BigDecimal unitPrice = price.map(ApplicablePrice::unitPriceExcludingTax).orElse(null);
+        BigDecimal listUnitPrice = price.map(ApplicablePrice::unitPriceExcludingTax).orElse(null);
+        if (listUnitPrice != null && line.isBelowListPrice(listUnitPrice)) {
+            warnings.add(prefix + "單價 " + line.getRequestedUnitPrice().toPlainString()
+                    + " 元低於底價 " + listUnitPrice.toPlainString() + " 元，無法送審");
+        }
+        BigDecimal unitPrice = line.dealUnitPrice(listUnitPrice);
 
         return new Line(
                 line.getId(),
@@ -193,6 +198,8 @@ public class SalesOrderAssembler {
                 factor.map(f -> SalesOrderAmounts.baseQty(line.getQuantity(), f)).orElse(null),
                 price.map(ApplicablePrice::source).orElse(null),
                 price.map(ApplicablePrice::priceId).orElse(null),
+                line.getRequestedUnitPrice(),
+                listUnitPrice,
                 unitPrice,
                 unitPrice == null ? null : SalesOrderAmounts.lineAmount(line.getQuantity(), unitPrice),
                 null
@@ -255,6 +262,8 @@ public class SalesOrderAssembler {
                             line.getBaseQty(),
                             line.getPriceSource(),
                             line.getPriceId(),
+                            line.getRequestedUnitPrice(),
+                            line.getListUnitPrice(),
                             line.getUnitPriceExcludingTax(),
                             line.getLineAmountExcludingTax(),
                             approved

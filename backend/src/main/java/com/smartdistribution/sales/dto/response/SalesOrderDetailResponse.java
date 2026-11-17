@@ -73,7 +73,9 @@ public record SalesOrderDetailResponse(
             BigDecimal baseQty,
             PriceSource priceSource, //客戶價格或標準售價
             Long priceId,
-            BigDecimal unitPriceExcludingTax,
+            BigDecimal requestedUnitPrice, //業務填的單價，null 代表用底價
+            BigDecimal listUnitPrice, //底價：草稿是依訂單日期試算，送審後是快照
+            BigDecimal unitPriceExcludingTax, //成交價
             BigDecimal lineAmountExcludingTax,
             Supply supply //核准後才有值
     ) {

@@ -7,7 +7,9 @@ import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.masterdata.customer.entity.PaymentTerm;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.pricing.entity.CustomerPrice;
+import com.smartdistribution.sales.service.SalesOrderBillingService;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
@@ -15,8 +17,11 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDate;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.startsWith;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -29,6 +34,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
+
+    @Autowired
+    private SalesOrderBillingService salesOrderBillingService;
 
     @Test
     void draftWithoutActivePriceCanBeSavedButNotSubmitted() throws Exception {
@@ -331,6 +339,46 @@ class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
         getOrder(sales, afterContractId)
                 .andExpect(jsonPath("$.lines[0].priceSource").value("STANDARD_PRICE"))
                 .andExpect(jsonPath("$.lines[0].unitPriceExcludingTax").value(300));
+    }
+
+    @Test
+    void unitPriceCanBeRaisedButNotBelowListPrice() throws Exception {
+        String sales = login(createUser("override-sales", "SALES"));
+        String salesManager = login(createUser("override-manager", "SALES_MANAGER"));
+        Customer customer = createActiveCustomer(PaymentTerm.DUE_0);
+        CustomerItemMapping mapping = createActiveMapping(customer, createActiveItem(UnitOfMeasure.PCS));
+        createActivePrice(mapping, UnitOfMeasure.PCS, "200");
+
+        //低於底價：草稿可以存並提示，送審被擋
+        SalesOrderVersion below = createDraft(sales, draftBody(customer, line(mapping, "2", UnitOfMeasure.PCS, "180")));
+        getOrder(sales, below.id())
+                .andExpect(jsonPath("$.lines[0].listUnitPrice").value(200))
+                .andExpect(jsonPath("$.warnings[0]").value(containsString("低於底價 200")));
+        submit(sales, below)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("SO_PRICE_BELOW_LIST_PRICE"))
+                .andExpect(jsonPath("$.message").value(containsString("底價 200")));
+
+        //留空：成交價就是底價
+        Long listPriceId = createSubmittedOrder(sales, draftBody(customer, line(mapping, "2", UnitOfMeasure.PCS)));
+        getOrder(sales, listPriceId)
+                .andExpect(jsonPath("$.lines[0].requestedUnitPrice").doesNotExist())
+                .andExpect(jsonPath("$.lines[0].listUnitPrice").value(200))
+                .andExpect(jsonPath("$.lines[0].unitPriceExcludingTax").value(200));
+
+        //往上調：金額與應收照成交價，主管核准時看得到差異
+        Long raisedId = createSubmittedOrder(sales, draftBody(customer, line(mapping, "2", UnitOfMeasure.PCS, "230")));
+        getOrder(sales, raisedId)
+                .andExpect(jsonPath("$.lines[0].listUnitPrice").value(200))
+                .andExpect(jsonPath("$.lines[0].unitPriceExcludingTax").value(230))
+                .andExpect(jsonPath("$.lines[0].lineAmountExcludingTax").value(460));
+
+        mockMvc.perform(get("/api/v1/approval-requests/{id}", findPendingApprovalId(raisedId))
+                        .header("Authorization", bearer(salesManager)))
+                .andExpect(jsonPath("$.warnings", hasItem(containsString("成交價 230.00，底價 200.00"))));
+
+        assertThat(salesOrderBillingService.findForBilling(raisedId).lines().get(0).unitPriceExcludingTax())
+                .isEqualByComparingTo("230");
     }
 
     @Test
