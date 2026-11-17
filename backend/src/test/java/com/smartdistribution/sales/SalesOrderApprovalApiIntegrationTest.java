@@ -5,7 +5,7 @@ import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.masterdata.customer.entity.PaymentTerm;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
-import com.smartdistribution.masterdata.customerprice.entity.CustomerPrice;
+import com.smartdistribution.pricing.entity.CustomerPrice;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;

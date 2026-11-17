@@ -8,8 +8,8 @@ import com.smartdistribution.inventory.service.InventoryService;
 import com.smartdistribution.masterdata.common.MasterDataStatus;
 import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
-import com.smartdistribution.masterdata.customerprice.entity.CustomerPrice;
-import com.smartdistribution.masterdata.customerprice.entity.CustomerPriceStatus;
+import com.smartdistribution.pricing.service.PriceLookupService;
+import com.smartdistribution.pricing.service.PriceLookupService.PriceSource;
 import com.smartdistribution.sales.entity.SalesOrder;
 import com.smartdistribution.sales.entity.SalesOrderLine;
 import com.smartdistribution.sales.entity.SalesOrderStatus;
@@ -29,7 +29,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
@@ -38,6 +37,7 @@ public class SalesOrderApprovalHandler implements ApprovalHandler {
     private final SalesOrderRepository salesOrderRepository;
     private final SalesOrderLineRepository salesOrderLineRepository;
     private final SalesOrderMasterData salesOrderMasterData;
+    private final PriceLookupService priceLookupService;
     private final InventoryService inventoryService;
 
     @Override
@@ -93,8 +93,7 @@ public class SalesOrderApprovalHandler implements ApprovalHandler {
                 );
             }
 
-            Optional<CustomerPrice> price = salesOrderMasterData.findPrice(line.getCustomerPriceId());
-            if (price.isPresent() && price.get().getStatus() == CustomerPriceStatus.REVOKED) {
+            if (priceLookupService.isRevoked(PriceSource.CUSTOMER_PRICE, line.getCustomerPriceId())) {
                 throw new BusinessException(
                         ErrorCode.SO_PRICE_REVOKED,
                         prefix + "引用的價格已撤銷，請退回後由業務依目前價格重新送審。"
@@ -133,8 +132,7 @@ public class SalesOrderApprovalHandler implements ApprovalHandler {
         List<String> warnings = new ArrayList<>();
 
         for (SalesOrderLine line : lines) {
-            Optional<CustomerPrice> price = salesOrderMasterData.findPrice(line.getCustomerPriceId());
-            if (price.isPresent() && price.get().getStatus() == CustomerPriceStatus.REPLACED) {
+            if (priceLookupService.isReplaced(PriceSource.CUSTOMER_PRICE, line.getCustomerPriceId())) {
                 warnings.add("第 " + line.getLineNo() + " 行 " + line.getCustomerItemCode()
                         + "：價格已更新，本單仍以送審時的 "
                         + line.getUnitPriceExcludingTax().toPlainString() + " 元核准");

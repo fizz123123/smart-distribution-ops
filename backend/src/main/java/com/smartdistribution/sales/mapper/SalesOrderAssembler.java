@@ -6,7 +6,8 @@ import com.smartdistribution.masterdata.common.MasterDataStatus;
 import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
-import com.smartdistribution.masterdata.customerprice.entity.CustomerPrice;
+import com.smartdistribution.pricing.service.PriceLookupService;
+import com.smartdistribution.pricing.service.PriceLookupService.ApplicablePrice;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse.Line;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse.Supply;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse;
@@ -26,6 +27,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -41,8 +44,11 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class SalesOrderAssembler {
 
+    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
+
     private final SalesOrderLineRepository salesOrderLineRepository;
     private final SalesOrderMasterData salesOrderMasterData;
+    private final PriceLookupService priceLookupService;
     private final UserDirectoryService userDirectoryService;
     private final InventoryService inventoryService;
     private final SalesOrderQuantities salesOrderQuantities;
@@ -159,12 +165,17 @@ public class SalesOrderAssembler {
             warnings.add(prefix + "公司料號沒有設定「" + line.getUnit().getDisplayName() + "」的換算");
         }
 
-        Optional<CustomerPrice> price = salesOrderMasterData.findActivePrice(mapping.getId(), line.getUnit());
+        //只能用有價格的單位下單，計價單位就是訂購單位
+        Optional<ApplicablePrice> price = priceLookupService.findApplicablePrice(
+                mapping.getId(),
+                line.getUnit(),
+                LocalDate.now(TAIPEI)
+        );
         if (price.isEmpty()) {
             warnings.add(prefix + "尚無已覆核的「" + line.getUnit().getDisplayName() + "」價格，無法送審");
         }
 
-        BigDecimal unitPrice = price.map(CustomerPrice::getUnitPriceExcludingTax).orElse(null);
+        BigDecimal unitPrice = price.map(ApplicablePrice::unitPriceExcludingTax).orElse(null);
 
         return new Line(
                 line.getId(),
@@ -179,7 +190,7 @@ public class SalesOrderAssembler {
                 line.getUnit(),
                 factor.orElse(null),
                 factor.map(f -> SalesOrderAmounts.baseQty(line.getQuantity(), f)).orElse(null),
-                price.map(CustomerPrice::getId).orElse(null),
+                price.map(ApplicablePrice::priceId).orElse(null),
                 unitPrice,
                 unitPrice == null ? null : SalesOrderAmounts.lineAmount(line.getQuantity(), unitPrice),
                 null

@@ -1,4 +1,4 @@
-package com.smartdistribution.masterdata.customerprice.entity;
+package com.smartdistribution.pricing.entity;
 
 /**
  * 客戶價格版本狀態 REJECTED、REPLACED、REVOKED 只供歷史查詢

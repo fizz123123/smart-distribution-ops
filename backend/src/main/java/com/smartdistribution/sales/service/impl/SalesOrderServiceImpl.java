@@ -7,7 +7,8 @@ import com.smartdistribution.masterdata.common.MasterDataStatus;
 import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
-import com.smartdistribution.masterdata.customerprice.entity.CustomerPrice;
+import com.smartdistribution.pricing.service.PriceLookupService;
+import com.smartdistribution.pricing.service.PriceLookupService.ApplicablePrice;
 import com.smartdistribution.sales.dto.request.CreateSalesOrderRequest;
 import com.smartdistribution.sales.dto.request.SalesOrderLineRequest;
 import com.smartdistribution.sales.dto.request.UpdateSalesOrderRequest;
@@ -37,6 +38,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -48,9 +51,12 @@ import java.util.Set;
 @Transactional(readOnly = true)
 public class SalesOrderServiceImpl implements SalesOrderService {
 
+    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
+
     private final SalesOrderRepository salesOrderRepository;
     private final SalesOrderLineRepository salesOrderLineRepository;
     private final SalesOrderMasterData salesOrderMasterData;
+    private final PriceLookupService priceLookupService;
     private final SalesOrderAssembler salesOrderAssembler;
     private final ApprovalService approvalService;
     private final UserDirectoryService userDirectoryService;
@@ -214,7 +220,8 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                         prefix + "公司料號沒有設定「" + line.getUnit().getDisplayName() + "」的換算。"
                 ));
 
-        CustomerPrice price = salesOrderMasterData.findActivePrice(mapping.getId(), line.getUnit())
+        ApplicablePrice price = priceLookupService
+                .findApplicablePrice(mapping.getId(), line.getUnit(), LocalDate.now(TAIPEI))
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.SO_ACTIVE_PRICE_REQUIRED,
                         prefix + "尚無已覆核的「" + line.getUnit().getDisplayName() + "」價格，請先完成價格建檔與覆核。"
@@ -225,9 +232,9 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 mapping.getCustomerItemCode(),
                 factor,
                 SalesOrderAmounts.baseQty(line.getQuantity(), factor),
-                price.getId(),
-                price.getUnitPriceExcludingTax(),
-                SalesOrderAmounts.lineAmount(line.getQuantity(), price.getUnitPriceExcludingTax()),
+                price.priceId(),
+                price.unitPriceExcludingTax(),
+                SalesOrderAmounts.lineAmount(line.getQuantity(), price.unitPriceExcludingTax()),
                 SalesOrderAmounts.TAX_RATE
         );
     }

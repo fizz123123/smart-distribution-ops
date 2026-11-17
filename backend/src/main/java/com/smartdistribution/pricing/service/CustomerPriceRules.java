@@ -1,4 +1,4 @@
-package com.smartdistribution.masterdata.customerprice.service;
+package com.smartdistribution.pricing.service;
 
 import com.smartdistribution.masterdata.common.MasterDataStatus;
 import com.smartdistribution.masterdata.common.UnitOfMeasure;

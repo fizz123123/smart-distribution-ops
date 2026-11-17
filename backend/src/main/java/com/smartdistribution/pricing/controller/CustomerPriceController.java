@@ -1,10 +1,10 @@
-package com.smartdistribution.masterdata.customerprice.controller;
+package com.smartdistribution.pricing.controller;
 
-import com.smartdistribution.masterdata.customerprice.dto.request.CreateCustomerPriceRequest;
-import com.smartdistribution.masterdata.customerprice.dto.request.RevokeCustomerPriceRequest;
-import com.smartdistribution.masterdata.customerprice.dto.response.CustomerPriceResponse;
-import com.smartdistribution.masterdata.customerprice.entity.CustomerPriceStatus;
-import com.smartdistribution.masterdata.customerprice.service.CustomerPriceService;
+import com.smartdistribution.pricing.dto.request.CreateCustomerPriceRequest;
+import com.smartdistribution.pricing.dto.request.RevokeCustomerPriceRequest;
+import com.smartdistribution.pricing.dto.response.CustomerPriceResponse;
+import com.smartdistribution.pricing.entity.CustomerPriceStatus;
+import com.smartdistribution.pricing.service.CustomerPriceService;
 import com.smartdistribution.shared.web.response.PageResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
