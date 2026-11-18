@@ -13,6 +13,7 @@ import com.smartdistribution.sales.dto.request.CreateSalesOrderRequest;
 import com.smartdistribution.sales.dto.request.SalesOrderLineRequest;
 import com.smartdistribution.sales.dto.request.UpdateSalesOrderRequest;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse;
+import com.smartdistribution.sales.dto.response.SalesOrderShortageResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderSummaryResponse;
 import com.smartdistribution.sales.entity.DeliveryMethod;
 import com.smartdistribution.sales.entity.SalesOrder;
@@ -81,6 +82,15 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     @PreAuthorize("hasAuthority('SO_VIEW')")
     public SalesOrderDetailResponse findSalesOrder(Long salesOrderId) {
         return salesOrderAssembler.toDetail(findSalesOrderById(salesOrderId));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('SO_VIEW')")
+    public List<SalesOrderShortageResponse> findShortages(Long companyItemId, Long preferredSupplierId) {
+        return salesOrderAssembler.toShortages(
+                salesOrderLineRepository.findApprovedLines(companyItemId),
+                preferredSupplierId
+        );
     }
 
     @Override

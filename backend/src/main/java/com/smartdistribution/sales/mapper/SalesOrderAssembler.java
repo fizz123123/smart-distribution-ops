@@ -6,11 +6,13 @@ import com.smartdistribution.masterdata.common.MasterDataStatus;
 import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
+import com.smartdistribution.masterdata.supplier.entity.Supplier;
 import com.smartdistribution.pricing.service.PriceLookupService;
 import com.smartdistribution.pricing.service.PriceLookupService.ApplicablePrice;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse.Line;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse.Supply;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse;
+import com.smartdistribution.sales.dto.response.SalesOrderShortageResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderSummaryResponse;
 import com.smartdistribution.sales.entity.SalesOrder;
 import com.smartdistribution.sales.entity.SalesOrderLine;
@@ -33,6 +35,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -251,23 +254,7 @@ public class SalesOrderAssembler {
         boolean approved = salesOrder.getStatus() == SalesOrderStatus.APPROVED
                 || salesOrder.getStatus() == SalesOrderStatus.CLOSED;
 
-        List<Long> lineIds = lines.stream().map(SalesOrderLine::getId).toList();
-
-        Map<Long, BigDecimal> reservedByLine = approved
-                ? inventoryService.findOpenQtyBySalesOrderLines(lineIds)
-                : Map.of();
-
-        Map<Long, BigDecimal> cancelledByLine = approved
-                ? salesOrderQuantities.findCancelledQty(lineIds)
-                : Map.of();
-
-        Map<Long, PurchaseSupply> purchaseByLine = approved
-                ? purchaseSupplyProvider.findBySalesOrderLines(lineIds)
-                : Map.of();
-
-        Map<Long, ShipmentQuantity> shipmentsByLine = approved
-                ? salesOrderQuantities.findShipments(lineIds)
-                : Map.of();
+        Map<Long, Supply> supplies = approved ? findSupplies(lines) : Map.of();
 
         return lines.stream()
                 .map(line -> {
@@ -294,11 +281,94 @@ public class SalesOrderAssembler {
                             line.getLineAmountExcludingTax(),
                             line.getRequestedDeliveryDate(),
                             line.getDeliveryDate(),
-                            approved
-                                    ? toSupply(line, reservedByLine, cancelledByLine, purchaseByLine, shipmentsByLine)
-                                    : null
+                            supplies.get(line.getId())
                     );
                 }).toList();
+    }
+
+    /**
+     * 已核准 SO 明細的供應狀態；SO 詳情與缺料清單共用，兩邊的尚待規劃才會一致
+     *
+     * @param lines 已核准或已結案 SO 的明細
+     * @return SO 明細 ID → 供應狀態
+     */
+    public Map<Long, Supply> findSupplies(List<SalesOrderLine> lines) {
+        List<Long> lineIds = lines.stream().map(SalesOrderLine::getId).toList();
+        if (lineIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, BigDecimal> reservedByLine = inventoryService.findOpenQtyBySalesOrderLines(lineIds);
+        Map<Long, BigDecimal> cancelledByLine = salesOrderQuantities.findCancelledQty(lineIds);
+        Map<Long, PurchaseSupply> purchaseByLine = purchaseSupplyProvider.findBySalesOrderLines(lineIds);
+        Map<Long, ShipmentQuantity> shipmentsByLine = salesOrderQuantities.findShipments(lineIds);
+
+        Map<Long, Supply> supplies = new HashMap<>();
+        for (SalesOrderLine line : lines) {
+            supplies.put(line.getId(), toSupply(line, reservedByLine, cancelledByLine, purchaseByLine, shipmentsByLine));
+        }
+
+        return supplies;
+    }
+
+    /**
+     * 缺料清單：只留尚待規劃大於 0 的明細，依偏好供應商篩選
+     *
+     * @param lines               已核准 SO 的明細，已依交期排序
+     * @param preferredSupplierId 偏好供應商篩選，null 代表不篩選
+     * @return 缺料明細
+     */
+    public List<SalesOrderShortageResponse> toShortages(List<SalesOrderLine> lines, Long preferredSupplierId) {
+        Map<Long, Supply> supplies = findSupplies(lines);
+        Map<Long, CompanyItem> items = salesOrderMasterData.findCompanyItems(
+                lines.stream().map(SalesOrderLine::getCompanyItemId).distinct().toList()
+        );
+
+        List<SalesOrderLine> shortageLines = lines.stream()
+                .filter(line -> supplies.get(line.getId()).unplannedQty().signum() > 0)
+                .filter(line -> preferredSupplierId == null
+                        || preferredSupplierId.equals(items.get(line.getCompanyItemId()).getPreferredSupplierId()))
+                .toList();
+
+        Map<Long, Customer> customers = salesOrderMasterData.findCustomers(
+                shortageLines.stream().map(line -> line.getSalesOrder().getCustomerId()).distinct().toList()
+        );
+        Map<Long, Supplier> suppliers = salesOrderMasterData.findSuppliers(
+                items.values().stream()
+                        .map(CompanyItem::getPreferredSupplierId)
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .toList()
+        );
+
+        return shortageLines.stream()
+                .map(line -> {
+                    SalesOrder salesOrder = line.getSalesOrder();
+                    Customer customer = customers.get(salesOrder.getCustomerId());
+                    CompanyItem item = items.get(line.getCompanyItemId());
+                    Supplier supplier = item.getPreferredSupplierId() == null
+                            ? null
+                            : suppliers.get(item.getPreferredSupplierId());
+
+                    return new SalesOrderShortageResponse(
+                            salesOrder.getId(),
+                            salesOrder.getSoNumber(),
+                            line.getId(),
+                            line.getLineNo(),
+                            customer.getCustomerCode(),
+                            customer.getName(),
+                            item.getId(),
+                            item.getItemCode(),
+                            item.getName(),
+                            item.getBaseUnit(),
+                            supplies.get(line.getId()).unplannedQty(),
+                            line.getDeliveryDate(),
+                            supplier == null ? null : supplier.getId(),
+                            supplier == null ? null : supplier.getSupplierCode(),
+                            supplier == null ? null : supplier.getName()
+                    );
+                })
+                .toList();
     }
 
     /**

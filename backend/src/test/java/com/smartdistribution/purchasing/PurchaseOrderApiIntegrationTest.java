@@ -2,6 +2,9 @@ package com.smartdistribution.purchasing;
 
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
 import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
+import com.smartdistribution.masterdata.customer.entity.Customer;
+import com.smartdistribution.masterdata.customer.entity.PaymentTerm;
+import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.masterdata.supplier.entity.Supplier;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -9,6 +12,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MvcResult;
+
+import java.time.LocalDate;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.startsWith;
@@ -186,5 +191,61 @@ class PurchaseOrderApiIntegrationTest extends PurchaseOrderTestSupport {
         //倉管沒有 PO_VIEW，看不到 PO 單價
         mockMvc.perform(get("/api/v1/purchase-orders").header("Authorization", bearer(warehouse)))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void shortageListShowsApprovedLinesWithUnplannedQtyByDeliveryDate() throws Exception {
+        String sales = login(createUser("shortage-sales", "SALES"));
+        String salesManager = login(createUser("shortage-sales-manager", "SALES_MANAGER"));
+        String purchasing = login(createUser("shortage-purchasing", "PURCHASING"));
+        Supplier supplier = createActiveSupplier();
+        Customer customer = createActiveCustomer(PaymentTerm.DUE_0);
+        CompanyItem item = createActiveItem(UnitOfMeasure.PCS);
+        CustomerItemMapping mapping = createActiveMapping(customer, item);
+        createActivePrice(mapping, UnitOfMeasure.PCS, "200");
+        jdbcTemplate.update("UPDATE company_item SET preferred_supplier_id = ? WHERE id = ?", supplier.getId(), item.getId());
+
+        //沒有庫存：同一料號分兩個交期，兩行都缺料
+        Long salesOrderId = createSubmittedOrder(sales, draftBody(customer,
+                line(mapping, "2", UnitOfMeasure.PCS, null, LocalDate.of(2026, 11, 25)) + ", "
+                        + line(mapping, "3", UnitOfMeasure.PCS, null, LocalDate.of(2026, 11, 21))));
+
+        //待核准的還不算缺料
+        mockMvc.perform(get("/api/v1/sales-orders/shortages")
+                        .header("Authorization", bearer(purchasing))
+                        .param("companyItemId", item.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+
+        approve(salesManager, salesOrderId).andExpect(status().isOk());
+
+        //依交期排序：11/21 那行在前
+        mockMvc.perform(get("/api/v1/sales-orders/shortages")
+                        .header("Authorization", bearer(purchasing))
+                        .param("companyItemId", item.getId().toString()))
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].lineNo").value(2))
+                .andExpect(jsonPath("$[0].deliveryDate").value("2026-11-21"))
+                .andExpect(jsonPath("$[0].unplannedQty").value(3))
+                .andExpect(jsonPath("$[0].preferredSupplierId").value(supplier.getId()))
+                .andExpect(jsonPath("$[1].deliveryDate").value("2026-11-25"));
+
+        //第 2 行排進 PO 草稿後就不缺了
+        Long secondLineId = findLineIds(salesOrderId).get(1);
+        createPoDraft(purchasing, poBody(supplier, poLine(item, secondLineId, "3", "120")));
+
+        mockMvc.perform(get("/api/v1/sales-orders/shortages")
+                        .header("Authorization", bearer(purchasing))
+                        .param("companyItemId", item.getId().toString())
+                        .param("preferredSupplierId", supplier.getId().toString()))
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].lineNo").value(1));
+
+        //偏好供應商不符就篩掉
+        mockMvc.perform(get("/api/v1/sales-orders/shortages")
+                        .header("Authorization", bearer(purchasing))
+                        .param("companyItemId", item.getId().toString())
+                        .param("preferredSupplierId", "-1"))
+                .andExpect(jsonPath("$.length()").value(0));
     }
 }

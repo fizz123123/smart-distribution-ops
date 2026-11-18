@@ -10,6 +10,8 @@ import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.masterdata.customer.repository.CustomerRepository;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.masterdata.customeritemmapping.repository.CustomerItemMappingRepository;
+import com.smartdistribution.masterdata.supplier.entity.Supplier;
+import com.smartdistribution.masterdata.supplier.repository.SupplierRepository;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +25,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * 銷售模組唯讀取用主檔的地方：客戶、客戶料號對應、單位換算；價格改由 PriceLookupService 取得
+ * 銷售模組唯讀取用主檔的地方：客戶、客戶料號對應、單位換算、偏好供應商；價格改由 PriceLookupService 取得
  * SO 服務與核准 handler 共用，主檔的查法只寫一次；銷售模組不修改任何主檔
  */
 @Component
@@ -34,6 +36,7 @@ public class SalesOrderMasterData {
     private final CompanyItemRepository companyItemRepository;
     private final CustomerItemMappingRepository customerItemMappingRepository;
     private final ItemUnitConversionRepository itemUnitConversionRepository;
+    private final SupplierRepository supplierRepository;
 
     public Customer findCustomer(Long customerId) {
         return customerRepository.findById(customerId)
@@ -52,6 +55,13 @@ public class SalesOrderMasterData {
         return companyItemRepository.findAllById(companyItemIds)
                 .stream()
                 .collect(Collectors.toMap(CompanyItem::getId, Function.identity()));
+    }
+
+    //缺料清單顯示料號的偏好供應商
+    public Map<Long, Supplier> findSuppliers(Collection<Long> supplierIds) {
+        return supplierRepository.findAllById(supplierIds)
+                .stream()
+                .collect(Collectors.toMap(Supplier::getId, Function.identity()));
     }
 
     public CustomerItemMapping findMapping(Long mappingId) {

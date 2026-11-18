@@ -3,6 +3,7 @@ package com.smartdistribution.sales.controller;
 import com.smartdistribution.sales.dto.request.CreateSalesOrderRequest;
 import com.smartdistribution.sales.dto.request.UpdateSalesOrderRequest;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse;
+import com.smartdistribution.sales.dto.response.SalesOrderShortageResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderSummaryResponse;
 import com.smartdistribution.sales.entity.SalesOrderStatus;
 import com.smartdistribution.sales.service.SalesOrderService;
@@ -24,6 +25,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/v1/sales-orders")
 @RequiredArgsConstructor
@@ -40,6 +43,15 @@ public class SalesOrderController {
             Pageable pageable
     ) {
         return ResponseEntity.ok(salesOrderService.findSalesOrders(keyword, status, customerId, pageable));
+    }
+
+    //路徑比 /{salesOrderId} 具體，Spring 會優先對應到這裡
+    @GetMapping("/shortages")
+    public ResponseEntity<List<SalesOrderShortageResponse>> findShortages(
+            @RequestParam(required = false) Long companyItemId,
+            @RequestParam(required = false) Long preferredSupplierId
+    ) {
+        return ResponseEntity.ok(salesOrderService.findShortages(companyItemId, preferredSupplierId));
     }
 
     @GetMapping("/{salesOrderId}")
