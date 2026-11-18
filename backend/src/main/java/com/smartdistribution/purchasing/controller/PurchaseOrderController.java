@@ -2,6 +2,7 @@ package com.smartdistribution.purchasing.controller;
 
 import com.smartdistribution.document.service.StoredDocument;
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
+import com.smartdistribution.purchasing.dto.request.CreateBatchDraftsRequest;
 import com.smartdistribution.purchasing.dto.request.CreatePurchaseOrderRequest;
 import com.smartdistribution.purchasing.dto.request.UpdatePurchaseOrderRequest;
 import com.smartdistribution.purchasing.dto.response.LastPriceResponse;
@@ -30,6 +31,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/purchase-orders")
@@ -68,6 +71,16 @@ public class PurchaseOrderController {
             @Valid @RequestBody CreatePurchaseOrderRequest request
     ) {
         PurchaseOrderDetailResponse response = purchaseOrderService.createPurchaseOrder(request);
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    //回傳這次產生的所有草稿，一家供應商一張，數量有限所以不分頁
+    @PostMapping("/batch-drafts")
+    public ResponseEntity<List<PurchaseOrderDetailResponse>> createBatchDrafts(
+            @Valid @RequestBody CreateBatchDraftsRequest request
+    ) {
+        List<PurchaseOrderDetailResponse> response = purchaseOrderService.createBatchDrafts(request);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }

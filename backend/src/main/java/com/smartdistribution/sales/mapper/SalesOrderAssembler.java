@@ -6,15 +6,18 @@ import com.smartdistribution.masterdata.common.MasterDataStatus;
 import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
+import com.smartdistribution.masterdata.supplier.entity.Supplier;
 import com.smartdistribution.pricing.service.PriceLookupService;
 import com.smartdistribution.pricing.service.PriceLookupService.ApplicablePrice;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse.Line;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse.Supply;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse;
+import com.smartdistribution.sales.dto.response.SalesOrderShortageResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderSummaryResponse;
 import com.smartdistribution.sales.entity.SalesOrder;
 import com.smartdistribution.sales.entity.SalesOrderLine;
 import com.smartdistribution.sales.entity.SalesOrderStatus;
+import com.smartdistribution.sales.repository.CancelledQuantityProjection;
 import com.smartdistribution.sales.repository.SalesOrderLineRepository;
 import com.smartdistribution.sales.service.PurchaseSupplyProvider.PurchaseSupply;
 import com.smartdistribution.sales.service.PurchaseSupplyProvider;
@@ -29,9 +32,11 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -61,6 +66,7 @@ public class SalesOrderAssembler {
 
         Map<Long, Customer> customers = salesOrderMasterData.findCustomers(customerIds);
         Map<Long, String> userNames = userDirectoryService.findNamesByIds(userIds);
+        Map<Long, LocalDate> earliestDeliveryDates = findEarliestDeliveryDates(salesOrders);
 
         return salesOrders.map(salesOrder -> {
             Customer customer = customers.get(salesOrder.getCustomerId());
@@ -76,7 +82,7 @@ public class SalesOrderAssembler {
                     salesOrder.getResponsibleSalesUserId(),
                     userNames.get(salesOrder.getResponsibleSalesUserId()),
                     salesOrder.getStatus(),
-                    salesOrder.getRequestedDeliveryDate(),
+                    earliestDeliveryDates.getOrDefault(salesOrder.getId(), salesOrder.getRequestedDeliveryDate()),
                     salesOrder.getTotalAmount(),
                     salesOrder.getCreatedAt(),
                     salesOrder.getVersion()
@@ -93,6 +99,7 @@ public class SalesOrderAssembler {
         List<String> warnings = new ArrayList<>();
         List<Line> lineResponses;
         SalesOrder.Amounts amounts;
+        SalesOrder.Amounts effectiveAmounts = null;
 
         //放棄的草稿可能從未送審、沒有快照，所以和草稿一樣依目前主檔顯示，但不需要送審提示
         boolean preview = salesOrder.isDraftOrReturned() || salesOrder.getStatus() == SalesOrderStatus.CANCELLED;
@@ -104,7 +111,7 @@ public class SalesOrderAssembler {
                 previewWarnings.add("客戶 " + customer.getCustomerCode() + " 已停用，無法送審");
             }
             lineResponses = lines.stream()
-                    .map(line -> toPreviewLine(line, salesOrder.getOrderDate(), previewWarnings))
+                    .map(line -> toPreviewLine(line, salesOrder, previewWarnings))
                     .toList();
             amounts = previewAmounts(lineResponses);
         } else {
@@ -113,6 +120,9 @@ public class SalesOrderAssembler {
                     salesOrder.getUntaxedAmount(),
                     salesOrder.getTaxAmount(),
                     salesOrder.getTotalAmount()
+            );
+            effectiveAmounts = SalesOrderAmounts.documentAmounts(
+                    lineResponses.stream().map(Line::effectiveLineAmount).toList()
             );
         }
 
@@ -141,6 +151,9 @@ public class SalesOrderAssembler {
                 amounts == null ? null : amounts.untaxed(),
                 amounts == null ? null : amounts.tax(),
                 amounts == null ? null : amounts.total(),
+                effectiveAmounts == null ? null : effectiveAmounts.untaxed(),
+                effectiveAmounts == null ? null : effectiveAmounts.tax(),
+                effectiveAmounts == null ? null : effectiveAmounts.total(),
                 salesOrder.getSubmittedAt(),
                 salesOrder.getApprovedAt(),
                 salesOrder.getCreatedAt(),
@@ -152,7 +165,8 @@ public class SalesOrderAssembler {
     }
 
     //草稿試算：依目前的主檔計算基準數量與金額，同時列出送審會被擋下的問題
-    private Line toPreviewLine(SalesOrderLine line, LocalDate orderDate, List<String> warnings) {
+    private Line toPreviewLine(SalesOrderLine line, SalesOrder salesOrder, List<String> warnings) {
+        LocalDate orderDate = salesOrder.getOrderDate();
         CustomerItemMapping mapping = salesOrderMasterData.findMapping(line.getCustomerItemMappingId());
         CompanyItem item = mapping.getCompanyItem();
         String prefix = "第 " + line.getLineNo() + " 行 " + mapping.getCustomerItemCode() + "：";
@@ -202,6 +216,11 @@ public class SalesOrderAssembler {
                 listUnitPrice,
                 unitPrice,
                 unitPrice == null ? null : SalesOrderAmounts.lineAmount(line.getQuantity(), unitPrice),
+                null,
+                null,
+                null,
+                line.getRequestedDeliveryDate(),
+                line.resolveDeliveryDate(salesOrder.getRequestedDeliveryDate()),
                 null
         );
     }
@@ -225,27 +244,19 @@ public class SalesOrderAssembler {
         boolean approved = salesOrder.getStatus() == SalesOrderStatus.APPROVED
                 || salesOrder.getStatus() == SalesOrderStatus.CLOSED;
 
-        List<Long> lineIds = lines.stream().map(SalesOrderLine::getId).toList();
-
-        Map<Long, BigDecimal> reservedByLine = approved
-                ? inventoryService.findOpenQtyBySalesOrderLines(lineIds)
+        //取消申請只能對已核准的 SO 提出，待核准時一定沒有取消；同一份取消數量給供應狀態與有效金額共用
+        Map<Long, CancelledQuantityProjection> cancellations = approved
+                ? salesOrderQuantities.findCancellations(lines.stream().map(SalesOrderLine::getId).toList())
                 : Map.of();
-
-        Map<Long, BigDecimal> cancelledByLine = approved
-                ? salesOrderQuantities.findCancelledQty(lineIds)
-                : Map.of();
-
-        Map<Long, PurchaseSupply> purchaseByLine = approved
-                ? purchaseSupplyProvider.findBySalesOrderLines(lineIds)
-                : Map.of();
-
-        Map<Long, ShipmentQuantity> shipmentsByLine = approved
-                ? salesOrderQuantities.findShipments(lineIds)
-                : Map.of();
+        Map<Long, Supply> supplies = approved ? findSupplies(lines, cancellations) : Map.of();
 
         return lines.stream()
                 .map(line -> {
                     CompanyItem item = items.get(line.getCompanyItemId());
+                    CancelledQuantityProjection cancellation = cancellations.get(line.getId());
+                    BigDecimal cancelledQuantity = cancellation == null
+                            ? BigDecimal.ZERO
+                            : cancellation.cancelledQuantity();
 
                     return new Line(
                             line.getId(),
@@ -266,11 +277,118 @@ public class SalesOrderAssembler {
                             line.getListUnitPrice(),
                             line.getUnitPriceExcludingTax(),
                             line.getLineAmountExcludingTax(),
-                            approved
-                                    ? toSupply(line, reservedByLine, cancelledByLine, purchaseByLine, shipmentsByLine)
-                                    : null
+                            cancelledQuantity,
+                            line.getQuantity().subtract(cancelledQuantity),
+                            SalesOrderAmounts.effectiveLineAmount(
+                                    line.getQuantity(),
+                                    cancelledQuantity,
+                                    line.getUnitPriceExcludingTax()
+                            ),
+                            line.getRequestedDeliveryDate(),
+                            line.getDeliveryDate(),
+                            supplies.get(line.getId())
                     );
                 }).toList();
+    }
+
+    /**
+     * 已核准 SO 明細的供應狀態；SO 詳情與缺料清單共用，兩邊的尚待規劃才會一致
+     *
+     * @param lines 已核准或已結案 SO 的明細
+     * @return SO 明細 ID → 供應狀態
+     */
+    public Map<Long, Supply> findSupplies(List<SalesOrderLine> lines) {
+        return findSupplies(
+                lines,
+                salesOrderQuantities.findCancellations(lines.stream().map(SalesOrderLine::getId).toList())
+        );
+    }
+
+    //SO 詳情已經查過取消數量，直接傳進來，不必再查一次
+    private Map<Long, Supply> findSupplies(
+            List<SalesOrderLine> lines,
+            Map<Long, CancelledQuantityProjection> cancellations
+    ) {
+        List<Long> lineIds = lines.stream().map(SalesOrderLine::getId).toList();
+        if (lineIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, BigDecimal> reservedByLine = inventoryService.findOpenQtyBySalesOrderLines(lineIds);
+        Map<Long, BigDecimal> cancelledByLine = new HashMap<>();
+        cancellations.forEach((lineId, cancellation) -> cancelledByLine.put(lineId, cancellation.cancelledQty()));
+        Map<Long, PurchaseSupply> purchaseByLine = purchaseSupplyProvider.findBySalesOrderLines(lineIds);
+        Map<Long, ShipmentQuantity> shipmentsByLine = salesOrderQuantities.findShipments(lineIds);
+
+        Map<Long, Supply> supplies = new HashMap<>();
+        for (SalesOrderLine line : lines) {
+            supplies.put(line.getId(), toSupply(line, reservedByLine, cancelledByLine, purchaseByLine, shipmentsByLine));
+        }
+
+        return supplies;
+    }
+
+    /**
+     * 缺料清單：先依偏好供應商縮小範圍，再算尚待規劃，只留大於 0 的明細
+     *
+     * @param lines               已核准 SO 的明細，已依交期排序
+     * @param preferredSupplierId 偏好供應商篩選，null 代表不篩選
+     * @return 缺料明細
+     */
+    public List<SalesOrderShortageResponse> toShortages(List<SalesOrderLine> lines, Long preferredSupplierId) {
+        Map<Long, CompanyItem> items = salesOrderMasterData.findCompanyItems(
+                lines.stream().map(SalesOrderLine::getCompanyItemId).distinct().toList()
+        );
+
+        List<SalesOrderLine> candidateLines = lines.stream()
+                .filter(line -> preferredSupplierId == null
+                        || preferredSupplierId.equals(items.get(line.getCompanyItemId()).getPreferredSupplierId()))
+                .toList();
+
+        Map<Long, Supply> supplies = findSupplies(candidateLines);
+        List<SalesOrderLine> shortageLines = candidateLines.stream()
+                .filter(line -> supplies.get(line.getId()).unplannedQty().signum() > 0)
+                .toList();
+
+        Map<Long, Customer> customers = salesOrderMasterData.findCustomers(
+                shortageLines.stream().map(line -> line.getSalesOrder().getCustomerId()).distinct().toList()
+        );
+        Map<Long, Supplier> suppliers = salesOrderMasterData.findSuppliers(
+                items.values().stream()
+                        .map(CompanyItem::getPreferredSupplierId)
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .toList()
+        );
+
+        return shortageLines.stream()
+                .map(line -> {
+                    SalesOrder salesOrder = line.getSalesOrder();
+                    Customer customer = customers.get(salesOrder.getCustomerId());
+                    CompanyItem item = items.get(line.getCompanyItemId());
+                    Supplier supplier = item.getPreferredSupplierId() == null
+                            ? null
+                            : suppliers.get(item.getPreferredSupplierId());
+
+                    return new SalesOrderShortageResponse(
+                            salesOrder.getId(),
+                            salesOrder.getSoNumber(),
+                            line.getId(),
+                            line.getLineNo(),
+                            customer.getCustomerCode(),
+                            customer.getName(),
+                            item.getId(),
+                            item.getItemCode(),
+                            item.getName(),
+                            item.getBaseUnit(),
+                            supplies.get(line.getId()).unplannedQty(),
+                            line.getDeliveryDate(),
+                            supplier == null ? null : supplier.getId(),
+                            supplier == null ? null : supplier.getSupplierCode(),
+                            supplier == null ? null : supplier.getName()
+                    );
+                })
+                .toList();
     }
 
     /**
@@ -308,11 +426,33 @@ public class SalesOrderAssembler {
                 shipment.deliveringQty(),
                 shippedQty,
                 cancelledQty,
-                unplannedQty
+                unplannedQty,
+                purchase.purchaseOrders()
         );
     }
 
     private SalesOrderDetailResponse.UserRef userRef(Long userId) {
         return new SalesOrderDetailResponse.UserRef(userId, userDirectoryService.findName(userId));
+    }
+
+    //清單顯示最早的實際交期：明細有填用明細，沒填用表頭；送審後明細的快照一定有值
+    private Map<Long, LocalDate> findEarliestDeliveryDates(Page<SalesOrder> salesOrders) {
+        List<Long> salesOrderIds = salesOrders.map(SalesOrder::getId).getContent();
+        if (salesOrderIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, LocalDate> earliest = new HashMap<>();
+        salesOrderLineRepository.findAllBySalesOrderIdInOrderByLineNoAsc(salesOrderIds).forEach(line -> {
+            SalesOrder salesOrder = line.getSalesOrder();
+            LocalDate date = line.getDeliveryDate() != null
+                    ? line.getDeliveryDate()
+                    : line.resolveDeliveryDate(salesOrder.getRequestedDeliveryDate());
+            if (date != null) {
+                earliest.merge(salesOrder.getId(), date, (a, b) -> a.isBefore(b) ? a : b);
+            }
+        });
+
+        return earliest;
     }
 }

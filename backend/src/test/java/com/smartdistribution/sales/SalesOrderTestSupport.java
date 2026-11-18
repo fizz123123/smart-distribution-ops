@@ -345,9 +345,22 @@ public abstract class SalesOrderTestSupport {
 
     //requestedUnitPrice 為 null 時用底價
     protected String line(CustomerItemMapping mapping, String quantity, UnitOfMeasure unit, String requestedUnitPrice) {
+        return line(mapping, quantity, unit, requestedUnitPrice, null);
+    }
+
+    //requestedDeliveryDate 為 null 時沿用表頭交期
+    protected String line(
+            CustomerItemMapping mapping,
+            String quantity,
+            UnitOfMeasure unit,
+            String requestedUnitPrice,
+            LocalDate requestedDeliveryDate
+    ) {
+        String deliveryDate = requestedDeliveryDate == null ? "null" : "\"" + requestedDeliveryDate + "\"";
+
         return """
-                {"customerItemMappingId": %d, "quantity": %s, "unit": "%s", "requestedUnitPrice": %s}
-                """.formatted(mapping.getId(), quantity, unit.name(), requestedUnitPrice);
+                {"customerItemMappingId": %d, "quantity": %s, "unit": "%s", "requestedUnitPrice": %s, "requestedDeliveryDate": %s}
+                """.formatted(mapping.getId(), quantity, unit.name(), requestedUnitPrice, deliveryDate);
     }
 
     protected static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");

@@ -12,4 +12,10 @@ public interface SalesOrderCancellationRepository extends JpaRepository<SalesOrd
     boolean existsBySalesOrderIdAndStatusIn(Long salesOrderId, Collection<SalesOrderCancellationStatus> statuses);
 
     List<SalesOrderCancellation> findAllBySalesOrderIdOrderByIdDesc(Long salesOrderId);
+
+    //訂單確認單的版次：已核准的取消申請，依核准順序
+    List<SalesOrderCancellation> findAllBySalesOrderIdAndStatusOrderByApprovedAtAsc(
+            Long salesOrderId,
+            SalesOrderCancellationStatus status
+    );
 }

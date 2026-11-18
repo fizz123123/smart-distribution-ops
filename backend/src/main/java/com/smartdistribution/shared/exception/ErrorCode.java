@@ -335,6 +335,10 @@ public enum ErrorCode {
             HttpStatus.CONFLICT,
             "來源 SO 明細不正確：SO 必須已核准，且料號要和採購明細相同。"
     ),
+    PO_BATCH_SUPPLIER_REQUIRED(
+            HttpStatus.BAD_REQUEST,
+            "料號沒有偏好供應商，請指定供應商。"
+    ),
     PO_SOURCE_QUANTITY_EXCEEDED(
             HttpStatus.CONFLICT,
             "採購數量超過來源 SO 明細的尚待規劃量。"

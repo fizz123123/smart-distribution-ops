@@ -2,6 +2,9 @@ package com.smartdistribution.purchasing;
 
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
 import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
+import com.smartdistribution.masterdata.customer.entity.Customer;
+import com.smartdistribution.masterdata.customer.entity.PaymentTerm;
+import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.masterdata.supplier.entity.Supplier;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -10,6 +13,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.time.LocalDate;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -186,5 +192,144 @@ class PurchaseOrderApiIntegrationTest extends PurchaseOrderTestSupport {
         //倉管沒有 PO_VIEW，看不到 PO 單價
         mockMvc.perform(get("/api/v1/purchase-orders").header("Authorization", bearer(warehouse)))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void shortageListShowsApprovedLinesWithUnplannedQtyByDeliveryDate() throws Exception {
+        String sales = login(createUser("shortage-sales", "SALES"));
+        String salesManager = login(createUser("shortage-sales-manager", "SALES_MANAGER"));
+        String purchasing = login(createUser("shortage-purchasing", "PURCHASING"));
+        Supplier supplier = createActiveSupplier();
+        Customer customer = createActiveCustomer(PaymentTerm.DUE_0);
+        CompanyItem item = createActiveItem(UnitOfMeasure.PCS);
+        CustomerItemMapping mapping = createActiveMapping(customer, item);
+        createActivePrice(mapping, UnitOfMeasure.PCS, "200");
+        jdbcTemplate.update("UPDATE company_item SET preferred_supplier_id = ? WHERE id = ?", supplier.getId(), item.getId());
+
+        //沒有庫存：同一料號分兩個交期，兩行都缺料
+        Long salesOrderId = createSubmittedOrder(sales, draftBody(customer,
+                line(mapping, "2", UnitOfMeasure.PCS, null, LocalDate.of(2026, 11, 25)) + ", "
+                        + line(mapping, "3", UnitOfMeasure.PCS, null, LocalDate.of(2026, 11, 21))));
+
+        //待核准的還不算缺料
+        mockMvc.perform(get("/api/v1/sales-orders/shortages")
+                        .header("Authorization", bearer(purchasing))
+                        .param("companyItemId", item.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+
+        approve(salesManager, salesOrderId).andExpect(status().isOk());
+
+        //依交期排序：11/21 那行在前
+        mockMvc.perform(get("/api/v1/sales-orders/shortages")
+                        .header("Authorization", bearer(purchasing))
+                        .param("companyItemId", item.getId().toString()))
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].lineNo").value(2))
+                .andExpect(jsonPath("$[0].deliveryDate").value("2026-11-21"))
+                .andExpect(jsonPath("$[0].unplannedQty").value(3))
+                .andExpect(jsonPath("$[0].preferredSupplierId").value(supplier.getId()))
+                .andExpect(jsonPath("$[1].deliveryDate").value("2026-11-25"));
+
+        //第 2 行排進 PO 草稿後就不缺了
+        Long secondLineId = findLineIds(salesOrderId).get(1);
+        createPoDraft(purchasing, poBody(supplier, poLine(item, secondLineId, "3", "120")));
+
+        mockMvc.perform(get("/api/v1/sales-orders/shortages")
+                        .header("Authorization", bearer(purchasing))
+                        .param("companyItemId", item.getId().toString())
+                        .param("preferredSupplierId", supplier.getId().toString()))
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].lineNo").value(1));
+
+        //偏好供應商不符就篩掉
+        mockMvc.perform(get("/api/v1/sales-orders/shortages")
+                        .header("Authorization", bearer(purchasing))
+                        .param("companyItemId", item.getId().toString())
+                        .param("preferredSupplierId", "-1"))
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void batchDraftsAreGroupedBySupplierWithLastApprovedPrice() throws Exception {
+        String warehouseManager = login(createUser("batch-wh", "WAREHOUSE_MANAGER"));
+        String salesManager = login(createUser("batch-sales-manager", "SALES_MANAGER"));
+        String purchasing = login(createUser("batch-purchasing", "PURCHASING"));
+        String purchasingManager = login(createUser("batch-purchasing-manager", "PURCHASING_MANAGER"));
+        Supplier preferred = createActiveSupplier();
+        Supplier other = createActiveSupplier();
+        ShortageOrder orderA = createShortageOrder(warehouseManager, salesManager, "0", "3");
+        ShortageOrder orderB = createShortageOrder(warehouseManager, salesManager, "0", "2");
+        jdbcTemplate.update(
+                "UPDATE company_item SET preferred_supplier_id = ? WHERE id = ?",
+                preferred.getId(), orderA.item().getId()
+        );
+
+        //料號 A 向偏好供應商買過一次，核准單價 88
+        createApprovedPo(purchasing, purchasingManager, poBody(preferred, poLine(orderA.item(), null, "1", "88")));
+
+        //料號 B 沒有偏好供應商也沒指定：整批不建立
+        mockMvc.perform(post("/api/v1/purchase-orders/batch-drafts")
+                        .header("Authorization", bearer(purchasing))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(batchBody(
+                                batchLine(orderA.salesOrderLineId(), null, "3"),
+                                batchLine(orderB.salesOrderLineId(), null, "2")
+                        )))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PO_BATCH_SUPPLIER_REQUIRED"))
+                .andExpect(jsonPath("$.message").value(containsString("第 2 行")));
+        assertThat(countLinkedPurchaseOrderLines(orderA.salesOrderLineId())).isZero();
+
+        //A 用偏好供應商、B 指定另一家：產生兩張草稿
+        mockMvc.perform(post("/api/v1/purchase-orders/batch-drafts")
+                        .header("Authorization", bearer(purchasing))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(batchBody(
+                                batchLine(orderA.salesOrderLineId(), null, "3"),
+                                batchLine(orderB.salesOrderLineId(), other.getId(), "2")
+                        )))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].status").value("DRAFT"))
+                .andExpect(jsonPath("$[0].supplier.id").value(preferred.getId()))
+                .andExpect(jsonPath("$[0].expectedArrivalDate").doesNotExist())
+                .andExpect(jsonPath("$[0].lines[0].lineNo").value(1))
+                .andExpect(jsonPath("$[0].lines[0].source.salesOrderLineId").value(orderA.salesOrderLineId()))
+                .andExpect(jsonPath("$[0].lines[0].unit").value("PCS"))
+                .andExpect(jsonPath("$[0].lines[0].unitPriceExcludingTax").value(88))
+                .andExpect(jsonPath("$[1].supplier.id").value(other.getId()))
+                .andExpect(jsonPath("$[1].lines[0].unitPriceExcludingTax").doesNotExist());
+
+        //A 已經全部排進草稿，再排就超過尚待規劃，整批不建立
+        mockMvc.perform(post("/api/v1/purchase-orders/batch-drafts")
+                        .header("Authorization", bearer(purchasing))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(batchBody(batchLine(orderA.salesOrderLineId(), null, "1"))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PO_SOURCE_QUANTITY_EXCEEDED"));
+        assertThat(countLinkedPurchaseOrderLines(orderA.salesOrderLineId())).isEqualTo(1);
+    }
+
+    private String batchLine(Long salesOrderLineId, Long supplierId, String quantity) {
+        return """
+                {"salesOrderLineId": %d, "supplierId": %s, "quantity": %s}
+                """.formatted(salesOrderLineId, supplierId, quantity);
+    }
+
+    private String batchBody(String... lines) {
+        return """
+                {"lines": [%s]}
+                """.formatted(String.join(", ", lines));
+    }
+
+    private int countLinkedPurchaseOrderLines(Long salesOrderLineId) {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM purchase_order_line WHERE sales_order_line_id = ?",
+                Integer.class,
+                salesOrderLineId
+        );
+
+        return count == null ? 0 : count;
     }
 }

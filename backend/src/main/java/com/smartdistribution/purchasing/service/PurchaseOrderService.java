@@ -2,6 +2,7 @@ package com.smartdistribution.purchasing.service;
 
 import com.smartdistribution.document.service.StoredDocument;
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
+import com.smartdistribution.purchasing.dto.request.CreateBatchDraftsRequest;
 import com.smartdistribution.purchasing.dto.request.CreatePurchaseOrderRequest;
 import com.smartdistribution.purchasing.dto.request.UpdatePurchaseOrderRequest;
 import com.smartdistribution.purchasing.dto.response.LastPriceResponse;
@@ -12,6 +13,8 @@ import com.smartdistribution.shared.web.request.ReasonRequest;
 import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
 import org.springframework.data.domain.Pageable;
+
+import java.util.List;
 
 public interface PurchaseOrderService {
 
@@ -32,6 +35,14 @@ public interface PurchaseOrderService {
      * 不關聯就是一般補庫
      */
     PurchaseOrderDetailResponse createPurchaseOrder(CreatePurchaseOrderRequest request);
+
+    /**
+     * 從缺料清單批次產生 PO 草稿：每一行關聯一筆 SO 明細，依供應商分組，一家一張；
+     * 數量用庫存基準單位，單價預填同供應商最近一次核准的單價，到貨日留空；任一行不通過，整批都不建立
+     *
+     * @return 產生的 PO 草稿，依供應商第一次出現的順序
+     */
+    List<PurchaseOrderDetailResponse> createBatchDrafts(CreateBatchDraftsRequest request);
 
     PurchaseOrderDetailResponse updatePurchaseOrder(Long purchaseOrderId, UpdatePurchaseOrderRequest request);
 

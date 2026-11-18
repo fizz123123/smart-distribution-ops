@@ -13,6 +13,7 @@ import java.util.List;
  * - 表頭未稅 ＝ 明細小計加總，四捨五入到元
  * - 稅額 ＝ 表頭未稅 × 5%，四捨五入到元
  * - 含稅 ＝ 表頭未稅 ＋ 稅額
+ * - 有效小計 ＝ （訂購數量 － 已核准取消數量）× 成交價，表頭有效金額用同一套規則加總
  * 一律 HALF_UP
  */
 public final class SalesOrderAmounts {
@@ -28,6 +29,22 @@ public final class SalesOrderAmounts {
 
     public static BigDecimal lineAmount(BigDecimal pricingQty, BigDecimal unitPriceExcludingTax) {
         return pricingQty.multiply(unitPriceExcludingTax).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * 扣除已核准取消後的小計；原始小計是送審快照，不會改
+     *
+     * @param quantity              訂購數量
+     * @param cancelledQuantity     已核准取消的數量，和訂購數量同單位
+     * @param unitPriceExcludingTax 快照的成交價
+     * @return 有效小計
+     */
+    public static BigDecimal effectiveLineAmount(
+            BigDecimal quantity,
+            BigDecimal cancelledQuantity,
+            BigDecimal unitPriceExcludingTax
+    ) {
+        return lineAmount(quantity.subtract(cancelledQuantity), unitPriceExcludingTax);
     }
 
     public static SalesOrder.Amounts documentAmounts(List<BigDecimal> lineAmounts) {
