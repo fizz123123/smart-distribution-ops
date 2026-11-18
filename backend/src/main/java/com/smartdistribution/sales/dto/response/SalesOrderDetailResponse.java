@@ -77,6 +77,8 @@ public record SalesOrderDetailResponse(
             BigDecimal listUnitPrice, //底價：草稿是依訂單日期試算，送審後是快照
             BigDecimal unitPriceExcludingTax, //成交價
             BigDecimal lineAmountExcludingTax,
+            LocalDate requestedDeliveryDate, //業務填的交期，null 代表沿用表頭
+            LocalDate deliveryDate, //實際交期：草稿是依表頭試算，送審後是快照
             Supply supply //核准後才有值
     ) {
     }

@@ -17,7 +17,7 @@ public record SalesOrderSummaryResponse(
         Long responsibleSalesUserId,
         String responsibleSalesName,
         SalesOrderStatus status,
-        LocalDate requestedDeliveryDate,
+        LocalDate earliestDeliveryDate, //明細中最早的實際交期
         BigDecimal totalAmount, //送審後才有值
         Instant createdAt,
         Long version

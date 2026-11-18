@@ -90,7 +90,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         Long currentUserId = currentUserProvider.getCurrentUserId();
         Customer customer = findActiveCustomer(request.customerId());
         Long responsibleSalesUserId = resolveResponsibleSales(request.responsibleSalesUserId(), currentUserId);
-        validateDraftLines(customer, request.lines());
+        validateDraftLines(customer, request.lines(), request.requestedDeliveryDate());
 
         SalesOrder salesOrder = new SalesOrder(
                 customer.getId(),
@@ -125,7 +125,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 request.responsibleSalesUserId(),
                 currentUserProvider.getCurrentUserId()
         );
-        validateDraftLines(customer, request.lines());
+        validateDraftLines(customer, request.lines(), request.requestedDeliveryDate());
 
         //明細整批取代：先刪除舊明細再寫入，行號才不會和舊資料的唯一約束衝突
         salesOrderLineRepository.deleteAllBySalesOrderId(salesOrderId);
@@ -171,7 +171,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         //每筆明細依目前主檔寫入快照；任何一筆不通過，整張 SO 都不會送審
         List<BigDecimal> lineAmounts = new ArrayList<>();
         for (SalesOrderLine line : lines) {
-            line.applySnapshot(buildSnapshot(line, salesOrder.getOrderDate()));
+            line.applySnapshot(buildSnapshot(line, salesOrder));
             lineAmounts.add(line.getLineAmountExcludingTax());
         }
 
@@ -206,9 +206,10 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     /**
      * 送審快照：對應、公司料號與客戶必須啟用；單位要是基準單位或已設定換算；
      * 訂單日期要取得到價格（客戶價格優先，沒有就用標準售價），業務填的單價不能低於它；
-     * 錯誤訊息帶行號，業務才知道要修哪一筆
+     * 每一行都要有實際交期；錯誤訊息帶行號，業務才知道要修哪一筆
      */
-    private SalesOrderLine.Snapshot buildSnapshot(SalesOrderLine line, LocalDate orderDate) {
+    private SalesOrderLine.Snapshot buildSnapshot(SalesOrderLine line, SalesOrder salesOrder) {
+        LocalDate orderDate = salesOrder.getOrderDate();
         CustomerItemMapping mapping = salesOrderMasterData.findMapping(line.getCustomerItemMappingId());
         CompanyItem item = mapping.getCompanyItem();
         String prefix = "第 " + line.getLineNo() + " 行 " + mapping.getCustomerItemCode() + "：";
@@ -244,6 +245,14 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         }
         BigDecimal dealUnitPrice = line.dealUnitPrice(listUnitPrice);
 
+        LocalDate deliveryDate = line.resolveDeliveryDate(salesOrder.getRequestedDeliveryDate());
+        if (deliveryDate == null) {
+            throw new BusinessException(
+                    ErrorCode.SO_DELIVERY_INFO_INCOMPLETE,
+                    prefix + "請填寫交期；明細沒填時沿用表頭的要求交期。"
+            );
+        }
+
         return new SalesOrderLine.Snapshot(
                 item.getId(),
                 mapping.getCustomerItemCode(),
@@ -254,7 +263,8 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 listUnitPrice,
                 dealUnitPrice,
                 SalesOrderAmounts.lineAmount(line.getQuantity(), dealUnitPrice),
-                SalesOrderAmounts.TAX_RATE
+                SalesOrderAmounts.TAX_RATE,
+                deliveryDate
         );
     }
 
@@ -273,10 +283,9 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         return orderDate;
     }
 
-    //要求交期與交貨方式必填；外送時另外需要地址、收貨聯絡人與電話
+    //交貨方式必填；外送時另外需要地址、收貨聯絡人與電話。交期逐行在送審快照檢查
     private void ensureDeliveryInfoComplete(SalesOrder salesOrder) {
-        boolean complete = salesOrder.getRequestedDeliveryDate() != null
-                && salesOrder.getDeliveryMethod() != null;
+        boolean complete = salesOrder.getDeliveryMethod() != null;
 
         if (complete && salesOrder.getDeliveryMethod() == DeliveryMethod.DELIVERY) {
             complete = salesOrder.getDeliveryAddress() != null
@@ -290,7 +299,12 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     }
 
     //草稿只檢查對應屬於這個客戶、明細不重複、數量小數位符合單位；狀態、換算與價格等送審再檢查
-    private void validateDraftLines(Customer customer, List<SalesOrderLineRequest> lines) {
+    //同一客戶料號＋單位可以分不同交期出貨，所以重複的判斷要加上實際交期
+    private void validateDraftLines(
+            Customer customer,
+            List<SalesOrderLineRequest> lines,
+            LocalDate headerDeliveryDate
+    ) {
         Set<String> keys = new HashSet<>();
 
         for (int index = 0; index < lines.size(); index++) {
@@ -305,10 +319,13 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 );
             }
 
-            if (!keys.add(line.customerItemMappingId() + ":" + line.unit())) {
+            LocalDate deliveryDate = line.requestedDeliveryDate() != null
+                    ? line.requestedDeliveryDate()
+                    : headerDeliveryDate;
+            if (!keys.add(line.customerItemMappingId() + ":" + line.unit() + ":" + deliveryDate)) {
                 throw new BusinessException(
                         ErrorCode.SO_LINE_INVALID,
-                        prefix + "同一客戶料號與單位只能出現一次。"
+                        prefix + "同一客戶料號、單位與交期只能出現一次。"
                 );
             }
 
@@ -331,7 +348,8 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                     line.customerItemMappingId(),
                     line.quantity(),
                     line.unit(),
-                    line.requestedUnitPrice()
+                    line.requestedUnitPrice(),
+                    line.requestedDeliveryDate()
             ));
         }
     }

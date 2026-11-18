@@ -19,6 +19,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 /**
  * SO 明細。草稿只存使用者輸入（客戶料號對應、數量、單位）；
@@ -62,6 +63,10 @@ public class SalesOrderLine {
     @Column(name = "requested_unit_price", precision = 15, scale = 2)
     private BigDecimal requestedUnitPrice;
 
+    //業務在草稿填的交期，null 代表沿用表頭；和送審快照分開存，理由同單價
+    @Column(name = "requested_delivery_date")
+    private LocalDate requestedDeliveryDate;
+
     // ===== 以下是送審快照 =====
 
     @Column(name = "company_item_id")
@@ -104,6 +109,10 @@ public class SalesOrderLine {
     @Column(name = "line_amount_excluding_tax", precision = 15, scale = 2)
     private BigDecimal lineAmountExcludingTax;
 
+    //送審當下的實際交期：明細有填用明細，沒填用表頭；送審後只讀這一欄
+    @Column(name = "delivery_date")
+    private LocalDate deliveryDate;
+
     @Column(name = "tax_rate", precision = 5, scale = 4)
     private BigDecimal taxRate;
 
@@ -113,7 +122,8 @@ public class SalesOrderLine {
             Long customerItemMappingId,
             BigDecimal quantity,
             UnitOfMeasure unit,
-            BigDecimal requestedUnitPrice
+            BigDecimal requestedUnitPrice,
+            LocalDate requestedDeliveryDate
     ) {
         this.salesOrder = salesOrder;
         this.lineNo = lineNo;
@@ -121,6 +131,17 @@ public class SalesOrderLine {
         this.quantity = quantity;
         this.unit = unit;
         this.requestedUnitPrice = requestedUnitPrice;
+        this.requestedDeliveryDate = requestedDeliveryDate;
+    }
+
+    /**
+     * 實際交期：明細有填就用明細的，沒填沿用表頭
+     *
+     * @param headerDeliveryDate 表頭的要求交期，可能為 null
+     * @return 實際交期，兩者都沒填時為 null
+     */
+    public LocalDate resolveDeliveryDate(LocalDate headerDeliveryDate) {
+        return requestedDeliveryDate != null ? requestedDeliveryDate : headerDeliveryDate;
     }
 
     /**
@@ -156,6 +177,7 @@ public class SalesOrderLine {
         this.unitPriceExcludingTax = snapshot.unitPriceExcludingTax();
         this.lineAmountExcludingTax = snapshot.lineAmountExcludingTax();
         this.taxRate = snapshot.taxRate();
+        this.deliveryDate = snapshot.deliveryDate();
     }
 
     public record Snapshot(
@@ -168,7 +190,8 @@ public class SalesOrderLine {
             BigDecimal listUnitPrice,
             BigDecimal unitPriceExcludingTax,
             BigDecimal lineAmountExcludingTax,
-            BigDecimal taxRate
+            BigDecimal taxRate,
+            LocalDate deliveryDate
     ) {
     }
 }

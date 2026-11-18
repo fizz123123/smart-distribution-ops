@@ -382,6 +382,101 @@ class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
     }
 
     @Test
+    void lineDeliveryDateOverridesHeaderAndAllowsSplitDeliveries() throws Exception {
+        String sales = login(createUser("line-date-sales", "SALES"));
+        String salesManager = login(createUser("line-date-manager", "SALES_MANAGER"));
+        Customer customer = createActiveCustomer(PaymentTerm.DUE_0);
+        CustomerItemMapping mapping = createActiveMapping(customer, createActiveItem(UnitOfMeasure.PCS));
+        createActivePrice(mapping, UnitOfMeasure.PCS, "200");
+        LocalDate headerDate = LocalDate.of(2026, 11, 20);
+        LocalDate laterDate = LocalDate.of(2026, 11, 25);
+
+        //同料號同單位，實際交期相同被擋：一行明寫表頭的日期、一行沿用表頭
+        mockMvc.perform(post("/api/v1/sales-orders")
+                        .header("Authorization", bearer(sales))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(draftBody(customer,
+                                line(mapping, "1", UnitOfMeasure.PCS, null, headerDate) + ", "
+                                        + line(mapping, "2", UnitOfMeasure.PCS))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("SO_LINE_INVALID"));
+
+        //交期不同可以分兩行：第 1 行沿用表頭、第 2 行自己的交期
+        Long salesOrderId = createSubmittedOrder(sales, draftBody(customer,
+                line(mapping, "1", UnitOfMeasure.PCS) + ", "
+                        + line(mapping, "2", UnitOfMeasure.PCS, null, laterDate)));
+
+        getOrder(sales, salesOrderId)
+                .andExpect(jsonPath("$.lines[0].requestedDeliveryDate").doesNotExist())
+                .andExpect(jsonPath("$.lines[0].deliveryDate").value(headerDate.toString()))
+                .andExpect(jsonPath("$.lines[1].deliveryDate").value(laterDate.toString()));
+
+        mockMvc.perform(get("/api/v1/sales-orders")
+                        .header("Authorization", bearer(sales))
+                        .param("customerId", customer.getId().toString()))
+                .andExpect(jsonPath("$.content[0].earliestDeliveryDate").value(headerDate.toString()));
+
+        //退回後改表頭交期：沿用表頭的那行跟著變，自己填的不變
+        mockMvc.perform(post("/api/v1/approval-requests/{id}/return", findPendingApprovalId(salesOrderId))
+                        .header("Authorization", bearer(salesManager))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"comment": "客戶改交期"}
+                                """))
+                .andExpect(status().isOk());
+
+        Long version = readLong(getOrder(sales, salesOrderId).andReturn(), "$.version");
+        mockMvc.perform(patch("/api/v1/sales-orders/{id}", salesOrderId)
+                        .header("Authorization", bearer(sales))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "customerId": %d,
+                                  "orderDate": "%s",
+                                  "requestedDeliveryDate": "2026-11-22",
+                                  "deliveryMethod": "CUSTOMER_PICKUP",
+                                  "lines": [%s, %s],
+                                  "version": %d
+                                }
+                                """.formatted(
+                                customer.getId(),
+                                LocalDate.now(TAIPEI),
+                                line(mapping, "1", UnitOfMeasure.PCS),
+                                line(mapping, "2", UnitOfMeasure.PCS, null, laterDate),
+                                version
+                        )))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lines[0].deliveryDate").value("2026-11-22"))
+                .andExpect(jsonPath("$.lines[1].deliveryDate").value(laterDate.toString()));
+    }
+
+    @Test
+    void everyLineNeedsDeliveryDateToSubmit() throws Exception {
+        String sales = login(createUser("no-date-sales", "SALES"));
+        Customer customer = createActiveCustomer(PaymentTerm.DUE_0);
+        CustomerItemMapping mapping = createActiveMapping(customer, createActiveItem(UnitOfMeasure.PCS));
+        createActivePrice(mapping, UnitOfMeasure.PCS, "200");
+
+        //表頭沒有交期，第 1 行有自己的交期、第 2 行沒有
+        SalesOrderVersion draft = createDraft(sales, """
+                {
+                  "customerId": %d,
+                  "deliveryMethod": "CUSTOMER_PICKUP",
+                  "lines": [%s, %s]
+                }
+                """.formatted(
+                customer.getId(),
+                line(mapping, "1", UnitOfMeasure.PCS, null, LocalDate.of(2026, 11, 25)),
+                line(mapping, "2", UnitOfMeasure.PCS)
+        ));
+
+        submit(sales, draft)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("SO_DELIVERY_INFO_INCOMPLETE"))
+                .andExpect(jsonPath("$.message").value(containsString("第 2 行")));
+    }
+
+    @Test
     void orderDateDefaultsToTodayAndCannotBeInTheFuture() throws Exception {
         String sales = login(createUser("order-date", "SALES"));
         Customer customer = createActiveCustomer(PaymentTerm.DUE_0);

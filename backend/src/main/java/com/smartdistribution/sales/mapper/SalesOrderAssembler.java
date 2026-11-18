@@ -29,6 +29,7 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +62,7 @@ public class SalesOrderAssembler {
 
         Map<Long, Customer> customers = salesOrderMasterData.findCustomers(customerIds);
         Map<Long, String> userNames = userDirectoryService.findNamesByIds(userIds);
+        Map<Long, LocalDate> earliestDeliveryDates = findEarliestDeliveryDates(salesOrders);
 
         return salesOrders.map(salesOrder -> {
             Customer customer = customers.get(salesOrder.getCustomerId());
@@ -76,12 +78,33 @@ public class SalesOrderAssembler {
                     salesOrder.getResponsibleSalesUserId(),
                     userNames.get(salesOrder.getResponsibleSalesUserId()),
                     salesOrder.getStatus(),
-                    salesOrder.getRequestedDeliveryDate(),
+                    earliestDeliveryDates.getOrDefault(salesOrder.getId(), salesOrder.getRequestedDeliveryDate()),
                     salesOrder.getTotalAmount(),
                     salesOrder.getCreatedAt(),
                     salesOrder.getVersion()
             );
         });
+    }
+
+    //清單顯示最早的實際交期：明細有填用明細，沒填用表頭；送審後明細的快照一定有值
+    private Map<Long, LocalDate> findEarliestDeliveryDates(Page<SalesOrder> salesOrders) {
+        List<Long> salesOrderIds = salesOrders.map(SalesOrder::getId).getContent();
+        if (salesOrderIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Long, LocalDate> earliest = new HashMap<>();
+        salesOrderLineRepository.findAllBySalesOrderIdInOrderByLineNoAsc(salesOrderIds).forEach(line -> {
+            SalesOrder salesOrder = line.getSalesOrder();
+            LocalDate date = line.getDeliveryDate() != null
+                    ? line.getDeliveryDate()
+                    : line.resolveDeliveryDate(salesOrder.getRequestedDeliveryDate());
+            if (date != null) {
+                earliest.merge(salesOrder.getId(), date, (a, b) -> a.isBefore(b) ? a : b);
+            }
+        });
+
+        return earliest;
     }
 
     public SalesOrderDetailResponse toDetail(SalesOrder salesOrder) {
@@ -104,7 +127,7 @@ public class SalesOrderAssembler {
                 previewWarnings.add("客戶 " + customer.getCustomerCode() + " 已停用，無法送審");
             }
             lineResponses = lines.stream()
-                    .map(line -> toPreviewLine(line, salesOrder.getOrderDate(), previewWarnings))
+                    .map(line -> toPreviewLine(line, salesOrder, previewWarnings))
                     .toList();
             amounts = previewAmounts(lineResponses);
         } else {
@@ -152,7 +175,8 @@ public class SalesOrderAssembler {
     }
 
     //草稿試算：依目前的主檔計算基準數量與金額，同時列出送審會被擋下的問題
-    private Line toPreviewLine(SalesOrderLine line, LocalDate orderDate, List<String> warnings) {
+    private Line toPreviewLine(SalesOrderLine line, SalesOrder salesOrder, List<String> warnings) {
+        LocalDate orderDate = salesOrder.getOrderDate();
         CustomerItemMapping mapping = salesOrderMasterData.findMapping(line.getCustomerItemMappingId());
         CompanyItem item = mapping.getCompanyItem();
         String prefix = "第 " + line.getLineNo() + " 行 " + mapping.getCustomerItemCode() + "：";
@@ -202,6 +226,8 @@ public class SalesOrderAssembler {
                 listUnitPrice,
                 unitPrice,
                 unitPrice == null ? null : SalesOrderAmounts.lineAmount(line.getQuantity(), unitPrice),
+                line.getRequestedDeliveryDate(),
+                line.resolveDeliveryDate(salesOrder.getRequestedDeliveryDate()),
                 null
         );
     }
@@ -266,6 +292,8 @@ public class SalesOrderAssembler {
                             line.getListUnitPrice(),
                             line.getUnitPriceExcludingTax(),
                             line.getLineAmountExcludingTax(),
+                            line.getRequestedDeliveryDate(),
+                            line.getDeliveryDate(),
                             approved
                                     ? toSupply(line, reservedByLine, cancelledByLine, purchaseByLine, shipmentsByLine)
                                     : null
