@@ -34,9 +34,12 @@ public record SalesOrderDetailResponse(
         String contactName,
         String contactPhone,
         String remark,
-        BigDecimal untaxedAmount,
+        BigDecimal untaxedAmount, //原始金額：送審快照
         BigDecimal taxAmount,
         BigDecimal totalAmount,
+        BigDecimal effectiveUntaxedAmount, //有效金額：扣除已核准取消；送審後才有值
+        BigDecimal effectiveTaxAmount,
+        BigDecimal effectiveTotalAmount,
         Instant submittedAt,
         Instant approvedAt,
         Instant createdAt,
@@ -78,6 +81,9 @@ public record SalesOrderDetailResponse(
             BigDecimal listUnitPrice, //底價：草稿是依訂單日期試算，送審後是快照
             BigDecimal unitPriceExcludingTax, //成交價
             BigDecimal lineAmountExcludingTax,
+            BigDecimal cancelledQuantity, //已核准取消，訂購單位；送審後才有值
+            BigDecimal effectiveQuantity,
+            BigDecimal effectiveLineAmount,
             LocalDate requestedDeliveryDate, //業務填的交期，null 代表沿用表頭
             LocalDate deliveryDate, //實際交期：草稿是依表頭試算，送審後是快照
             Supply supply //核准後才有值

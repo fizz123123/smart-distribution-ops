@@ -42,6 +42,21 @@ public class SalesOrderQuantities {
                 ));
     }
 
+    //SO 明細 ID → 已核准取消的訂購單位數量，算有效金額用；沒有取消的明細不會出現在結果中
+    public Map<Long, BigDecimal> findCancelledQuantity(Collection<Long> salesOrderLineIds) {
+        if (salesOrderLineIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return salesOrderCancellationLineRepository
+                .sumCancelledQty(salesOrderLineIds, SalesOrderCancellationStatus.APPROVED)
+                .stream()
+                .collect(Collectors.toMap(
+                        CancelledQuantityProjection::salesOrderLineId,
+                        CancelledQuantityProjection::cancelledQuantity
+                ));
+    }
+
     //SO 明細 ID → 已出貨與進行中 DO 數量；沒有 DO 的明細不會出現在結果中
     public Map<Long, ShipmentQuantity> findShipments(Collection<Long> salesOrderLineIds) {
         return shipmentQuantityProvider.findBySalesOrderLines(salesOrderLineIds);

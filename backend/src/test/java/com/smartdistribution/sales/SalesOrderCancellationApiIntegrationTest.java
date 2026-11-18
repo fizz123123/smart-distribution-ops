@@ -30,6 +30,45 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class SalesOrderCancellationApiIntegrationTest extends SalesOrderTestSupport {
 
     @Test
+    void effectiveAmountsDeductApprovedCancellationsAndKeepOriginal() throws Exception {
+        String sales = login(createUser("effective-sales", "SALES"));
+        String salesManager = login(createUser("effective-manager", "SALES_MANAGER"));
+
+        Customer customer = createActiveCustomer(PaymentTerm.DUE_0);
+        CustomerItemMapping pe = createActiveMapping(customer, createActiveItem(UnitOfMeasure.STICK));
+        CustomerItemMapping pu = createActiveMapping(customer, createActiveItem(UnitOfMeasure.PCS));
+        createActivePrice(pe, UnitOfMeasure.STICK, "100");
+        createActivePrice(pu, UnitOfMeasure.PCS, "200");
+
+        //SO_MAIN：PE 10 支 @100、PU 5 個 @200 → 含稅 2,100
+        Long salesOrderId = createSubmittedOrder(sales, draftBody(customer,
+                line(pe, "10", UnitOfMeasure.STICK) + ", " + line(pu, "5", UnitOfMeasure.PCS)));
+        approve(salesManager, salesOrderId).andExpect(status().isOk());
+
+        //沒有取消時，有效金額等於原始金額
+        getOrder(sales, salesOrderId)
+                .andExpect(jsonPath("$.totalAmount").value(2100))
+                .andExpect(jsonPath("$.effectiveTotalAmount").value(2100))
+                .andExpect(jsonPath("$.lines[1].cancelledQuantity").value(0))
+                .andExpect(jsonPath("$.lines[1].effectiveQuantity").value(5));
+
+        //PU 取消 2 個：有效 3 個、小計 600；表頭未稅 1,600、稅額 80、含稅 1,680；原始金額不變
+        Long puLineId = findLineIds(salesOrderId).get(1);
+        Long cancellationId = createSubmittedCancellation(sales, salesOrderId, cancellationLine(puLineId, "2"));
+        approveCancellation(salesManager, cancellationId).andExpect(status().isOk());
+
+        getOrder(sales, salesOrderId)
+                .andExpect(jsonPath("$.untaxedAmount").value(2000))
+                .andExpect(jsonPath("$.totalAmount").value(2100))
+                .andExpect(jsonPath("$.lines[1].cancelledQuantity").value(2))
+                .andExpect(jsonPath("$.lines[1].effectiveQuantity").value(3))
+                .andExpect(jsonPath("$.lines[1].effectiveLineAmount").value(600))
+                .andExpect(jsonPath("$.effectiveUntaxedAmount").value(1600))
+                .andExpect(jsonPath("$.effectiveTaxAmount").value(80))
+                .andExpect(jsonPath("$.effectiveTotalAmount").value(1680));
+    }
+
+    @Test
     void cancellationReleasesReservationOnlyBeyondRemainingDemand() throws Exception {
         String sales = login(createUser("release-sales", "SALES"));
         String salesManager = login(createUser("release-manager", "SALES_MANAGER"));

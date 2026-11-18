@@ -119,6 +119,7 @@ public class SalesOrderAssembler {
         List<String> warnings = new ArrayList<>();
         List<Line> lineResponses;
         SalesOrder.Amounts amounts;
+        SalesOrder.Amounts effectiveAmounts = null;
 
         //放棄的草稿可能從未送審、沒有快照，所以和草稿一樣依目前主檔顯示，但不需要送審提示
         boolean preview = salesOrder.isDraftOrReturned() || salesOrder.getStatus() == SalesOrderStatus.CANCELLED;
@@ -139,6 +140,9 @@ public class SalesOrderAssembler {
                     salesOrder.getUntaxedAmount(),
                     salesOrder.getTaxAmount(),
                     salesOrder.getTotalAmount()
+            );
+            effectiveAmounts = SalesOrderAmounts.documentAmounts(
+                    lineResponses.stream().map(Line::effectiveLineAmount).toList()
             );
         }
 
@@ -167,6 +171,9 @@ public class SalesOrderAssembler {
                 amounts == null ? null : amounts.untaxed(),
                 amounts == null ? null : amounts.tax(),
                 amounts == null ? null : amounts.total(),
+                effectiveAmounts == null ? null : effectiveAmounts.untaxed(),
+                effectiveAmounts == null ? null : effectiveAmounts.tax(),
+                effectiveAmounts == null ? null : effectiveAmounts.total(),
                 salesOrder.getSubmittedAt(),
                 salesOrder.getApprovedAt(),
                 salesOrder.getCreatedAt(),
@@ -229,6 +236,9 @@ public class SalesOrderAssembler {
                 listUnitPrice,
                 unitPrice,
                 unitPrice == null ? null : SalesOrderAmounts.lineAmount(line.getQuantity(), unitPrice),
+                null,
+                null,
+                null,
                 line.getRequestedDeliveryDate(),
                 line.resolveDeliveryDate(salesOrder.getRequestedDeliveryDate()),
                 null
@@ -255,10 +265,15 @@ public class SalesOrderAssembler {
                 || salesOrder.getStatus() == SalesOrderStatus.CLOSED;
 
         Map<Long, Supply> supplies = approved ? findSupplies(lines) : Map.of();
+        //取消申請只能對已核准的 SO 提出，待核准時一定沒有取消
+        Map<Long, BigDecimal> cancelledByLine = approved
+                ? salesOrderQuantities.findCancelledQuantity(lines.stream().map(SalesOrderLine::getId).toList())
+                : Map.of();
 
         return lines.stream()
                 .map(line -> {
                     CompanyItem item = items.get(line.getCompanyItemId());
+                    BigDecimal cancelledQuantity = cancelledByLine.getOrDefault(line.getId(), BigDecimal.ZERO);
 
                     return new Line(
                             line.getId(),
@@ -279,6 +294,13 @@ public class SalesOrderAssembler {
                             line.getListUnitPrice(),
                             line.getUnitPriceExcludingTax(),
                             line.getLineAmountExcludingTax(),
+                            cancelledQuantity,
+                            line.getQuantity().subtract(cancelledQuantity),
+                            SalesOrderAmounts.effectiveLineAmount(
+                                    line.getQuantity(),
+                                    cancelledQuantity,
+                                    line.getUnitPriceExcludingTax()
+                            ),
                             line.getRequestedDeliveryDate(),
                             line.getDeliveryDate(),
                             supplies.get(line.getId())

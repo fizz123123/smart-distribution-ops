@@ -23,7 +23,8 @@ public interface SalesOrderCancellationLineRepository extends JpaRepository<Sale
     @Query("""
             SELECT new com.smartdistribution.sales.repository.CancelledQuantityProjection(
                 line.salesOrderLine.id,
-                SUM(line.baseQty)
+                SUM(line.baseQty),
+                SUM(line.quantity)
             )
             FROM SalesOrderCancellationLine line
             WHERE line.cancellation.status = :approved
