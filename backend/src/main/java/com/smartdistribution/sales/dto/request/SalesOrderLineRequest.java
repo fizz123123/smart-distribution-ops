@@ -31,4 +31,14 @@ public record SalesOrderLineRequest(
         //這一行自己的交期；留空就沿用表頭的要求交期
         LocalDate requestedDeliveryDate
 ) {
+
+    /**
+     * 實際交期：明細有填就用明細的，沒填沿用表頭；規則和 SalesOrderLine.resolveDeliveryDate 相同
+     *
+     * @param headerDeliveryDate 表頭的要求交期，可能為 null
+     * @return 實際交期，兩者都沒填時為 null
+     */
+    public LocalDate resolveDeliveryDate(LocalDate headerDeliveryDate) {
+        return requestedDeliveryDate != null ? requestedDeliveryDate : headerDeliveryDate;
+    }
 }

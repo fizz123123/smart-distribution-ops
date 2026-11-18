@@ -12,7 +12,9 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -29,21 +31,18 @@ public class SalesOrderQuantities {
 
     //SO 明細 ID → 已核准取消的基準數量；沒有取消的明細不會出現在結果中
     public Map<Long, BigDecimal> findCancelledQty(Collection<Long> salesOrderLineIds) {
-        if (salesOrderLineIds.isEmpty()) {
-            return Map.of();
-        }
+        Map<Long, BigDecimal> cancelledQty = new HashMap<>();
+        findCancellations(salesOrderLineIds).forEach((lineId, sum) -> cancelledQty.put(lineId, sum.cancelledQty()));
 
-        return salesOrderCancellationLineRepository
-                .sumCancelledQty(salesOrderLineIds, SalesOrderCancellationStatus.APPROVED)
-                .stream()
-                .collect(Collectors.toMap(
-                        CancelledQuantityProjection::salesOrderLineId,
-                        CancelledQuantityProjection::cancelledQty
-                ));
+        return cancelledQty;
     }
 
-    //SO 明細 ID → 已核准取消的訂購單位數量，算有效金額用；沒有取消的明細不會出現在結果中
-    public Map<Long, BigDecimal> findCancelledQuantity(Collection<Long> salesOrderLineIds) {
+    /**
+     * 已核准取消的數量，基準單位與訂購單位一起回傳；SO 詳情一次取得，不必查兩次
+     *
+     * @return SO 明細 ID → 取消數量；沒有取消的明細不會出現在結果中
+     */
+    public Map<Long, CancelledQuantityProjection> findCancellations(Collection<Long> salesOrderLineIds) {
         if (salesOrderLineIds.isEmpty()) {
             return Map.of();
         }
@@ -51,10 +50,7 @@ public class SalesOrderQuantities {
         return salesOrderCancellationLineRepository
                 .sumCancelledQty(salesOrderLineIds, SalesOrderCancellationStatus.APPROVED)
                 .stream()
-                .collect(Collectors.toMap(
-                        CancelledQuantityProjection::salesOrderLineId,
-                        CancelledQuantityProjection::cancelledQuantity
-                ));
+                .collect(Collectors.toMap(CancelledQuantityProjection::salesOrderLineId, Function.identity()));
     }
 
     //SO 明細 ID → 已出貨與進行中 DO 數量；沒有 DO 的明細不會出現在結果中

@@ -75,6 +75,7 @@ public class PurchaseOrderController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    //回傳這次產生的所有草稿，一家供應商一張，數量有限所以不分頁
     @PostMapping("/batch-drafts")
     public ResponseEntity<List<PurchaseOrderDetailResponse>> createBatchDrafts(
             @Valid @RequestBody CreateBatchDraftsRequest request

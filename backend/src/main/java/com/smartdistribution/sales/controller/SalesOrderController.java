@@ -50,6 +50,7 @@ public class SalesOrderController {
     }
 
     //路徑比 /{salesOrderId} 具體，Spring 會優先對應到這裡
+    //不分頁：尚待規劃要逐行即時計算，無法在資料庫分頁；採購也需要看到全部才能依供應商分組
     @GetMapping("/shortages")
     public ResponseEntity<List<SalesOrderShortageResponse>> findShortages(
             @RequestParam(required = false) Long companyItemId,

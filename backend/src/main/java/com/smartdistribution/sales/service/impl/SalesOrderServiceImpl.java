@@ -47,7 +47,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -103,10 +102,8 @@ public class SalesOrderServiceImpl implements SalesOrderService {
 
         //每核准一張取消申請，訂單內容就變一次，版次跟著加 1
         List<String> cancellationNumbers = salesOrderCancellationRepository
-                .findAllBySalesOrderIdOrderByIdDesc(salesOrderId)
+                .findAllBySalesOrderIdAndStatusOrderByApprovedAtAsc(salesOrderId, SalesOrderCancellationStatus.APPROVED)
                 .stream()
-                .filter(cancellation -> cancellation.getStatus() == SalesOrderCancellationStatus.APPROVED)
-                .sorted(Comparator.comparing(SalesOrderCancellation::getApprovedAt))
                 .map(SalesOrderCancellation::getCancellationNumber)
                 .toList();
         int version = 1 + cancellationNumbers.size();
@@ -368,9 +365,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 );
             }
 
-            LocalDate deliveryDate = line.requestedDeliveryDate() != null
-                    ? line.requestedDeliveryDate()
-                    : headerDeliveryDate;
+            LocalDate deliveryDate = line.resolveDeliveryDate(headerDeliveryDate);
             if (!keys.add(line.customerItemMappingId() + ":" + line.unit() + ":" + deliveryDate)) {
                 throw new BusinessException(
                         ErrorCode.SO_LINE_INVALID,

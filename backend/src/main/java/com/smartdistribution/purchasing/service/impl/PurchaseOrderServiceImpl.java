@@ -126,94 +126,28 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     @Transactional
     @PreAuthorize("hasAuthority('PO_CREATE')")
     public List<PurchaseOrderDetailResponse> createBatchDrafts(CreateBatchDraftsRequest request) {
-        List<CreateBatchDraftsRequest.Line> requestLines = request.lines();
-        Map<Long, SalesOrderLineDemand> demands = salesOrderDemandService.findDemands(
-                requestLines.stream().map(CreateBatchDraftsRequest.Line::salesOrderLineId).toList()
-        );
-
         //1. 補上料號、基準單位與供應商；行號用整批的順序，錯誤訊息才對得上畫面
-        List<LineInput> inputs = new ArrayList<>();
-        List<Long> supplierIds = new ArrayList<>();
-        for (int index = 0; index < requestLines.size(); index++) {
-            CreateBatchDraftsRequest.Line line = requestLines.get(index);
-            String prefix = "第 " + (index + 1) + " 行：";
-
-            SalesOrderLineDemand demand = demands.get(line.salesOrderLineId());
-            if (demand == null) {
-                throw new BusinessException(ErrorCode.PO_SOURCE_INVALID, prefix + "找不到來源 SO 明細。");
-            }
-
-            CompanyItem item = purchaseOrderMasterData.findCompanyItem(demand.companyItemId());
-            Long supplierId = line.supplierId() != null ? line.supplierId() : item.getPreferredSupplierId();
-            if (supplierId == null) {
-                throw new BusinessException(
-                        ErrorCode.PO_BATCH_SUPPLIER_REQUIRED,
-                        prefix + item.getItemCode() + " 沒有偏好供應商，請指定供應商。"
-                );
-            }
-
-            inputs.add(new LineInput(
-                    index + 1,
-                    item.getId(),
-                    line.salesOrderLineId(),
-                    line.quantity(),
-                    item.getBaseUnit(),
-                    null
-            ));
-            supplierIds.add(supplierId);
-        }
+        List<BatchLine> batchLines = toBatchLines(request.lines());
+        Map<Integer, Long> supplierByLineNo = batchLines.stream()
+                .collect(Collectors.toMap(batchLine -> batchLine.input().lineNo(), BatchLine::supplierId));
 
         //2. 整批一起檢查，同一筆 SO 明細重複、超過尚待規劃都在這裡擋下
         List<CheckedLine> checkedLines = purchaseOrderLineValidator.validate(
-                inputs,
+                batchLines.stream().map(BatchLine::input).toList(),
                 PurchaseOrderQuantities.NO_EXCLUDED_PURCHASE_ORDER
         );
 
         //3. 依供應商分組，保留第一次出現的順序
         Map<Long, List<CheckedLine>> linesBySupplier = new LinkedHashMap<>();
-        for (int index = 0; index < checkedLines.size(); index++) {
-            linesBySupplier.computeIfAbsent(supplierIds.get(index), id -> new ArrayList<>())
-                    .add(checkedLines.get(index));
+        for (CheckedLine checkedLine : checkedLines) {
+            Long supplierId = supplierByLineNo.get(checkedLine.input().lineNo());
+            linesBySupplier.computeIfAbsent(supplierId, id -> new ArrayList<>()).add(checkedLine);
         }
 
-        //4. 一家供應商一張草稿；每張的行號從 1 開始，單價預填最近一次核准的單價
-        List<PurchaseOrderDetailResponse> drafts = new ArrayList<>();
-        for (Map.Entry<Long, List<CheckedLine>> entry : linesBySupplier.entrySet()) {
-            Supplier supplier = findActiveSupplier(entry.getKey());
-
-            PurchaseOrder purchaseOrder = new PurchaseOrder(
-                    supplier.getId(),
-                    currentUserProvider.getCurrentUserId(),
-                    null,
-                    null
-            );
-            purchaseOrderRepository.saveAndFlush(purchaseOrder);
-            purchaseOrder.assignNumber();
-
-            List<CheckedLine> supplierLines = entry.getValue();
-            List<CheckedLine> numberedLines = new ArrayList<>();
-            for (int index = 0; index < supplierLines.size(); index++) {
-                CheckedLine checked = supplierLines.get(index);
-                LineInput input = checked.input();
-                numberedLines.add(new CheckedLine(
-                        new LineInput(
-                                index + 1,
-                                input.companyItemId(),
-                                input.salesOrderLineId(),
-                                input.quantity(),
-                                input.unit(),
-                                findLastApprovedPrice(supplier.getId(), input.companyItemId(), input.unit())
-                        ),
-                        checked.conversionFactor()
-                ));
-            }
-
-            saveLines(purchaseOrder, numberedLines);
-            purchaseOrderRepository.flush();
-            drafts.add(purchaseOrderAssembler.toDetail(purchaseOrder));
-        }
-
-        return drafts;
+        //4. 一家供應商一張草稿
+        return linesBySupplier.entrySet().stream()
+                .map(entry -> createBatchDraft(entry.getKey(), entry.getValue()))
+                .toList();
     }
 
     @Override
@@ -364,6 +298,87 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                     input.unitPriceExcludingTax()
             ));
         }
+    }
+
+    //批次的一行：檢查用的明細輸入，加上這一行要向哪家供應商買
+    private record BatchLine(LineInput input, Long supplierId) {
+    }
+
+    //由 SO 明細找出料號，帶入基準單位；供應商沒指定就用偏好供應商，且必須啟用
+    private List<BatchLine> toBatchLines(List<CreateBatchDraftsRequest.Line> requestLines) {
+        Map<Long, SalesOrderLineDemand> demands = salesOrderDemandService.findDemands(
+                requestLines.stream().map(CreateBatchDraftsRequest.Line::salesOrderLineId).toList()
+        );
+
+        List<BatchLine> batchLines = new ArrayList<>();
+        for (int index = 0; index < requestLines.size(); index++) {
+            CreateBatchDraftsRequest.Line line = requestLines.get(index);
+            String prefix = "第 " + (index + 1) + " 行：";
+
+            SalesOrderLineDemand demand = demands.get(line.salesOrderLineId());
+            if (demand == null) {
+                throw new BusinessException(ErrorCode.PO_SOURCE_INVALID, prefix + "找不到來源 SO 明細。");
+            }
+
+            CompanyItem item = purchaseOrderMasterData.findCompanyItem(demand.companyItemId());
+            Long supplierId = line.supplierId() != null ? line.supplierId() : item.getPreferredSupplierId();
+            if (supplierId == null) {
+                throw new BusinessException(
+                        ErrorCode.PO_BATCH_SUPPLIER_REQUIRED,
+                        prefix + item.getItemCode() + " 沒有偏好供應商，請指定供應商。"
+                );
+            }
+
+            Supplier supplier = purchaseOrderMasterData.findSupplier(supplierId);
+            if (supplier.getStatus() != MasterDataStatus.ACTIVE) {
+                throw new BusinessException(
+                        ErrorCode.PO_SUPPLIER_INACTIVE,
+                        prefix + "供應商 " + supplier.getSupplierCode() + " 尚未啟用或已停用。"
+                );
+            }
+
+            batchLines.add(new BatchLine(
+                    new LineInput(
+                            index + 1,
+                            item.getId(),
+                            line.salesOrderLineId(),
+                            line.quantity(),
+                            item.getBaseUnit(),
+                            null
+                    ),
+                    supplierId
+            ));
+        }
+
+        return batchLines;
+    }
+
+    //一家供應商一張草稿：行號從 1 開始，單價預填最近一次核准的單價，到貨日留空
+    private PurchaseOrderDetailResponse createBatchDraft(Long supplierId, List<CheckedLine> checkedLines) {
+        PurchaseOrder purchaseOrder = new PurchaseOrder(supplierId, currentUserProvider.getCurrentUserId(), null, null);
+        purchaseOrderRepository.saveAndFlush(purchaseOrder);
+        purchaseOrder.assignNumber();
+
+        List<CheckedLine> numberedLines = new ArrayList<>();
+        for (int index = 0; index < checkedLines.size(); index++) {
+            LineInput input = checkedLines.get(index).input();
+            numberedLines.add(new CheckedLine(
+                    new LineInput(
+                            index + 1,
+                            input.companyItemId(),
+                            input.salesOrderLineId(),
+                            input.quantity(),
+                            input.unit(),
+                            findLastApprovedPrice(supplierId, input.companyItemId(), input.unit())
+                    ),
+                    checkedLines.get(index).conversionFactor()
+            ));
+        }
+
+        saveLines(purchaseOrder, numberedLines);
+        purchaseOrderRepository.flush();
+
+        return purchaseOrderAssembler.toDetail(purchaseOrder);
     }
 
     //同一供應商、料號與單位最近一次核准的單價；從未採購過時為 null
