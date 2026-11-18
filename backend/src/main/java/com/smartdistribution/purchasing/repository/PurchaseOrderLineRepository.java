@@ -4,6 +4,7 @@ import com.smartdistribution.masterdata.common.UnitOfMeasure;
 import com.smartdistribution.purchasing.entity.PurchaseOrderLine;
 import com.smartdistribution.purchasing.entity.PurchaseOrderStatus;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -16,6 +17,12 @@ import java.util.List;
 public interface PurchaseOrderLineRepository extends JpaRepository<PurchaseOrderLine, Long> {
 
     List<PurchaseOrderLine> findAllByPurchaseOrderIdOrderByLineNoAsc(Long purchaseOrderId);
+
+    //SO 詳情列出關聯的 PO：連同 PO 表頭一起載入，依 PO 建立順序
+    @EntityGraph(attributePaths = "purchaseOrder")
+    List<PurchaseOrderLine> findAllBySalesOrderLineIdInOrderByPurchaseOrderIdAscLineNoAsc(
+            Collection<Long> salesOrderLineIds
+    );
 
     //待收貨清單一次取回這一頁所有 PO 的明細
     List<PurchaseOrderLine> findAllByPurchaseOrderIdInOrderByLineNoAsc(Collection<Long> purchaseOrderIds);

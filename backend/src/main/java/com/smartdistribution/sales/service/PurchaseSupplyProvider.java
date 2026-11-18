@@ -1,7 +1,9 @@
 package com.smartdistribution.sales.service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -13,7 +15,7 @@ import java.util.Map;
 public interface PurchaseSupplyProvider {
 
     /**
-     * @return SO 明細 ID → 採購供應數量；沒有任何 PO 關聯的明細不會出現在結果中
+     * @return SO 明細 ID → 採購供應數量與關聯的 PO；沒有任何 PO 關聯的明細不會出現在結果中
      */
     Map<Long, PurchaseSupply> findBySalesOrderLines(Collection<Long> salesOrderLineIds);
 
@@ -22,12 +24,34 @@ public interface PurchaseSupplyProvider {
      *
      * @param plannedNotOrderedQty 已規劃未下單：關聯這筆明細、尚未核准的 PO 數量
      * @param inTransitQty         採購在途：關聯這筆明細、已核准但還沒入庫的 PO 數量
+     * @param purchaseOrders       關聯這筆明細的所有 PO，包含已取消、已結案的，依建立順序
      */
     record PurchaseSupply(
             BigDecimal plannedNotOrderedQty,
-            BigDecimal inTransitQty
+            BigDecimal inTransitQty,
+            List<LinkedPurchaseOrder> purchaseOrders
     ) {
 
-        public static final PurchaseSupply NONE = new PurchaseSupply(BigDecimal.ZERO, BigDecimal.ZERO);
+        public static final PurchaseSupply NONE = new PurchaseSupply(BigDecimal.ZERO, BigDecimal.ZERO, List.of());
+    }
+
+    /**
+     * 關聯 SO 明細的一張 PO；不含單價，看 SO 的人不一定有採購權限
+     * 狀態用字串，銷售模組不依賴採購的列舉
+     *
+     * @param status       PO 表頭狀態，例如 APPROVED、CANCELLED
+     * @param lineStatus   PO 明細狀態，例如 OPEN、COMPLETED、CLOSED_SHORT
+     * @param baseQty      這一行關聯的訂購量（庫存基準單位）
+     * @param receivedQty  已收的合格數量（庫存基準單位）
+     */
+    record LinkedPurchaseOrder(
+            Long purchaseOrderId,
+            String poNumber,
+            String status,
+            String lineStatus,
+            BigDecimal baseQty,
+            BigDecimal receivedQty,
+            LocalDate expectedArrivalDate
+    ) {
     }
 }

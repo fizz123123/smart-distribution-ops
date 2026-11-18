@@ -112,6 +112,54 @@ class PurchaseOrderCloseApiIntegrationTest extends PurchaseOrderTestSupport {
     }
 
     @Test
+    void salesOrderDetailListsLinkedPurchaseOrdersOfAllStatuses() throws Exception {
+        String warehouseManager = login(createUser("wh-manager", "WAREHOUSE_MANAGER"));
+        String salesManager = login(createUser("sales-manager", "SALES_MANAGER"));
+        String purchasing = login(createUser("purchasing", "PURCHASING"));
+        String purchasingManager = login(createUser("purchasing-manager", "PURCHASING_MANAGER"));
+        Supplier supplier = createActiveSupplier();
+        ShortageOrder order = createShortageOrder(warehouseManager, salesManager, "0", "6");
+
+        //第 1 張核准後取消
+        Long cancelledId = createApprovedPo(
+                purchasing, purchasingManager,
+                poBody(supplier, poLine(order.item(), order.salesOrderLineId(), "2", "120"))
+        );
+        closePo(purchasingManager, "cancel", cancelledId, "供應商停產", poVersion(purchasing, cancelledId))
+                .andExpect(status().isOk());
+
+        //第 2 張全部收齊
+        Long receivedId = createApprovedPo(
+                purchasing, purchasingManager,
+                poBody(supplier, poLine(order.item(), order.salesOrderLineId(), "2", "120"))
+        );
+        postReceipt(warehouseManager, receivedId, receiptLine(findPoLineId(receivedId), "2", "2", "0", null))
+                .andExpect(status().isCreated());
+
+        //第 3 張還是草稿
+        PurchaseOrderVersion draft = createPoDraft(
+                purchasing,
+                poBody(supplier, poLine(order.item(), order.salesOrderLineId(), "1", "120"))
+        );
+
+        //業務看 SO 詳情：三張都列出，依建立順序，不含單價
+        getOrder(order.salesToken(), order.salesOrderId())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lines[0].supply.purchaseOrders.length()").value(3))
+                .andExpect(jsonPath("$.lines[0].supply.purchaseOrders[0].purchaseOrderId").value(cancelledId))
+                .andExpect(jsonPath("$.lines[0].supply.purchaseOrders[0].status").value("CANCELLED"))
+                .andExpect(jsonPath("$.lines[0].supply.purchaseOrders[0].lineStatus").value("CANCELLED"))
+                .andExpect(jsonPath("$.lines[0].supply.purchaseOrders[1].status").value("CLOSED"))
+                .andExpect(jsonPath("$.lines[0].supply.purchaseOrders[1].lineStatus").value("COMPLETED"))
+                .andExpect(jsonPath("$.lines[0].supply.purchaseOrders[1].baseQty").value(2))
+                .andExpect(jsonPath("$.lines[0].supply.purchaseOrders[1].receivedQty").value(2))
+                .andExpect(jsonPath("$.lines[0].supply.purchaseOrders[2].purchaseOrderId").value(draft.id()))
+                .andExpect(jsonPath("$.lines[0].supply.purchaseOrders[2].status").value("DRAFT"))
+                .andExpect(jsonPath("$.lines[0].supply.purchaseOrders[2].expectedArrivalDate").value("2026-11-10"))
+                .andExpect(jsonPath("$.lines[0].supply.purchaseOrders[0].unitPriceExcludingTax").doesNotExist());
+    }
+
+    @Test
     void shortCloseStopsWaitingForTheRestAndKeepsReceivedStock() throws Exception {
         String warehouseManager = login(createUser("wh-manager", "WAREHOUSE_MANAGER"));
         String salesManager = login(createUser("sales-manager", "SALES_MANAGER"));

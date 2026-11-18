@@ -4,6 +4,7 @@ import com.smartdistribution.masterdata.common.UnitOfMeasure;
 import com.smartdistribution.masterdata.customer.entity.PaymentTerm;
 import com.smartdistribution.pricing.service.PriceSource;
 import com.smartdistribution.sales.entity.DeliveryMethod;
+import com.smartdistribution.sales.service.PurchaseSupplyProvider.LinkedPurchaseOrder;
 import com.smartdistribution.sales.entity.SalesOrderChannel;
 import com.smartdistribution.sales.entity.SalesOrderStatus;
 
@@ -96,7 +97,8 @@ public record SalesOrderDetailResponse(
             BigDecimal deliveringQty,
             BigDecimal shippedQty,
             BigDecimal cancelledQty,
-            BigDecimal unplannedQty
+            BigDecimal unplannedQty,
+            List<LinkedPurchaseOrder> purchaseOrders //關聯這一行的所有 PO，不含單價
     ) {
     }
 }

@@ -336,7 +336,8 @@ public class SalesOrderAssembler {
                 shipment.deliveringQty(),
                 shippedQty,
                 cancelledQty,
-                unplannedQty
+                unplannedQty,
+                purchase.purchaseOrders()
         );
     }
 
