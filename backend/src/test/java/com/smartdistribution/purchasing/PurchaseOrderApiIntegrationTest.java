@@ -15,6 +15,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import java.time.LocalDate;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -247,5 +248,88 @@ class PurchaseOrderApiIntegrationTest extends PurchaseOrderTestSupport {
                         .param("companyItemId", item.getId().toString())
                         .param("preferredSupplierId", "-1"))
                 .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void batchDraftsAreGroupedBySupplierWithLastApprovedPrice() throws Exception {
+        String warehouseManager = login(createUser("batch-wh", "WAREHOUSE_MANAGER"));
+        String salesManager = login(createUser("batch-sales-manager", "SALES_MANAGER"));
+        String purchasing = login(createUser("batch-purchasing", "PURCHASING"));
+        String purchasingManager = login(createUser("batch-purchasing-manager", "PURCHASING_MANAGER"));
+        Supplier preferred = createActiveSupplier();
+        Supplier other = createActiveSupplier();
+        ShortageOrder orderA = createShortageOrder(warehouseManager, salesManager, "0", "3");
+        ShortageOrder orderB = createShortageOrder(warehouseManager, salesManager, "0", "2");
+        jdbcTemplate.update(
+                "UPDATE company_item SET preferred_supplier_id = ? WHERE id = ?",
+                preferred.getId(), orderA.item().getId()
+        );
+
+        //料號 A 向偏好供應商買過一次，核准單價 88
+        createApprovedPo(purchasing, purchasingManager, poBody(preferred, poLine(orderA.item(), null, "1", "88")));
+
+        //料號 B 沒有偏好供應商也沒指定：整批不建立
+        mockMvc.perform(post("/api/v1/purchase-orders/batch-drafts")
+                        .header("Authorization", bearer(purchasing))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(batchBody(
+                                batchLine(orderA.salesOrderLineId(), null, "3"),
+                                batchLine(orderB.salesOrderLineId(), null, "2")
+                        )))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PO_BATCH_SUPPLIER_REQUIRED"))
+                .andExpect(jsonPath("$.message").value(containsString("第 2 行")));
+        assertThat(countLinkedPurchaseOrderLines(orderA.salesOrderLineId())).isZero();
+
+        //A 用偏好供應商、B 指定另一家：產生兩張草稿
+        mockMvc.perform(post("/api/v1/purchase-orders/batch-drafts")
+                        .header("Authorization", bearer(purchasing))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(batchBody(
+                                batchLine(orderA.salesOrderLineId(), null, "3"),
+                                batchLine(orderB.salesOrderLineId(), other.getId(), "2")
+                        )))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].status").value("DRAFT"))
+                .andExpect(jsonPath("$[0].supplier.id").value(preferred.getId()))
+                .andExpect(jsonPath("$[0].expectedArrivalDate").doesNotExist())
+                .andExpect(jsonPath("$[0].lines[0].lineNo").value(1))
+                .andExpect(jsonPath("$[0].lines[0].source.salesOrderLineId").value(orderA.salesOrderLineId()))
+                .andExpect(jsonPath("$[0].lines[0].unit").value("PCS"))
+                .andExpect(jsonPath("$[0].lines[0].unitPriceExcludingTax").value(88))
+                .andExpect(jsonPath("$[1].supplier.id").value(other.getId()))
+                .andExpect(jsonPath("$[1].lines[0].unitPriceExcludingTax").doesNotExist());
+
+        //A 已經全部排進草稿，再排就超過尚待規劃，整批不建立
+        mockMvc.perform(post("/api/v1/purchase-orders/batch-drafts")
+                        .header("Authorization", bearer(purchasing))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(batchBody(batchLine(orderA.salesOrderLineId(), null, "1"))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PO_SOURCE_QUANTITY_EXCEEDED"));
+        assertThat(countLinkedPurchaseOrderLines(orderA.salesOrderLineId())).isEqualTo(1);
+    }
+
+    private String batchLine(Long salesOrderLineId, Long supplierId, String quantity) {
+        return """
+                {"salesOrderLineId": %d, "supplierId": %s, "quantity": %s}
+                """.formatted(salesOrderLineId, supplierId, quantity);
+    }
+
+    private String batchBody(String... lines) {
+        return """
+                {"lines": [%s]}
+                """.formatted(String.join(", ", lines));
+    }
+
+    private int countLinkedPurchaseOrderLines(Long salesOrderLineId) {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM purchase_order_line WHERE sales_order_line_id = ?",
+                Integer.class,
+                salesOrderLineId
+        );
+
+        return count == null ? 0 : count;
     }
 }

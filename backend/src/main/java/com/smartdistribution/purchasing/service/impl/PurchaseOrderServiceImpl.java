@@ -7,7 +7,9 @@ import com.smartdistribution.document.service.DocumentService;
 import com.smartdistribution.document.service.StoredDocument;
 import com.smartdistribution.masterdata.common.MasterDataStatus;
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
+import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.supplier.entity.Supplier;
+import com.smartdistribution.purchasing.dto.request.CreateBatchDraftsRequest;
 import com.smartdistribution.purchasing.dto.request.CreatePurchaseOrderRequest;
 import com.smartdistribution.purchasing.dto.request.UpdatePurchaseOrderRequest;
 import com.smartdistribution.purchasing.dto.response.LastPriceResponse;
@@ -26,6 +28,8 @@ import com.smartdistribution.purchasing.service.PurchaseOrderLineValidator;
 import com.smartdistribution.purchasing.service.PurchaseOrderMasterData;
 import com.smartdistribution.purchasing.service.PurchaseOrderQuantities;
 import com.smartdistribution.purchasing.service.PurchaseOrderService;
+import com.smartdistribution.sales.service.SalesOrderDemandService;
+import com.smartdistribution.sales.service.SalesOrderDemandService.SalesOrderLineDemand;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 import com.smartdistribution.shared.security.currentuser.CurrentUserProvider;
@@ -42,6 +46,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -56,6 +62,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final PurchaseOrderLineRepository purchaseOrderLineRepository;
     private final PurchaseOrderMasterData purchaseOrderMasterData;
+    private final SalesOrderDemandService salesOrderDemandService;
     private final PurchaseOrderLineValidator purchaseOrderLineValidator;
     private final PurchaseOrderAssembler purchaseOrderAssembler;
     private final ApprovalService approvalService;
@@ -86,11 +93,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     @Override
     @PreAuthorize("hasAuthority('PO_CREATE')")
     public LastPriceResponse findLastPrice(Long supplierId, Long companyItemId, UnitOfMeasure unit) {
-        List<BigDecimal> prices = purchaseOrderLineRepository.findApprovedPrices(
-                supplierId, companyItemId, unit, PageRequest.of(0, 1)
-        );
-
-        return new LastPriceResponse(prices.isEmpty() ? null : prices.getFirst());
+        return new LastPriceResponse(findLastApprovedPrice(supplierId, companyItemId, unit));
     }
 
     @Override
@@ -117,6 +120,100 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         purchaseOrderRepository.flush();
 
         return purchaseOrderAssembler.toDetail(purchaseOrder);
+    }
+
+    @Override
+    @Transactional
+    @PreAuthorize("hasAuthority('PO_CREATE')")
+    public List<PurchaseOrderDetailResponse> createBatchDrafts(CreateBatchDraftsRequest request) {
+        List<CreateBatchDraftsRequest.Line> requestLines = request.lines();
+        Map<Long, SalesOrderLineDemand> demands = salesOrderDemandService.findDemands(
+                requestLines.stream().map(CreateBatchDraftsRequest.Line::salesOrderLineId).toList()
+        );
+
+        //1. 補上料號、基準單位與供應商；行號用整批的順序，錯誤訊息才對得上畫面
+        List<LineInput> inputs = new ArrayList<>();
+        List<Long> supplierIds = new ArrayList<>();
+        for (int index = 0; index < requestLines.size(); index++) {
+            CreateBatchDraftsRequest.Line line = requestLines.get(index);
+            String prefix = "第 " + (index + 1) + " 行：";
+
+            SalesOrderLineDemand demand = demands.get(line.salesOrderLineId());
+            if (demand == null) {
+                throw new BusinessException(ErrorCode.PO_SOURCE_INVALID, prefix + "找不到來源 SO 明細。");
+            }
+
+            CompanyItem item = purchaseOrderMasterData.findCompanyItem(demand.companyItemId());
+            Long supplierId = line.supplierId() != null ? line.supplierId() : item.getPreferredSupplierId();
+            if (supplierId == null) {
+                throw new BusinessException(
+                        ErrorCode.PO_BATCH_SUPPLIER_REQUIRED,
+                        prefix + item.getItemCode() + " 沒有偏好供應商，請指定供應商。"
+                );
+            }
+
+            inputs.add(new LineInput(
+                    index + 1,
+                    item.getId(),
+                    line.salesOrderLineId(),
+                    line.quantity(),
+                    item.getBaseUnit(),
+                    null
+            ));
+            supplierIds.add(supplierId);
+        }
+
+        //2. 整批一起檢查，同一筆 SO 明細重複、超過尚待規劃都在這裡擋下
+        List<CheckedLine> checkedLines = purchaseOrderLineValidator.validate(
+                inputs,
+                PurchaseOrderQuantities.NO_EXCLUDED_PURCHASE_ORDER
+        );
+
+        //3. 依供應商分組，保留第一次出現的順序
+        Map<Long, List<CheckedLine>> linesBySupplier = new LinkedHashMap<>();
+        for (int index = 0; index < checkedLines.size(); index++) {
+            linesBySupplier.computeIfAbsent(supplierIds.get(index), id -> new ArrayList<>())
+                    .add(checkedLines.get(index));
+        }
+
+        //4. 一家供應商一張草稿；每張的行號從 1 開始，單價預填最近一次核准的單價
+        List<PurchaseOrderDetailResponse> drafts = new ArrayList<>();
+        for (Map.Entry<Long, List<CheckedLine>> entry : linesBySupplier.entrySet()) {
+            Supplier supplier = findActiveSupplier(entry.getKey());
+
+            PurchaseOrder purchaseOrder = new PurchaseOrder(
+                    supplier.getId(),
+                    currentUserProvider.getCurrentUserId(),
+                    null,
+                    null
+            );
+            purchaseOrderRepository.saveAndFlush(purchaseOrder);
+            purchaseOrder.assignNumber();
+
+            List<CheckedLine> supplierLines = entry.getValue();
+            List<CheckedLine> numberedLines = new ArrayList<>();
+            for (int index = 0; index < supplierLines.size(); index++) {
+                CheckedLine checked = supplierLines.get(index);
+                LineInput input = checked.input();
+                numberedLines.add(new CheckedLine(
+                        new LineInput(
+                                index + 1,
+                                input.companyItemId(),
+                                input.salesOrderLineId(),
+                                input.quantity(),
+                                input.unit(),
+                                findLastApprovedPrice(supplier.getId(), input.companyItemId(), input.unit())
+                        ),
+                        checked.conversionFactor()
+                ));
+            }
+
+            saveLines(purchaseOrder, numberedLines);
+            purchaseOrderRepository.flush();
+            drafts.add(purchaseOrderAssembler.toDetail(purchaseOrder));
+        }
+
+        return drafts;
     }
 
     @Override
@@ -267,6 +364,15 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                     input.unitPriceExcludingTax()
             ));
         }
+    }
+
+    //同一供應商、料號與單位最近一次核准的單價；從未採購過時為 null
+    private BigDecimal findLastApprovedPrice(Long supplierId, Long companyItemId, UnitOfMeasure unit) {
+        List<BigDecimal> prices = purchaseOrderLineRepository.findApprovedPrices(
+                supplierId, companyItemId, unit, PageRequest.of(0, 1)
+        );
+
+        return prices.isEmpty() ? null : prices.getFirst();
     }
 
     private Supplier findActiveSupplier(Long supplierId) {
