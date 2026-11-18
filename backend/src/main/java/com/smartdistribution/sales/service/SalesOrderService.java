@@ -2,6 +2,7 @@ package com.smartdistribution.sales.service;
 
 import com.smartdistribution.sales.dto.request.CreateSalesOrderRequest;
 import com.smartdistribution.sales.dto.request.UpdateSalesOrderRequest;
+import com.smartdistribution.sales.dto.response.SalesOrderConfirmationFile;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderShortageResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderSummaryResponse;
@@ -39,6 +40,12 @@ public interface SalesOrderService {
      * 送審：檢查主檔、單位、價格與交期，保存交易快照後建立核准申請
      */
     SalesOrderDetailResponse submitSalesOrder(Long salesOrderId, VersionRequest request);
+
+    /**
+     * 訂單確認單 PDF：只有已核准、已結案的 SO 可以列印；隨時產生、不存檔
+     * 版次 ＝ 1 ＋ 已核准的取消申請張數，同一版次重印內容相同
+     */
+    SalesOrderConfirmationFile printConfirmation(Long salesOrderId);
 
     /**
      * 放棄草稿：DRAFT / RETURNED → CANCELLED

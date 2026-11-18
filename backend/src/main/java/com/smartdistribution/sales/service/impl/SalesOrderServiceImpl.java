@@ -7,23 +7,28 @@ import com.smartdistribution.masterdata.common.MasterDataStatus;
 import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
-import com.smartdistribution.pricing.service.PriceLookupService;
 import com.smartdistribution.pricing.service.PriceLookupService.ApplicablePrice;
+import com.smartdistribution.pricing.service.PriceLookupService;
 import com.smartdistribution.sales.dto.request.CreateSalesOrderRequest;
 import com.smartdistribution.sales.dto.request.SalesOrderLineRequest;
 import com.smartdistribution.sales.dto.request.UpdateSalesOrderRequest;
+import com.smartdistribution.sales.dto.response.SalesOrderConfirmationFile;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderShortageResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderSummaryResponse;
 import com.smartdistribution.sales.entity.DeliveryMethod;
 import com.smartdistribution.sales.entity.SalesOrder;
+import com.smartdistribution.sales.entity.SalesOrderCancellation;
+import com.smartdistribution.sales.entity.SalesOrderCancellationStatus;
 import com.smartdistribution.sales.entity.SalesOrderChannel;
 import com.smartdistribution.sales.entity.SalesOrderLine;
 import com.smartdistribution.sales.entity.SalesOrderStatus;
 import com.smartdistribution.sales.mapper.SalesOrderAssembler;
+import com.smartdistribution.sales.repository.SalesOrderCancellationRepository;
 import com.smartdistribution.sales.repository.SalesOrderLineRepository;
 import com.smartdistribution.sales.repository.SalesOrderRepository;
 import com.smartdistribution.sales.service.SalesOrderAmounts;
+import com.smartdistribution.sales.service.SalesOrderConfirmationPdfLayout;
 import com.smartdistribution.sales.service.SalesOrderMasterData;
 import com.smartdistribution.sales.service.SalesOrderService;
 import com.smartdistribution.shared.exception.BusinessException;
@@ -42,6 +47,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -59,6 +65,8 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     private final SalesOrderMasterData salesOrderMasterData;
     private final PriceLookupService priceLookupService;
     private final SalesOrderAssembler salesOrderAssembler;
+    private final SalesOrderCancellationRepository salesOrderCancellationRepository;
+    private final SalesOrderConfirmationPdfLayout salesOrderConfirmationPdfLayout;
     private final ApprovalService approvalService;
     private final UserDirectoryService userDirectoryService;
     private final CurrentUserProvider currentUserProvider;
@@ -82,6 +90,37 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     @PreAuthorize("hasAuthority('SO_VIEW')")
     public SalesOrderDetailResponse findSalesOrder(Long salesOrderId) {
         return salesOrderAssembler.toDetail(findSalesOrderById(salesOrderId));
+    }
+
+    @Override
+    @PreAuthorize("hasAuthority('SO_VIEW')")
+    public SalesOrderConfirmationFile printConfirmation(Long salesOrderId) {
+        SalesOrder salesOrder = findSalesOrderById(salesOrderId);
+
+        if (salesOrder.getStatus() != SalesOrderStatus.APPROVED && salesOrder.getStatus() != SalesOrderStatus.CLOSED) {
+            throw new BusinessException(ErrorCode.SO_STATUS_CONFLICT, "只有已核准或已結案的訂單可以列印確認單。");
+        }
+
+        //每核准一張取消申請，訂單內容就變一次，版次跟著加 1
+        List<String> cancellationNumbers = salesOrderCancellationRepository
+                .findAllBySalesOrderIdOrderByIdDesc(salesOrderId)
+                .stream()
+                .filter(cancellation -> cancellation.getStatus() == SalesOrderCancellationStatus.APPROVED)
+                .sorted(Comparator.comparing(SalesOrderCancellation::getApprovedAt))
+                .map(SalesOrderCancellation::getCancellationNumber)
+                .toList();
+        int version = 1 + cancellationNumbers.size();
+
+        byte[] content = salesOrderConfirmationPdfLayout.render(
+                salesOrderAssembler.toDetail(salesOrder),
+                version,
+                cancellationNumbers
+        );
+
+        return new SalesOrderConfirmationFile(
+                salesOrder.getSoNumber() + "-confirmation-v" + version + ".pdf",
+                content
+        );
     }
 
     @Override

@@ -2,6 +2,7 @@ package com.smartdistribution.sales.controller;
 
 import com.smartdistribution.sales.dto.request.CreateSalesOrderRequest;
 import com.smartdistribution.sales.dto.request.UpdateSalesOrderRequest;
+import com.smartdistribution.sales.dto.response.SalesOrderConfirmationFile;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderShortageResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderSummaryResponse;
@@ -14,7 +15,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -57,6 +61,19 @@ public class SalesOrderController {
     @GetMapping("/{salesOrderId}")
     public ResponseEntity<SalesOrderDetailResponse> findSalesOrder(@PathVariable Long salesOrderId) {
         return ResponseEntity.ok(salesOrderService.findSalesOrder(salesOrderId));
+    }
+
+    @GetMapping("/{salesOrderId}/confirmation")
+    public ResponseEntity<byte[]> printConfirmation(@PathVariable Long salesOrderId) {
+        SalesOrderConfirmationFile file = salesOrderService.printConfirmation(salesOrderId);
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(file.fileName()).build().toString()
+                )
+                .body(file.content());
     }
 
     @PostMapping
