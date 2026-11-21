@@ -1,0 +1,56 @@
+package com.smartdistribution.analytics.shortage.service.impl;
+
+import com.smartdistribution.analytics.shortage.dto.response.ShortageAnalysisResponse;
+import com.smartdistribution.analytics.shortage.mapper.ShortageAnalysisMapper;
+import com.smartdistribution.analytics.shortage.repository.ShortageAnalyticsRepository;
+import com.smartdistribution.analytics.shortage.service.ShortageAnalyticsService;
+import com.smartdistribution.analytics.shortage.service.ShortageRules;
+import com.smartdistribution.sales.service.SalesOrderSupplyService;
+import com.smartdistribution.sales.service.SalesOrderSupplyService.ApprovedLineSupply;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class ShortageAnalyticsServiceImpl implements ShortageAnalyticsService {
+
+    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
+
+    //平均採購週期看最近幾個月收齊的 PO 明細
+    private static final int LEAD_TIME_HISTORY_MONTHS = 6;
+
+    private final ShortageAnalyticsRepository shortageAnalyticsRepository;
+    private final ShortageAnalysisMapper shortageAnalysisMapper;
+    private final SalesOrderSupplyService salesOrderSupplyService;
+
+    @Override
+    @PreAuthorize("hasAnyAuthority('DASHBOARD_VIEW_ALL', 'ANALYTICS_SHORTAGE_VIEW')")
+    public ShortageAnalysisResponse findShortageAnalysis(Long companyItemId) {
+        LocalDate today = LocalDate.now(TAIPEI);
+        //尚待規劃用銷售模組的算法，和 SO 詳情、缺料清單一致
+        List<ApprovedLineSupply> supplies = salesOrderSupplyService.findApprovedLineSupplies(companyItemId);
+
+        return shortageAnalysisMapper.toResponse(
+                today,
+                shortageAnalyticsRepository.findItemStocks(
+                        companyItemId,
+                        today.minusDays(ShortageRules.USAGE_DAYS - 1),
+                        today,
+                        today.minusMonths(LEAD_TIME_HISTORY_MONTHS)
+                ),
+                supplies,
+                shortageAnalyticsRepository.findOpenPurchaseLines(companyItemId),
+                shortageAnalyticsRepository.findCustomerNames(
+                        supplies.stream().map(ApprovedLineSupply::customerId).collect(Collectors.toSet())
+                )
+        );
+    }
+}

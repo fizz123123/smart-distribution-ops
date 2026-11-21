@@ -37,7 +37,7 @@ public enum SupplyStatus {
         if (supply.unplannedQty().signum() > 0) {
             return UNPLANNED;
         }
-        if (supply.purchaseOrders().stream().anyMatch(po -> isOpen(po) && isLate(po, supply.deliveryDate(), today))) {
+        if (arrivesAfterDelivery(supply) || hasOverdueArrival(supply, today)) {
             return PURCHASE_DELAY_RISK;
         }
         if (supply.plannedNotOrderedQty().signum() > 0) {
@@ -52,17 +52,29 @@ public enum SupplyStatus {
         return READY;
     }
 
+    /**
+     * 缺貨分析的「到貨晚於交期」也用這個判斷
+     *
+     * @return 關聯的已核准 PO 還在等貨，預計到貨日卻晚於這一行的交期
+     */
+    public static boolean arrivesAfterDelivery(ApprovedLineSupply supply) {
+        LocalDate deliveryDate = supply.deliveryDate();
+        return deliveryDate != null && supply.purchaseOrders().stream()
+                .anyMatch(po -> isOpen(po)
+                        && po.expectedArrivalDate() != null
+                        && po.expectedArrivalDate().isAfter(deliveryDate));
+    }
+
+    //關聯的已核准 PO 已經過了預計到貨日，還沒收齊
+    private static boolean hasOverdueArrival(ApprovedLineSupply supply, LocalDate today) {
+        return supply.purchaseOrders().stream()
+                .anyMatch(po -> isOpen(po)
+                        && po.expectedArrivalDate() != null
+                        && po.expectedArrivalDate().isBefore(today));
+    }
+
     //已核准、這一行還在等貨的 PO
     private static boolean isOpen(LinkedPurchaseOrder po) {
         return OPEN_PO_STATUSES.contains(po.status()) && "OPEN".equals(po.lineStatus());
-    }
-
-    //預計到貨日晚於交期，或今天已經過了預計到貨日還沒收齊
-    private static boolean isLate(LinkedPurchaseOrder po, LocalDate deliveryDate, LocalDate today) {
-        LocalDate arrival = po.expectedArrivalDate();
-        if (arrival == null) {
-            return false;
-        }
-        return (deliveryDate != null && arrival.isAfter(deliveryDate)) || arrival.isBefore(today);
     }
 }
