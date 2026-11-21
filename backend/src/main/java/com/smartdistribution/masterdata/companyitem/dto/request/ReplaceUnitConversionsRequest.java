@@ -7,7 +7,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 import java.util.List;
 
 /**
- * 整份取代基準單位以外的換算；空清單代表清除全部換算（D-047）。
+ * 整份取代基準單位以外的換算；空清單代表清除全部換算。
  */
 public record ReplaceUnitConversionsRequest(
         @NotNull

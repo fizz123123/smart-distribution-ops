@@ -11,6 +11,7 @@ import com.smartdistribution.fulfillment.service.DeliveryOrderService;
 import com.smartdistribution.shared.web.request.ReasonRequest;
 import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
+import com.smartdistribution.shared.web.sort.SortWhitelist;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -34,6 +35,16 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class DeliveryOrderController {
 
+    //DO 清單：預設依建立時間，新的在前；SO 單號不在 DO 表頭上，請用 SO 篩選
+    private static final SortWhitelist DELIVERY_ORDER_SORTS = SortWhitelist.builder()
+            .field("createdAt", "createdAt")
+            .field("doNumber", "doNumber")
+            .field("plannedShipmentDate", "plannedShipmentDate")
+            .field("actualShipmentDate", "actualShipmentDate")
+            .field("status", "status")
+            .defaultSort(Sort.Direction.DESC, "createdAt")
+            .build();
+
     private final DeliveryOrderService deliveryOrderService;
 
     //通知出貨掛在 SO 底下，路徑表達 "替哪張 SO 出貨"
@@ -52,10 +63,11 @@ public class DeliveryOrderController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) DeliveryOrderStatus status,
             @RequestParam(required = false) Long salesOrderId,
-            @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC)
-            Pageable pageable
+            @PageableDefault(size = 20) Pageable pageable
     ) {
-        return ResponseEntity.ok(deliveryOrderService.findDeliveryOrders(keyword, status, salesOrderId, pageable));
+        return ResponseEntity.ok(deliveryOrderService.findDeliveryOrders(
+                keyword, status, salesOrderId, DELIVERY_ORDER_SORTS.apply(pageable)
+        ));
     }
 
     @GetMapping("/delivery-orders/{deliveryOrderId}")

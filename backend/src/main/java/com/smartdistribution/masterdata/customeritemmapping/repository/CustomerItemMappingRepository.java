@@ -17,7 +17,7 @@ public interface CustomerItemMappingRepository extends JpaRepository<CustomerIte
 
     boolean existsByCustomerIdAndCustomerItemCode(Long customerId, String customerItemCode);
 
-    // 客戶價格建立與覆核時鎖定對應列，同一對應的價格操作依序執行（D-049）
+    // 客戶價格建立與覆核時鎖定對應列，同一對應的價格操作依序執行
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT mapping FROM CustomerItemMapping mapping WHERE mapping.id = :id")
     Optional<CustomerItemMapping> findByIdForUpdate(@Param("id") Long id);

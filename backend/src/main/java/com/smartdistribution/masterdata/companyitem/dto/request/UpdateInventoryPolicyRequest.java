@@ -10,7 +10,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 
 public record UpdateInventoryPolicyRequest(
-        // 以庫存基準單位輸入，最多 3 位小數（D-044）
+        // 以庫存基準單位輸入，最多 3 位小數
         @NotNull
         @DecimalMin("0")
         @Digits(integer = 12, fraction = 3)

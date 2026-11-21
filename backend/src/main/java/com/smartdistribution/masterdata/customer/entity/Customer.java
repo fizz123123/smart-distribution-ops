@@ -50,7 +50,7 @@ public class Customer extends TimestampedEntity {
     @Column(length = 200)
     private String address;
 
-    //不屬於核准內容，任何狀態都可由財務主管修改（D-014）
+    //不屬於核准內容，任何狀態都可由財務主管修改
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_term", nullable = false, length = 10)
     private PaymentTerm paymentTerm;

@@ -23,7 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 完成揀貨、三聯出貨單、出貨過帳與作廢（AT-042～AT-046）
+ * 完成揀貨、三聯出貨單、出貨過帳與作廢
  */
 @SpringBootTest
 @AutoConfigureMockMvc

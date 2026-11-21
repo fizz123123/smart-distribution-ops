@@ -23,7 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * PO 核准：計入採購在途、產生正式 PDF、核准前提示與核准限制（AT-032）
+ * PO 核准：計入採購在途、產生正式 PDF、核准前提示與核准限制
  */
 @SpringBootTest
 @AutoConfigureMockMvc

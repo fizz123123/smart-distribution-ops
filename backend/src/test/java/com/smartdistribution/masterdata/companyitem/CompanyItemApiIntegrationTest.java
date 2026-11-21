@@ -28,7 +28,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -218,7 +217,7 @@ class CompanyItemApiIntegrationTest {
                 .andExpect(jsonPath("$.code").value("COMPANY_ITEM_UNIT_CONVERSION_INVALID"));
 
         // 已有換算時，草稿也不能改基準單位
-        mockMvc.perform(patch("/api/v1/company-items/{id}", item.id())
+        mockMvc.perform(put("/api/v1/company-items/{id}", item.id())
                         .header("Authorization", bearer(purchasing))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(updateBody(item.code(), ITEM_NAME, "PCS", null, readLong(result, "$.version"))))
@@ -234,14 +233,14 @@ class CompanyItemApiIntegrationTest {
 
         ItemVersion item = createActiveItem(purchasing, purchasingManager);
 
-        mockMvc.perform(patch("/api/v1/company-items/{id}", item.id())
+        mockMvc.perform(put("/api/v1/company-items/{id}", item.id())
                         .header("Authorization", bearer(purchasing))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(updateBody(item.code(), ITEM_NAME + " 改名", "STICK", null, item.version())))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("MASTER_DATA_IDENTITY_LOCKED"));
 
-        MvcResult updated = mockMvc.perform(patch("/api/v1/company-items/{id}", item.id())
+        MvcResult updated = mockMvc.perform(put("/api/v1/company-items/{id}", item.id())
                         .header("Authorization", bearer(purchasing))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(updateBody(item.code(), ITEM_NAME, "STICK", supplier.getId(), item.version())))

@@ -31,8 +31,8 @@ import java.util.Locale;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -237,7 +237,7 @@ class CustomerItemMappingApiIntegrationTest {
         approve(salesManager, findPendingApprovalId(mapping.id())).andExpect(status().isOk());
         Long activeVersion = mappingVersion(mapping.id());
 
-        mockMvc.perform(patch("/api/v1/customer-item-mappings/{id}", mapping.id())
+        mockMvc.perform(put("/api/v1/customer-item-mappings/{id}", mapping.id())
                         .header("Authorization", bearer(sales))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""

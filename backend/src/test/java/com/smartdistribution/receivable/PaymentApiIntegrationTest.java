@@ -18,7 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 收款、核銷與作廢收款（AT-053～AT-056，以及 AT-058 的「已收清不列入」）
+ * 收款、核銷與作廢收款；已收清的應收不列入
  */
 @SpringBootTest
 @AutoConfigureMockMvc

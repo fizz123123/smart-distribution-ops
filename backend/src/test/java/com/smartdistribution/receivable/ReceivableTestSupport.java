@@ -15,8 +15,8 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -134,7 +134,7 @@ public abstract class ReceivableTestSupport extends DeliveryOrderTestSupport {
     }
 
     protected ResultActions correctExternalInvoice(String token, Long receivableId, String body) throws Exception {
-        return mockMvc.perform(patch("/api/v1/receivables/{id}/external-invoice", receivableId)
+        return mockMvc.perform(put("/api/v1/receivables/{id}/external-invoice", receivableId)
                 .header("Authorization", bearer(token))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));

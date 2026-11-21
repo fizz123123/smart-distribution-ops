@@ -462,6 +462,52 @@ class InventoryAdjustmentApiIntegrationTest {
                 .andExpect(status().isOk());
     }
 
+    @Test
+    void balancesCanBeSortedByAvailableQtyAndSafetyStockWithStableOrder() throws Exception {
+        String warehouseManager = login(createUser("sort", "WAREHOUSE_MANAGER"));
+        CompanyItem small = createItem(UnitOfMeasure.PCS);
+        CompanyItem large = createItem(UnitOfMeasure.PCS);
+        CompanyItem sameAsSmall = createItem(UnitOfMeasure.PCS);
+        postAdjustment(warehouseManager, adjustmentBody("OPENING_BALANCE",
+                line(small.getId(), "5") + ", " + line(large.getId(), "10") + ", " + line(sameAsSmall.getId(), "5")));
+        jdbcTemplate.update(
+                "UPDATE inventory_policy SET safety_stock_base_qty = 20 WHERE company_item_id = ?",
+                large.getId()
+        );
+
+        //可用量由大到小；同樣是 5 的兩筆依 id 跟著由大到小，後建立的在前
+        mockMvc.perform(get("/api/v1/inventory/balances")
+                        .header("Authorization", bearer(warehouseManager))
+                        .param("keyword", ITEM_CODE_PREFIX)
+                        .param("sort", "availableQty,desc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].companyItemId").value(large.getId()))
+                .andExpect(jsonPath("$.content[1].companyItemId").value(sameAsSmall.getId()))
+                .andExpect(jsonPath("$.content[2].companyItemId").value(small.getId()));
+
+        //低於安全庫存的排前面
+        mockMvc.perform(get("/api/v1/inventory/balances")
+                        .header("Authorization", bearer(warehouseManager))
+                        .param("keyword", ITEM_CODE_PREFIX)
+                        .param("sort", "belowSafetyStock,desc"))
+                .andExpect(jsonPath("$.content[0].companyItemId").value(large.getId()));
+
+        //不在名單上的欄位、一次帶兩個欄位都回 400
+        mockMvc.perform(get("/api/v1/inventory/balances")
+                        .header("Authorization", bearer(warehouseManager))
+                        .param("sort", "reservedQty,desc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.message").value(containsString("availableQty")));
+
+        mockMvc.perform(get("/api/v1/inventory/balances")
+                        .header("Authorization", bearer(warehouseManager))
+                        .param("sort", "itemCode,asc")
+                        .param("sort", "name,asc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
     private void assertConsistent(String token, CompanyItem item) throws Exception {
         MvcResult result = mockMvc.perform(get("/api/v1/inventory/consistency-check")
                         .header("Authorization", bearer(token)))

@@ -10,6 +10,7 @@ import com.smartdistribution.masterdata.companyitem.service.CompanyItemService;
 import com.smartdistribution.shared.web.request.ReasonRequest;
 import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
+import com.smartdistribution.shared.web.sort.SortWhitelist;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -18,7 +19,6 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -32,17 +32,25 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class CompanyItemController {
 
+    //公司料號清單：預設依料號
+    private static final SortWhitelist COMPANY_ITEM_SORTS = SortWhitelist.builder()
+            .field("itemCode", "itemCode")
+            .field("name", "name")
+            .field("status", "status")
+            .field("createdAt", "createdAt")
+            .defaultSort(Sort.Direction.ASC, "itemCode")
+            .build();
+
     private final CompanyItemService companyItemService;
 
     @GetMapping
     public ResponseEntity<PageResponse<CompanyItemSummaryResponse>> findCompanyItems(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) MasterDataStatus status,
-            @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC)
-            Pageable pageable
+            @PageableDefault(size = 20) Pageable pageable
     ) {
         PageResponse<CompanyItemSummaryResponse> pageResponse =
-                companyItemService.findCompanyItems(keyword, status, pageable);
+                companyItemService.findCompanyItems(keyword, status, COMPANY_ITEM_SORTS.apply(pageable));
 
         return ResponseEntity.ok(pageResponse);
     }
@@ -67,7 +75,7 @@ public class CompanyItemController {
                 .body(response);
     }
 
-    @PatchMapping("/{companyItemId}")
+    @PutMapping("/{companyItemId}")
     public ResponseEntity<CompanyItemDetailResponse> updateCompanyItem(
             @PathVariable Long companyItemId,
             @Valid @RequestBody UpdateCompanyItemRequest request

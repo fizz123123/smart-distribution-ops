@@ -22,13 +22,13 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * SO 草稿、送審與快照（AT-011、AT-012、AT-013、AT-014、AT-021）。
+ * SO 草稿、送審與快照。
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -96,7 +96,7 @@ class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
                 .andExpect(jsonPath("$.lines[2].baseQty").value(20))
                 .andExpect(jsonPath("$.lines[2].lineAmountExcludingTax").value(1900));
 
-        // 送審後修改付款條件、啟用新版價格，既有 SO 的快照都不變（AT-012、AT-013）
+        // 送審後修改付款條件、啟用新版價格，既有 SO 的快照都不變
         customer.changePaymentTerm(PaymentTerm.DUE_0);
         customerRepository.saveAndFlush(customer);
         replacePrice(puPrice, "250", LocalDate.now(TAIPEI));
@@ -194,7 +194,7 @@ class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
 
         // 草稿整份修改：數量改為 3，版本加 1
         SalesOrderVersion draft = createDraft(sales, draftBody(customer, line(mapping, "1", UnitOfMeasure.PCS)));
-        mockMvc.perform(patch("/api/v1/sales-orders/{id}", draft.id())
+        mockMvc.perform(put("/api/v1/sales-orders/{id}", draft.id())
                         .header("Authorization", bearer(sales))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(updateBody(customer, line(mapping, "3", UnitOfMeasure.PCS), draft.version())))
@@ -204,7 +204,7 @@ class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
                 .andExpect(jsonPath("$.version").value(draft.version() + 1));
 
         // 用舊版本修改會衝突
-        mockMvc.perform(patch("/api/v1/sales-orders/{id}", draft.id())
+        mockMvc.perform(put("/api/v1/sales-orders/{id}", draft.id())
                         .header("Authorization", bearer(sales))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(updateBody(customer, line(mapping, "4", UnitOfMeasure.PCS), draft.version())))
@@ -215,7 +215,7 @@ class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
         Long pendingId = createSubmittedOrder(sales, draftBody(customer, line(mapping, "1", UnitOfMeasure.PCS)));
         Long pendingVersion = readLong(getOrder(sales, pendingId).andReturn(), "$.version");
 
-        mockMvc.perform(patch("/api/v1/sales-orders/{id}", pendingId)
+        mockMvc.perform(put("/api/v1/sales-orders/{id}", pendingId)
                         .header("Authorization", bearer(sales))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(updateBody(customer, line(mapping, "2", UnitOfMeasure.PCS), pendingVersion)))
@@ -426,7 +426,7 @@ class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
                 .andExpect(status().isOk());
 
         Long version = readLong(getOrder(sales, salesOrderId).andReturn(), "$.version");
-        mockMvc.perform(patch("/api/v1/sales-orders/{id}", salesOrderId)
+        mockMvc.perform(put("/api/v1/sales-orders/{id}", salesOrderId)
                         .header("Authorization", bearer(sales))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -504,7 +504,7 @@ class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("SO_ORDER_DATE_INVALID"));
 
-        mockMvc.perform(patch("/api/v1/sales-orders/{id}", draft.id())
+        mockMvc.perform(put("/api/v1/sales-orders/{id}", draft.id())
                         .header("Authorization", bearer(sales))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(updateBody(customer, today.plusDays(1), line(mapping, "1", UnitOfMeasure.PCS), draft.version())))

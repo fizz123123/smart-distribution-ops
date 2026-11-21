@@ -1,13 +1,16 @@
 package com.smartdistribution.receivable;
 
+import com.jayway.jsonpath.JsonPath;
 import com.smartdistribution.masterdata.customer.entity.PaymentTerm;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -18,7 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 確認正式應收、更正外部發票、即將到期與逾期（AT-052、AT-057、AT-058）
+ * 確認正式應收、更正外部發票、即將到期與逾期
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -163,6 +166,18 @@ class ReceivableConfirmationApiIntegrationTest extends ReceivableTestSupport {
         listByDueStatus(finance, "DUE_SOON", dueOnDayEight).andExpect(jsonPath("$.content.length()").value(0));
         listByDueStatus(finance, "DUE_SOON", overdue)
                 .andExpect(jsonPath("$.content.length()").value(0));
+
+        //清單預設依到期日，先到期的在前
+        MvcResult list = mockMvc.perform(get("/api/v1/receivables")
+                        .param("size", "100")
+                        .header("Authorization", bearer(finance)))
+                .andExpect(status().isOk())
+                .andReturn();
+        List<Long> ids = JsonPath.<List<Number>>read(list.getResponse().getContentAsString(), "$.content[*].id")
+                .stream()
+                .map(Number::longValue)
+                .toList();
+        assertThat(ids).containsSubsequence(overdue, dueToday, dueOnDaySeven, dueOnDayEight);
 
         //清單上也帶著到期狀態與應收狀態，分得出是不是草稿
         mockMvc.perform(get("/api/v1/receivables")

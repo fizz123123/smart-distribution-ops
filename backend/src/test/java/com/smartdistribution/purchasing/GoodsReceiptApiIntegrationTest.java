@@ -236,7 +236,7 @@ class GoodsReceiptApiIntegrationTest extends PurchaseOrderTestSupport {
         mockMvc.perform(get("/api/v1/goods-receipts/open-purchase-orders")
                         .header("Authorization", bearer(warehouse))
                         .param("size", "100")
-                        .param("sort", "id,desc"))
+                        .param("sort", "poNumber,desc"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath(thisOrder + ".lines[0].openQuantity").value(3))
                 .andExpect(jsonPath(thisOrder + ".lines[0].unitPriceExcludingTax").doesNotExist());

@@ -13,14 +13,15 @@ import com.smartdistribution.identity.service.AuthService;
 import com.smartdistribution.identity.service.UserManagementService;
 import com.smartdistribution.shared.web.request.ReasonRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
+import com.smartdistribution.shared.web.sort.SortWhitelist;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -32,6 +33,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
 public class UserController {
+
+    //使用者清單：預設依姓名
+    private static final SortWhitelist USER_SORTS = SortWhitelist.builder()
+            .field("name", "name")
+            .field("email", "email")
+            .field("status", "status")
+            .field("lastActivityAt", "lastActivityAt")
+            .defaultSort(Sort.Direction.ASC, "name")
+            .build();
 
     private final AuthService authService;
     private final UserManagementService userManagementService;
@@ -57,7 +67,7 @@ public class UserController {
             @PageableDefault(size = 20) Pageable pageable
     ) {
         PageResponse<UserSummaryResponse> response =
-                userManagementService.findUsers(pageable);
+                userManagementService.findUsers(USER_SORTS.apply(pageable));
 
         return ResponseEntity.ok(response);
     }
@@ -92,7 +102,7 @@ public class UserController {
         return ResponseEntity.ok(userManagementService.sendPasswordReset(userId));
     }
 
-    @PatchMapping("/{userId}")
+    @PutMapping("/{userId}")
     public ResponseEntity<UserDetailResponse> updateUser(
             @PathVariable Long userId,
             @Valid @RequestBody UpdateUserRequest request

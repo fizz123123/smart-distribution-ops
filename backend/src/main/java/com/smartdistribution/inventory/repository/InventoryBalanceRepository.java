@@ -39,7 +39,6 @@ public interface InventoryBalanceRepository extends JpaRepository<InventoryBalan
             WHERE :keyword IS NULL
                OR item.itemCode LIKE CONCAT('%', :keyword, '%')
                OR item.name LIKE CONCAT('%', :keyword, '%')
-            ORDER BY item.itemCode
             """)
     Page<InventoryBalanceProjection> searchBalances(
             @Param("keyword") String keyword,

@@ -10,6 +10,7 @@ import com.smartdistribution.sales.entity.SalesOrderStatus;
 import com.smartdistribution.sales.service.SalesOrderService;
 import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
+import com.smartdistribution.shared.web.sort.SortWhitelist;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -21,9 +22,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -36,6 +37,15 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SalesOrderController {
 
+    //SO 清單：預設依訂單日期，新的在前；客戶與最早交期不在 SO 表頭上，請用篩選
+    private static final SortWhitelist SALES_ORDER_SORTS = SortWhitelist.builder()
+            .field("orderDate", "orderDate")
+            .field("soNumber", "soNumber")
+            .field("totalAmount", "totalAmount")
+            .field("status", "status")
+            .defaultSort(Sort.Direction.DESC, "orderDate")
+            .build();
+
     private final SalesOrderService salesOrderService;
 
     @GetMapping
@@ -43,10 +53,11 @@ public class SalesOrderController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) SalesOrderStatus status,
             @RequestParam(required = false) Long customerId,
-            @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC)
-            Pageable pageable
+            @PageableDefault(size = 20) Pageable pageable
     ) {
-        return ResponseEntity.ok(salesOrderService.findSalesOrders(keyword, status, customerId, pageable));
+        return ResponseEntity.ok(salesOrderService.findSalesOrders(
+                keyword, status, customerId, SALES_ORDER_SORTS.apply(pageable)
+        ));
     }
 
     //路徑比 /{salesOrderId} 具體，Spring 會優先對應到這裡
@@ -86,7 +97,7 @@ public class SalesOrderController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @PatchMapping("/{salesOrderId}")
+    @PutMapping("/{salesOrderId}")
     public ResponseEntity<SalesOrderDetailResponse> updateSalesOrder(
             @PathVariable Long salesOrderId,
             @Valid @RequestBody UpdateSalesOrderRequest request
