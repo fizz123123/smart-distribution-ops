@@ -1,6 +1,7 @@
 package com.smartdistribution.analytics.sales.repository;
 
 import com.smartdistribution.analytics.common.repository.AnalyticsFilter;
+import com.smartdistribution.analytics.sales.repository.projection.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -11,123 +12,21 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
+import static com.smartdistribution.analytics.sales.repository.SalesAnalyticsSql.BACKLOG_LINES;
+import static com.smartdistribution.analytics.sales.repository.SalesAnalyticsSql.CANCELLATION_LINES;
+import static com.smartdistribution.analytics.sales.repository.SalesAnalyticsSql.NEW_ORDER_LINES;
+import static com.smartdistribution.analytics.sales.repository.SalesAnalyticsSql.REVENUE_LINES;
+import static com.smartdistribution.analytics.sales.repository.SalesAnalyticsSql.SHIPPED_LINES;
+import static com.smartdistribution.analytics.sales.repository.SalesAnalyticsSql.params;
+import static com.smartdistribution.analytics.sales.repository.SalesAnalyticsSql.scope;
+
 /**
- * 接單與營收分析的唯讀查詢
+ * 接單與營收分析的合計查詢：每種資料的明細 CTE 在 SalesAnalyticsSql，這裡只做期間篩選與加總
+ * 金額都是未稅
  */
 @Repository
 @RequiredArgsConstructor
 public class SalesAnalyticsRepository {
-
-    //營收：每一筆應收明細，日期是 DO 實際出貨日；金額在 DO 過帳時已經算好
-    private static final String REVENUE_LINES = """
-            WITH revenue_line AS (
-                SELECT receivable.actual_shipment_date AS business_date,
-                       receivable.customer_id,
-                       receivable_line.company_item_id,
-                       receivable_line.line_amount_excluding_tax AS amount
-                FROM receivable_line
-                JOIN receivable ON receivable.id = receivable_line.receivable_id
-                JOIN sales_order ON sales_order.id = receivable.sales_order_id
-                WHERE (:customerId IS NULL OR receivable.customer_id = :customerId)
-                  AND (:companyItemId IS NULL OR receivable_line.company_item_id = :companyItemId)
-                  AND (:responsibleSalesUserId IS NULL
-                       OR sales_order.responsible_sales_user_id = :responsibleSalesUserId)
-            )
-            """;
-
-    //新增接單：已核准 SO 的每一筆明細，日期是核准日；SO 核准後不會再核准，所以就是首次核准
-    private static final String NEW_ORDER_LINES = """
-            WITH new_order_line AS (
-                SELECT DATE(sales_order.approved_at) AS business_date,
-                       sales_order.id AS sales_order_id,
-                       sales_order.customer_id,
-                       sales_order_line.line_amount_excluding_tax AS amount
-                FROM sales_order_line
-                JOIN sales_order ON sales_order.id = sales_order_line.sales_order_id
-                WHERE sales_order.approved_at IS NOT NULL
-                  AND (:customerId IS NULL OR sales_order.customer_id = :customerId)
-                  AND (:companyItemId IS NULL OR sales_order_line.company_item_id = :companyItemId)
-                  AND (:responsibleSalesUserId IS NULL
-                       OR sales_order.responsible_sales_user_id = :responsibleSalesUserId)
-            )
-            """;
-
-    //核准取消：已核准取消申請的每一行，金額 ＝ 取消數量 × SO 明細單價，和 SO 的有效金額同一個算法
-    private static final String CANCELLATION_LINES = """
-            WITH cancellation_line AS (
-                SELECT DATE(cancellation.approved_at) AS business_date,
-                       ROUND(cancel_line.quantity * sales_order_line.unit_price_excluding_tax, 2) AS amount
-                FROM sales_order_cancellation_line cancel_line
-                JOIN sales_order_cancellation cancellation ON cancellation.id = cancel_line.cancellation_id
-                JOIN sales_order_line ON sales_order_line.id = cancel_line.sales_order_line_id
-                JOIN sales_order ON sales_order.id = sales_order_line.sales_order_id
-                WHERE cancellation.status = 'APPROVED'
-                  AND (:customerId IS NULL OR sales_order.customer_id = :customerId)
-                  AND (:companyItemId IS NULL OR sales_order_line.company_item_id = :companyItemId)
-                  AND (:responsibleSalesUserId IS NULL
-                       OR sales_order.responsible_sales_user_id = :responsibleSalesUserId)
-            )
-            """;
-
-    //準時交貨：已過帳 DO 的每一筆出貨明細，實際出貨日不晚於 SO 明細交期就算準時
-    private static final String SHIPPED_LINES = """
-            WITH shipped_line AS (
-                SELECT delivery_order.actual_shipment_date AS business_date,
-                       delivery_order.actual_shipment_date <= sales_order_line.delivery_date AS on_time
-                FROM delivery_order_line
-                JOIN delivery_order ON delivery_order.id = delivery_order_line.delivery_order_id
-                JOIN sales_order_line ON sales_order_line.id = delivery_order_line.sales_order_line_id
-                JOIN sales_order ON sales_order.id = sales_order_line.sales_order_id
-                WHERE delivery_order.status = 'POSTED'
-                  AND delivery_order_line.actual_quantity > 0
-                  AND (:customerId IS NULL OR sales_order.customer_id = :customerId)
-                  AND (:companyItemId IS NULL OR delivery_order_line.company_item_id = :companyItemId)
-                  AND (:responsibleSalesUserId IS NULL
-                       OR sales_order.responsible_sales_user_id = :responsibleSalesUserId)
-            )
-            """;
-
-    //已接單未出貨：已核准 SO 的每一筆明細，未出貨 ＝ 訂購 － 已核准取消 － 已過帳出貨（都是訂購單位）
-    private static final String BACKLOG_LINES = """
-            WITH cancelled AS (
-                SELECT cancel_line.sales_order_line_id,
-                       SUM(cancel_line.quantity) AS quantity
-                FROM sales_order_cancellation_line cancel_line
-                JOIN sales_order_cancellation cancellation ON cancellation.id = cancel_line.cancellation_id
-                WHERE cancellation.status = 'APPROVED'
-                GROUP BY cancel_line.sales_order_line_id
-            ),
-            shipped AS (
-                SELECT delivery_order_line.sales_order_line_id,
-                       SUM(delivery_order_line.actual_quantity) AS quantity
-                FROM delivery_order_line
-                JOIN delivery_order ON delivery_order.id = delivery_order_line.delivery_order_id
-                WHERE delivery_order.status = 'POSTED'
-                GROUP BY delivery_order_line.sales_order_line_id
-            ),
-            backlog_line AS (
-                SELECT sales_order_line.id AS sales_order_line_id,
-                       sales_order.id AS sales_order_id,
-                       sales_order.so_number,
-                       sales_order_line.line_no,
-                       sales_order.customer_id,
-                       sales_order_line.company_item_id,
-                       sales_order_line.delivery_date,
-                       sales_order_line.quantity
-                           - COALESCE(cancelled.quantity, 0)
-                           - COALESCE(shipped.quantity, 0) AS remaining_quantity,
-                       sales_order_line.unit_price_excluding_tax AS unit_price
-                FROM sales_order_line
-                JOIN sales_order ON sales_order.id = sales_order_line.sales_order_id
-                LEFT JOIN cancelled ON cancelled.sales_order_line_id = sales_order_line.id
-                LEFT JOIN shipped ON shipped.sales_order_line_id = sales_order_line.id
-                WHERE sales_order.status = 'APPROVED'
-                  AND (:customerId IS NULL OR sales_order.customer_id = :customerId)
-                  AND (:companyItemId IS NULL OR sales_order_line.company_item_id = :companyItemId)
-                  AND (:responsibleSalesUserId IS NULL
-                       OR sales_order.responsible_sales_user_id = :responsibleSalesUserId)
-            )
-            """;
 
     //三個月份加總的查詢都回傳「年月 → 金額」
     private static final RowMapper<AmountByKeyProjection> MONTHLY_AMOUNT =
@@ -363,18 +262,5 @@ public class SalesAnalyticsRepository {
                 rs.getBigDecimal("current_amount"),
                 rs.getBigDecimal("previous_amount")
         ));
-    }
-
-    private static MapSqlParameterSource params(AnalyticsFilter filter, LocalDate from, LocalDate to) {
-        return scope(filter)
-                .addValue("from", from)
-                .addValue("to", to);
-    }
-
-    private static MapSqlParameterSource scope(AnalyticsFilter filter) {
-        return new MapSqlParameterSource()
-                .addValue("customerId", filter.customerId())
-                .addValue("companyItemId", filter.companyItemId())
-                .addValue("responsibleSalesUserId", filter.responsibleSalesUserId());
     }
 }

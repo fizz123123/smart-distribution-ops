@@ -1,4 +1,4 @@
-package com.smartdistribution.analytics.sales.repository;
+package com.smartdistribution.analytics.sales.repository.projection;
 
 import java.math.BigDecimal;
 

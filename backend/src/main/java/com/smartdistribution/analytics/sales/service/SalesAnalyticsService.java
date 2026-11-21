@@ -1,6 +1,11 @@
 package com.smartdistribution.analytics.sales.service;
 
+import com.smartdistribution.analytics.sales.dto.response.CancellationSourceResponse;
+import com.smartdistribution.analytics.sales.dto.response.NewOrderSourceResponse;
+import com.smartdistribution.analytics.sales.dto.response.RevenueSourceResponse;
 import com.smartdistribution.analytics.sales.dto.response.SalesAnalysisResponse;
+import com.smartdistribution.shared.web.response.PageResponse;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDate;
 
@@ -25,5 +30,44 @@ public interface SalesAnalyticsService {
             Long customerId,
             Long companyItemId,
             Long responsibleSalesUserId
+    );
+
+    /**
+     * 營收的來源：期間內出貨的應收明細，日期由新到舊；篩選與權限和 findSalesAnalysis 相同
+     * 前期的來源，就把前期的起訖日當作 from、to 傳進來
+     *
+     * @return 一頁應收明細，加起來等於同樣條件下的營收
+     */
+    PageResponse<RevenueSourceResponse> findRevenueSources(
+            LocalDate from,
+            LocalDate to,
+            Long customerId,
+            Long companyItemId,
+            Long responsibleSalesUserId,
+            Pageable pageable
+    );
+
+    /**
+     * @return 一頁期間內核准的 SO，加起來等於同樣條件下的新增核准接單額
+     */
+    PageResponse<NewOrderSourceResponse> findNewOrderSources(
+            LocalDate from,
+            LocalDate to,
+            Long customerId,
+            Long companyItemId,
+            Long responsibleSalesUserId,
+            Pageable pageable
+    );
+
+    /**
+     * @return 一頁期間內核准的取消申請明細，加起來等於同樣條件下的核准取消額
+     */
+    PageResponse<CancellationSourceResponse> findCancellationSources(
+            LocalDate from,
+            LocalDate to,
+            Long customerId,
+            Long companyItemId,
+            Long responsibleSalesUserId,
+            Pageable pageable
     );
 }
