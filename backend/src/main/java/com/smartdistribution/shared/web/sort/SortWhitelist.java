@@ -131,7 +131,8 @@ public final class SortWhitelist {
                 throw new IllegalStateException("預設排序必須是名單上的欄位");
             }
 
-            return new SortWhitelist(Map.copyOf(sorts), List.copyOf(defaultFields), defaultDirection);
+            //保留宣告順序，錯誤訊息列出可用欄位時固定照 controller 寫的順序
+            return new SortWhitelist(new LinkedHashMap<>(sorts), List.copyOf(defaultFields), defaultDirection);
         }
     }
 }

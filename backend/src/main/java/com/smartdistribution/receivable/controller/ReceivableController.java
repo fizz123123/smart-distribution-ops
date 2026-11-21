@@ -63,7 +63,9 @@ public class ReceivableController {
 
     //登錄收款時用：掛在客戶底下，表達「這個客戶還欠哪些」
     @GetMapping("/customers/{customerId}/open-receivables")
-    public ResponseEntity<List<OutstandingReceivableResponse>> findOutstandingReceivables(@PathVariable Long customerId) {
+    public ResponseEntity<List<OutstandingReceivableResponse>> findOutstandingReceivables(
+            @PathVariable Long customerId
+    ) {
         return ResponseEntity.ok(receivableService.findOutstandingReceivables(customerId));
     }
 

@@ -31,7 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class CustomerController {
 
-    //客戶清單：預設依編號；不在名單上的欄位回 400
+    //客戶清單：預設依編號
     private static final SortWhitelist CUSTOMER_SORTS = SortWhitelist.builder()
             .field("customerCode", "customerCode")
             .field("name", "name")

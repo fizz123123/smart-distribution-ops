@@ -23,6 +23,7 @@ public interface InventoryBalanceRepository extends JpaRepository<InventoryBalan
     @Query("SELECT balance FROM InventoryBalance balance WHERE balance.companyItemId = :companyItemId")
     Optional<InventoryBalance> findByCompanyItemIdForUpdate(@Param("companyItemId") Long companyItemId);
 
+    //別名 balance、item、policy 也被 InventoryController 的排序白名單使用，改名要一起改
     @Query("""
             SELECT new com.smartdistribution.inventory.repository.InventoryBalanceProjection(
                 item.id,

@@ -9,7 +9,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
 /**
- * 須送出全部可編輯欄位；偏好供應商傳 null 代表清空
+ * 須送出全部可編輯欄位；偏好供應商傳 null 代表清空。
  */
 public record UpdateCompanyItemRequest(
         @NotBlank

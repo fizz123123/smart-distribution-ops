@@ -26,6 +26,8 @@ import java.util.List;
 public class InventoryController {
 
     //庫存餘額：預設依料號；可用量與是否低於安全庫存在查詢裡算出來，用運算式排序
+    //料號、品名與安全庫存在主檔模組，餘額查詢原本就要 join 才能顯示，排序沿用同一個 join，沒有新增依賴
+    //balance、item、policy 是 InventoryBalanceRepository.searchBalances 的別名，改名要一起改
     private static final SortWhitelist BALANCE_SORTS = SortWhitelist.builder()
             .field("itemCode", "item.itemCode")
             .field("name", "item.name")
