@@ -8,6 +8,7 @@ import com.smartdistribution.receivable.service.PaymentService.ConfirmedPayment;
 import com.smartdistribution.receivable.service.PaymentService;
 import com.smartdistribution.shared.web.request.ReasonRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
+import com.smartdistribution.shared.web.sort.SortWhitelist;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -28,6 +29,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class PaymentController {
 
+    //收款清單：預設依收款日，新的在前；客戶請用篩選
+    private static final SortWhitelist PAYMENT_SORTS = SortWhitelist.builder()
+            .field("receivedDate", "receivedDate")
+            .field("paymentNumber", "paymentNumber")
+            .field("amount", "amount")
+            .field("status", "status")
+            .defaultSort(Sort.Direction.DESC, "receivedDate")
+            .build();
+
     private final PaymentService paymentService;
 
     @GetMapping
@@ -35,10 +45,11 @@ public class PaymentController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) PaymentStatus status,
             @RequestParam(required = false) Long customerId,
-            @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC)
-            Pageable pageable
+            @PageableDefault(size = 20) Pageable pageable
     ) {
-        return ResponseEntity.ok(paymentService.findPayments(keyword, status, customerId, pageable));
+        return ResponseEntity.ok(paymentService.findPayments(
+                keyword, status, customerId, PAYMENT_SORTS.apply(pageable)
+        ));
     }
 
     @GetMapping("/{paymentId}")

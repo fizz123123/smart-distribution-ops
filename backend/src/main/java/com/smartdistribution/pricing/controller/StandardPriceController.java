@@ -6,6 +6,7 @@ import com.smartdistribution.pricing.dto.response.StandardPriceResponse;
 import com.smartdistribution.pricing.entity.PriceStatus;
 import com.smartdistribution.pricing.service.StandardPriceService;
 import com.smartdistribution.shared.web.response.PageResponse;
+import com.smartdistribution.shared.web.sort.SortWhitelist;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -26,17 +27,24 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class StandardPriceController {
 
+    //標準售價歷史：預設依生效日，新的在前
+    private static final SortWhitelist PRICE_SORTS = SortWhitelist.builder()
+            .field("effectiveFrom", "effectiveFrom")
+            .field("status", "status")
+            .field("unitPriceExcludingTax", "unitPriceExcludingTax")
+            .defaultSort(Sort.Direction.DESC, "effectiveFrom")
+            .build();
+
     private final StandardPriceService standardPriceService;
 
     @GetMapping
     public ResponseEntity<PageResponse<StandardPriceResponse>> findPrices(
             @RequestParam(required = false) Long companyItemId,
             @RequestParam(required = false) PriceStatus status,
-            @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC)
-            Pageable pageable
+            @PageableDefault(size = 20) Pageable pageable
     ) {
         PageResponse<StandardPriceResponse> pageResponse =
-                standardPriceService.findPrices(companyItemId, status, pageable);
+                standardPriceService.findPrices(companyItemId, status, PRICE_SORTS.apply(pageable));
 
         return ResponseEntity.ok(pageResponse);
     }

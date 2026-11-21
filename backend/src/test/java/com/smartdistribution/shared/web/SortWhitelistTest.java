@@ -52,7 +52,7 @@ class SortWhitelistTest {
         Pageable pageable = whitelist.apply(PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "availableQty")));
 
         assertThat(pageable.getSort().toList().getFirst().getProperty())
-                .isEqualTo("balance.onHandQty - balance.reservedQty");
+                .isEqualTo("(balance.onHandQty - balance.reservedQty)");
     }
 
     @Test

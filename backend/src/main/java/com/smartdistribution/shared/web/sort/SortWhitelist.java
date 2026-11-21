@@ -109,7 +109,8 @@ public final class SortWhitelist {
          * @param expression JPQL 運算式，只能由程式寫死，不能來自使用者輸入
          */
         public Builder expression(String field, String expression) {
-            sorts.put(field, JpaSort.unsafe(expression));
+            //包一層括號：Spring Data 會在不含括號的排序前補上主表別名，CASE WHEN 會因此變成錯誤語法
+            sorts.put(field, JpaSort.unsafe("(" + expression + ")"));
             return this;
         }
 

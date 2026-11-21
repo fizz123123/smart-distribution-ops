@@ -8,6 +8,7 @@ import com.smartdistribution.masterdata.customeritemmapping.service.CustomerItem
 import com.smartdistribution.shared.web.request.ReasonRequest;
 import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
+import com.smartdistribution.shared.web.sort.SortWhitelist;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -29,6 +30,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class CustomerItemMappingController {
 
+    //客戶料號對應清單：預設依客戶編號、客戶料號；客戶與公司料號都在主檔模組，可以直接用關聯排序
+    private static final SortWhitelist MAPPING_SORTS = SortWhitelist.builder()
+            .field("customerCode", "customer.customerCode")
+            .field("customerItemCode", "customerItemCode")
+            .field("itemCode", "companyItem.itemCode")
+            .field("status", "status")
+            .defaultSort(Sort.Direction.ASC, "customerCode", "customerItemCode")
+            .build();
+
     private final CustomerItemMappingService customerItemMappingService;
 
     @GetMapping
@@ -36,11 +46,10 @@ public class CustomerItemMappingController {
             @RequestParam(required = false) Long customerId,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) MasterDataStatus status,
-            @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC)
-            Pageable pageable
+            @PageableDefault(size = 20) Pageable pageable
     ) {
         PageResponse<CustomerItemMappingResponse> pageResponse =
-                customerItemMappingService.findMappings(customerId, keyword, status, pageable);
+                customerItemMappingService.findMappings(customerId, keyword, status, MAPPING_SORTS.apply(pageable));
 
         return ResponseEntity.ok(pageResponse);
     }

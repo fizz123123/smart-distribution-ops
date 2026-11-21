@@ -31,7 +31,6 @@ public interface ApprovalRequestRepository extends JpaRepository<ApprovalRequest
               AND request.targetType IN :targetTypes
               AND request.submittedBy <> :userId
               AND request.targetCreatedBy <> :userId
-            ORDER BY request.submittedAt ASC
             """)
     Page<ApprovalRequest> findPendingForUser(
             @Param("status") ApprovalStatus status,

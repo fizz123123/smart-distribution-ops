@@ -13,6 +13,7 @@ import com.smartdistribution.purchasing.service.PurchaseOrderService;
 import com.smartdistribution.shared.web.request.ReasonRequest;
 import com.smartdistribution.shared.web.request.VersionRequest;
 import com.smartdistribution.shared.web.response.PageResponse;
+import com.smartdistribution.shared.web.sort.SortWhitelist;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -39,6 +40,16 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PurchaseOrderController {
 
+    //PO 清單：預設依建立時間，新的在前；供應商不在 PO 表頭上，請用篩選
+    private static final SortWhitelist PURCHASE_ORDER_SORTS = SortWhitelist.builder()
+            .field("createdAt", "createdAt")
+            .field("poNumber", "poNumber")
+            .field("expectedArrivalDate", "expectedArrivalDate")
+            .field("untaxedAmount", "untaxedAmount")
+            .field("status", "status")
+            .defaultSort(Sort.Direction.DESC, "createdAt")
+            .build();
+
     private final PurchaseOrderService purchaseOrderService;
 
     @GetMapping
@@ -46,10 +57,11 @@ public class PurchaseOrderController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) PurchaseOrderStatus status,
             @RequestParam(required = false) Long supplierId,
-            @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC)
-            Pageable pageable
+            @PageableDefault(size = 20) Pageable pageable
     ) {
-        return ResponseEntity.ok(purchaseOrderService.findPurchaseOrders(keyword, status, supplierId, pageable));
+        return ResponseEntity.ok(purchaseOrderService.findPurchaseOrders(
+                keyword, status, supplierId, PURCHASE_ORDER_SORTS.apply(pageable)
+        ));
     }
 
     @GetMapping("/last-price")
