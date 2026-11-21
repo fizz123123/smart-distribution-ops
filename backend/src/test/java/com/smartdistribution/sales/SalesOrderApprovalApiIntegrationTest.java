@@ -25,7 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * SO 核准與預留（AT-017、AT-018、AT-019、AT-022、AT-024、AT-026）。
+ * SO 核准與預留。
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -59,7 +59,7 @@ class SalesOrderApprovalApiIntegrationTest extends SalesOrderTestSupport {
 
         approve(salesManager, salesOrderId).andExpect(status().isOk());
 
-        // SO_MAIN：預留 PE 10、PU 2，PU 尚待規劃 3；可出貨實體數量不因預留而扣減（AT-022）
+        // SO_MAIN：預留 PE 10、PU 2，PU 尚待規劃 3；可出貨實體數量不因預留而扣減
         getOrder(sales, salesOrderId)
                 .andExpect(jsonPath("$.status").value("APPROVED"))
                 .andExpect(jsonPath("$.approvedAt").exists())
@@ -79,7 +79,7 @@ class SalesOrderApprovalApiIntegrationTest extends SalesOrderTestSupport {
                 .andExpect(jsonPath("$[0].events[0].eventType").value("RESERVE"))
                 .andExpect(jsonPath("$[0].events[0].sourceType").value("SO_APPROVAL"));
 
-        // 有預留後，調減不得侵蝕預留（AT-024）
+        // 有預留後，調減不得侵蝕預留
         mockMvc.perform(post("/api/v1/inventory/adjustments")
                         .header("Authorization", bearer(warehouseManager))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -158,7 +158,7 @@ class SalesOrderApprovalApiIntegrationTest extends SalesOrderTestSupport {
 
         Long salesOrderId = createSubmittedOrder(sales, draftBody(customer, line(mapping, "1", UnitOfMeasure.PCS)));
 
-        // 送審後正常換價：舊版截到昨天轉 REPLACED、新版今天起生效（AT-017）
+        // 送審後正常換價：舊版截到昨天轉 REPLACED、新版今天起生效
         replacePrice(price, "250", LocalDate.now(TAIPEI));
 
         mockMvc.perform(get("/api/v1/approval-requests/{id}", findPendingApprovalId(salesOrderId))
@@ -207,7 +207,7 @@ class SalesOrderApprovalApiIntegrationTest extends SalesOrderTestSupport {
         price.revoke(1L, "單價登錄錯誤", Instant.now());
         customerPriceRepository.saveAndFlush(price);
 
-        // 價格撤銷時拒絕核准，不建立預留，SO 維持待核准（AT-018）
+        // 價格撤銷時拒絕核准，不建立預留，SO 維持待核准
         approve(salesManager, salesOrderId)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("SO_PRICE_REVOKED"));
@@ -247,7 +247,7 @@ class SalesOrderApprovalApiIntegrationTest extends SalesOrderTestSupport {
         price.revoke(1L, "單價登錄錯誤", Instant.now());
         customerPriceRepository.saveAndFlush(price);
 
-        // 已核准 SO 不回溯修改（AT-019）
+        // 已核准 SO 不回溯修改
         getOrder(sales, salesOrderId)
                 .andExpect(jsonPath("$.status").value("APPROVED"))
                 .andExpect(jsonPath("$.lines[0].unitPriceExcludingTax").value(200))
@@ -288,7 +288,7 @@ class SalesOrderApprovalApiIntegrationTest extends SalesOrderTestSupport {
 
         approve(otherSales, salesOrderId).andExpect(status().isForbidden());
 
-        // MANAGER 可替代核准 SO（D-040）
+        // MANAGER 可替代核准 SO
         approve(manager, salesOrderId).andExpect(status().isOk());
         getOrder(sales, salesOrderId).andExpect(jsonPath("$.status").value("APPROVED"));
     }

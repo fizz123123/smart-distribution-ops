@@ -17,7 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 通知出貨與 DO 草稿：只能用已預留、還沒排入其他 DO 的數量；撤回、作廢；排入出貨的數量不能取消（AT-040、AT-041）
+ * 通知出貨與 DO 草稿：只能用已預留、還沒排入其他 DO 的數量；撤回、作廢；排入出貨的數量不能取消
  */
 @SpringBootTest
 @AutoConfigureMockMvc

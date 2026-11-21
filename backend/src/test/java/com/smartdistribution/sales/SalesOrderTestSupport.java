@@ -517,7 +517,7 @@ public abstract class SalesOrderTestSupport {
         );
     }
 
-    // 一致性檢查（AT-026）：只看本測試建立的料號，開發資料庫可能有其他資料
+    // 一致性檢查：只看本測試建立的料號，開發資料庫可能有其他資料
     protected void assertConsistent(String token, CompanyItem... items) throws Exception {
         MvcResult result = mockMvc.perform(get("/api/v1/inventory/consistency-check")
                         .header("Authorization", bearer(token)))

@@ -15,7 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 取消已核准 PO 與短收結案：採購在途減少、來源 SO 的缺料重新出現、PDF 作廢（AT-036）
+ * 取消已核准 PO 與短收結案：採購在途減少、來源 SO 的缺料重新出現、PDF 作廢
  * 每個情境的 SO 都是期初庫存 2、訂購 5：預留 2、缺 3，再用一張 3 個的 PO 補
  */
 @SpringBootTest

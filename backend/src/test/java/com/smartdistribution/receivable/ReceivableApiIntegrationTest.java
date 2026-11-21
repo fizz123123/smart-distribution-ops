@@ -16,7 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * DO 過帳時建立應收草稿（AT-050、AT-051）
+ * DO 過帳時建立應收草稿
  */
 @SpringBootTest
 @AutoConfigureMockMvc

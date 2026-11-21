@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 兩張 SO 同時核准並競爭同一料號，不得超額預留（AT-023）。
+ * 兩張 SO 同時核准並競爭同一料號，不得超額預留。
  * 測試本身不加 @Transactional：兩個執行緒必須各自提交交易，才會真的在餘額列上互相等待。
  */
 @SpringBootTest

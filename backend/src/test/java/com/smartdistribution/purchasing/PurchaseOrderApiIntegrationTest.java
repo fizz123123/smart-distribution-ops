@@ -24,7 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * PO 草稿：關聯 SO 缺料、一般補庫、送審與放棄草稿（AT-030、AT-031）
+ * PO 草稿：關聯 SO 缺料、一般補庫、送審與放棄草稿
  */
 @SpringBootTest
 @AutoConfigureMockMvc

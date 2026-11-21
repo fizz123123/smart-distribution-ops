@@ -28,7 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * SO 草稿、送審與快照（AT-011、AT-012、AT-013、AT-014、AT-021）。
+ * SO 草稿、送審與快照。
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -96,7 +96,7 @@ class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
                 .andExpect(jsonPath("$.lines[2].baseQty").value(20))
                 .andExpect(jsonPath("$.lines[2].lineAmountExcludingTax").value(1900));
 
-        // 送審後修改付款條件、啟用新版價格，既有 SO 的快照都不變（AT-012、AT-013）
+        // 送審後修改付款條件、啟用新版價格，既有 SO 的快照都不變
         customer.changePaymentTerm(PaymentTerm.DUE_0);
         customerRepository.saveAndFlush(customer);
         replacePrice(puPrice, "250", LocalDate.now(TAIPEI));

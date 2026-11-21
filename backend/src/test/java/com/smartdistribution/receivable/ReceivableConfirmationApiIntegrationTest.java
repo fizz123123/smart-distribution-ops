@@ -18,7 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 確認正式應收、更正外部發票、即將到期與逾期（AT-052、AT-057、AT-058）
+ * 確認正式應收、更正外部發票、即將到期與逾期
  */
 @SpringBootTest
 @AutoConfigureMockMvc
