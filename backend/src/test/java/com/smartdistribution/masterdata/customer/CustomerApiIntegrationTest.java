@@ -28,7 +28,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -171,7 +170,7 @@ class CustomerApiIntegrationTest {
 
         CustomerVersion customer = submit(sales, createCustomer(sales, null));
 
-        mockMvc.perform(patch("/api/v1/customers/{id}", customer.id())
+        mockMvc.perform(put("/api/v1/customers/{id}", customer.id())
                         .header("Authorization", bearer(sales))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(updateBody(customer.name(), null, "02-0000-0000", customer.version())))
@@ -187,14 +186,14 @@ class CustomerApiIntegrationTest {
 
         CustomerVersion customer = createActiveCustomer(sales, manager, taxId);
 
-        mockMvc.perform(patch("/api/v1/customers/{id}", customer.id())
+        mockMvc.perform(put("/api/v1/customers/{id}", customer.id())
                         .header("Authorization", bearer(sales))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(updateBody(customerName(), taxId, null, customer.version())))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("MASTER_DATA_IDENTITY_LOCKED"));
 
-        mockMvc.perform(patch("/api/v1/customers/{id}", customer.id())
+        mockMvc.perform(put("/api/v1/customers/{id}", customer.id())
                         .header("Authorization", bearer(sales))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(updateBody(customer.name(), taxId, "02-9999-9999", customer.version())))

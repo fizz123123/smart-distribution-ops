@@ -28,8 +28,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -169,7 +169,7 @@ class SupplierApiIntegrationTest {
 
         SupplierVersion supplier = submit(purchasing, createSupplier(purchasing, null));
 
-        mockMvc.perform(patch("/api/v1/suppliers/{id}", supplier.id())
+        mockMvc.perform(put("/api/v1/suppliers/{id}", supplier.id())
                         .header("Authorization", bearer(purchasing))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(updateBody(supplier.name(), null, "02-0000-0000", supplier.version())))
@@ -185,14 +185,14 @@ class SupplierApiIntegrationTest {
 
         SupplierVersion supplier = createActiveSupplier(purchasing, manager, taxId);
 
-        mockMvc.perform(patch("/api/v1/suppliers/{id}", supplier.id())
+        mockMvc.perform(put("/api/v1/suppliers/{id}", supplier.id())
                         .header("Authorization", bearer(purchasing))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(updateBody(supplierName(), taxId, null, supplier.version())))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("MASTER_DATA_IDENTITY_LOCKED"));
 
-        mockMvc.perform(patch("/api/v1/suppliers/{id}", supplier.id())
+        mockMvc.perform(put("/api/v1/suppliers/{id}", supplier.id())
                         .header("Authorization", bearer(purchasing))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(updateBody(supplier.name(), taxId, "02-9999-9999", supplier.version())))

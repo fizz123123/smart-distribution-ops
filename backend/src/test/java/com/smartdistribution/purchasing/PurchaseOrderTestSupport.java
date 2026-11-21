@@ -19,8 +19,8 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -159,7 +159,7 @@ abstract class PurchaseOrderTestSupport extends SalesOrderTestSupport {
 
     ResultActions updatePo(String token, PurchaseOrderVersion purchaseOrder, Supplier supplier, String lines)
             throws Exception {
-        return mockMvc.perform(patch("/api/v1/purchase-orders/{id}", purchaseOrder.id())
+        return mockMvc.perform(put("/api/v1/purchase-orders/{id}", purchaseOrder.id())
                 .header("Authorization", bearer(token))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
