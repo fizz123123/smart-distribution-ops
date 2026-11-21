@@ -1,58 +1,49 @@
-package com.smartdistribution.analytics.service.impl;
+package com.smartdistribution.analytics.mapper;
 
 import com.smartdistribution.analytics.dto.response.ReceivableAnalysisResponse;
 import com.smartdistribution.analytics.dto.response.ReceivableAnalysisResponse.AgingGroup;
 import com.smartdistribution.analytics.dto.response.ReceivableAnalysisResponse.DueGroup;
 import com.smartdistribution.analytics.dto.response.ReceivableAnalysisResponse.DueReceivable;
+import com.smartdistribution.analytics.dto.response.ReceivableAnalysisResponse.Summary;
 import com.smartdistribution.analytics.repository.projection.OpenReceivableProjection;
-import com.smartdistribution.analytics.repository.ReceivableAnalyticsRepository;
 import com.smartdistribution.analytics.repository.projection.ReceivableTotalsProjection;
 import com.smartdistribution.analytics.service.AgingBucket;
-import com.smartdistribution.analytics.service.AnalyticsService;
 import com.smartdistribution.receivable.service.DueStatus;
-import lombok.RequiredArgsConstructor;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
 
-@Service
-@RequiredArgsConstructor
-@Transactional(readOnly = true)
-public class AnalyticsServiceImpl implements AnalyticsService {
+/**
+ * 把應收的查詢結果組成分析回應：到期分組、帳齡、即將到期與逾期明細
+ * 到期狀態沿用應收模組的 DueStatus，儀表板和應收清單的判斷只有一份
+ */
+@Component
+public class ReceivableAnalysisMapper {
 
-    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
-
-    private final ReceivableAnalyticsRepository receivableAnalyticsRepository;
-
-    @Override
-    @PreAuthorize("hasAnyAuthority('DASHBOARD_VIEW_ALL', 'ANALYTICS_RECEIVABLE_VIEW')")
-    public ReceivableAnalysisResponse findReceivableAnalysis(Long customerId, Long responsibleSalesUserId) {
-        LocalDate today = LocalDate.now(TAIPEI);
-        ReceivableTotalsProjection totals =
-                receivableAnalyticsRepository.findTotals(customerId, responsibleSalesUserId);
-        List<OpenReceivableProjection> openReceivables =
-                receivableAnalyticsRepository.findOpenReceivables(customerId, responsibleSalesUserId);
-
-        //到期狀態沿用應收模組的 DueStatus，儀表板和應收清單的判斷只有一份
-        List<OpenReceivableProjection> dueSoon = withDueStatus(openReceivables, DueStatus.DUE_SOON, today);
-        List<OpenReceivableProjection> overdue = withDueStatus(openReceivables, DueStatus.OVERDUE, today);
-
+    /**
+     * @param today           今天（台北時間），到期與帳齡都以它為準
+     * @param totals          正式應收的合計與待確認的草稿
+     * @param openReceivables 還沒收清的應收，依到期日排序
+     * @return 應收分析
+     */
+    public ReceivableAnalysisResponse toResponse(
+            LocalDate today,
+            ReceivableTotalsProjection totals,
+            List<OpenReceivableProjection> openReceivables
+    ) {
         return new ReceivableAnalysisResponse(
                 today,
-                new ReceivableAnalysisResponse.Summary(
+                new Summary(
                         totals.totalAmount(),
                         totals.outstandingAmount(),
                         totals.pendingCount(),
                         totals.pendingAmount(),
-                        toDueGroup(dueSoon),
-                        toDueGroup(overdue)
+                        toDueGroup(withDueStatus(openReceivables, DueStatus.DUE_SOON, today)),
+                        toDueGroup(withDueStatus(openReceivables, DueStatus.OVERDUE, today))
                 ),
                 toAging(openReceivables, today),
                 openReceivables.stream()

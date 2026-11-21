@@ -1,0 +1,87 @@
+package com.smartdistribution.analytics.service.impl;
+
+import com.smartdistribution.analytics.dto.response.AnalyticsPeriodResponse;
+import com.smartdistribution.analytics.dto.response.SalesAnalysisResponse;
+import com.smartdistribution.analytics.mapper.SalesAnalysisMapper;
+import com.smartdistribution.analytics.mapper.SalesAnalysisMapper.PeriodTotals;
+import com.smartdistribution.analytics.repository.AnalyticsFilter;
+import com.smartdistribution.analytics.repository.SalesAnalyticsRepository;
+import com.smartdistribution.analytics.service.AnalyticsPeriod;
+import com.smartdistribution.analytics.service.AnalyticsScope;
+import com.smartdistribution.analytics.service.SalesAnalyticsService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.ZoneId;
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class SalesAnalyticsServiceImpl implements SalesAnalyticsService {
+
+    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
+
+    private final SalesAnalyticsRepository salesAnalyticsRepository;
+    private final SalesAnalysisMapper salesAnalysisMapper;
+    private final AnalyticsScope analyticsScope;
+
+    @Override
+    @PreAuthorize("hasAnyAuthority('DASHBOARD_VIEW_ALL', 'ANALYTICS_SALES_VIEW_ALL', 'ANALYTICS_SALES_VIEW')")
+    public SalesAnalysisResponse findSalesAnalysis(
+            LocalDate from,
+            LocalDate to,
+            Long customerId,
+            Long companyItemId,
+            Long responsibleSalesUserId
+    ) {
+        LocalDate today = LocalDate.now(TAIPEI);
+        AnalyticsPeriod period = AnalyticsPeriod.resolve(from, to, today);
+        AnalyticsFilter filter = new AnalyticsFilter(
+                customerId,
+                companyItemId,
+                analyticsScope.resolveResponsibleSales(responsibleSalesUserId)
+        );
+
+        //近六個月不受期間篩選影響，固定從五個月前的 1 日到今天
+        List<YearMonth> months = AnalyticsPeriod.recentMonths(today);
+        LocalDate trendFrom = months.getFirst().atDay(1);
+
+        return new SalesAnalysisResponse(
+                AnalyticsPeriodResponse.from(period),
+                salesAnalysisMapper.toComparison(
+                        findPeriodTotals(filter, period.from(), period.to()),
+                        findPeriodTotals(filter, period.previousFrom(), period.previousTo())
+                ),
+                salesAnalysisMapper.toTrend(
+                        months,
+                        today,
+                        salesAnalyticsRepository.findMonthlyNewOrderAmounts(filter, trendFrom, today),
+                        salesAnalyticsRepository.findMonthlyCancellationAmounts(filter, trendFrom, today),
+                        salesAnalyticsRepository.findMonthlyRevenue(filter, trendFrom, today)
+                ),
+                salesAnalysisMapper.toContributions(
+                        salesAnalyticsRepository.findRevenueByCustomer(
+                                filter, period.from(), period.to(), period.previousFrom(), period.previousTo()
+                        ),
+                        salesAnalyticsRepository.findRevenueByItem(
+                                filter, period.from(), period.to(), period.previousFrom(), period.previousTo()
+                        )
+                ),
+                salesAnalysisMapper.toBacklog(salesAnalyticsRepository.findBacklogLines(filter), today)
+        );
+    }
+
+    private PeriodTotals findPeriodTotals(AnalyticsFilter filter, LocalDate from, LocalDate to) {
+        return new PeriodTotals(
+                salesAnalyticsRepository.findRevenueTotals(filter, from, to),
+                salesAnalyticsRepository.findNewOrderTotals(filter, from, to),
+                salesAnalyticsRepository.findCancellationAmount(filter, from, to),
+                salesAnalyticsRepository.findOnTimeDelivery(filter, from, to)
+        );
+    }
+}

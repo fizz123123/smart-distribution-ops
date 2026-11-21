@@ -3,9 +3,9 @@ package com.smartdistribution.analytics.service;
 import com.smartdistribution.analytics.dto.response.ReceivableAnalysisResponse;
 
 /**
- * 儀表板的分析查詢；每次即時計算，不保存結果
+ * 應收與逾期分析；每次即時計算，不保存結果
  */
-public interface AnalyticsService {
+public interface ReceivableAnalyticsService {
 
     /**
      * 應收與逾期：金額摘要、帳齡、即將到期與逾期明細，以今天為準
