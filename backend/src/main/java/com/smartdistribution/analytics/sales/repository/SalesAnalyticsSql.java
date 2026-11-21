@@ -128,6 +128,7 @@ final class SalesAnalyticsSql {
                        sales_order.customer_id,
                        sales_order_line.company_item_id,
                        sales_order_line.delivery_date,
+                       sales_order_line.unit_code,
                        sales_order_line.quantity
                            - COALESCE(cancelled.quantity, 0)
                            - COALESCE(shipped.quantity, 0) AS remaining_quantity,

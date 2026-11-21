@@ -1,7 +1,10 @@
 package com.smartdistribution.analytics.sales;
 
 import com.jayway.jsonpath.JsonPath;
+import com.smartdistribution.masterdata.common.UnitOfMeasure;
+import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.customer.entity.PaymentTerm;
+import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.receivable.ReceivableTestSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -73,6 +76,10 @@ class SalesAnalyticsApiIntegrationTest extends ReceivableTestSupport {
                 .andExpect(jsonPath("$.backlog.lineCount").value(1))
                 .andExpect(jsonPath("$.backlog.overdueAmount").value(200))
                 .andExpect(jsonPath("$.backlog.overdueLineCount").value(1))
+                //PU 剩下的 1 個已經預留，供應狀態是已備齊，沒有缺料影響
+                .andExpect(jsonPath("$.backlog.shortageImpactAmount").value(0))
+                .andExpect(jsonPath("$.backlog.bySupplyStatus[5].status").value("READY"))
+                .andExpect(jsonPath("$.backlog.bySupplyStatus[5].amount").value(200))
                 //近六個月：最後一個月是本月，標示截至今天
                 .andExpect(jsonPath("$.trend.length()").value(6))
                 .andExpect(jsonPath("$.trend[5].partial").value(true))
@@ -134,6 +141,79 @@ class SalesAnalyticsApiIntegrationTest extends ReceivableTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(1))
                 .andExpect(jsonPath("$.totalElements").value(4))
+                .andExpect(jsonPath("$.totalPages").value(2));
+    }
+
+    @Test
+    void backlogIsBrokenDownBySupplyStatus() throws Exception {
+        String salesManager = login(createUser("sales-manager", "SALES_MANAGER"));
+        MainOrder order = createScenario(salesManager);
+
+        //同一個客戶再下一張沒有庫存的 SO：3 個 @ 50，核准後預留不到，整行缺料待處理
+        CompanyItem fitting = createActiveItem(UnitOfMeasure.PCS);
+        CustomerItemMapping fittingMapping = createActiveMapping(order.customer(), fitting);
+        createActivePrice(fittingMapping, UnitOfMeasure.PCS, "50");
+        Long shortOrderId = createSubmittedOrder(
+                order.salesToken(),
+                draftBody(order.customer(), line(fittingMapping, "3", UnitOfMeasure.PCS))
+        );
+        approve(salesManager, shortOrderId).andExpect(status().isOk());
+        Long fittingLineId = findLineIds(shortOrderId).getFirst();
+        setDeliveryDate(fittingLineId, today().plusDays(30));
+
+        //未出貨 350：PU 1 個已預留但逾期（已備齊 200）＋ 新料號缺料（缺料待處理 150）
+        MvcResult result = analysis(salesManager, order)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.backlog.amount").value(350))
+                .andExpect(jsonPath("$.backlog.lineCount").value(2))
+                .andExpect(jsonPath("$.backlog.overdueAmount").value(200))
+                .andExpect(jsonPath("$.backlog.shortageImpactAmount").value(150))
+                .andExpect(jsonPath("$.backlog.shortageImpactLineCount").value(1))
+                .andExpect(jsonPath("$.backlog.bySupplyStatus.length()").value(6))
+                .andExpect(jsonPath("$.backlog.bySupplyStatus[0].status").value("UNPLANNED"))
+                .andExpect(jsonPath("$.backlog.bySupplyStatus[0].amount").value(150))
+                .andExpect(jsonPath("$.backlog.bySupplyStatus[0].lineCount").value(1))
+                .andExpect(jsonPath("$.backlog.bySupplyStatus[5].status").value("READY"))
+                .andExpect(jsonPath("$.backlog.bySupplyStatus[5].amount").value(200))
+                .andReturn();
+        //各狀態加起來等於未出貨總額
+        assertThat(sum(result, "$.backlog.bySupplyStatus[*].amount")).isEqualByComparingTo("350");
+
+        //下鑽：依供應狀態
+        backlogSources(salesManager, order, "supplyStatus", "UNPLANNED")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].salesOrderLineId").value(fittingLineId))
+                .andExpect(jsonPath("$.content[0].itemCode").value(fitting.getItemCode()))
+                .andExpect(jsonPath("$.content[0].remainingQuantity").value(3))
+                .andExpect(jsonPath("$.content[0].amount").value(150))
+                .andExpect(jsonPath("$.content[0].overdue").value(false));
+
+        //下鑽：只看逾期
+        backlogSources(salesManager, order, "overdueOnly", "true")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].salesOrderLineId").value(order.puLineId()))
+                .andExpect(jsonPath("$.content[0].supplyStatus").value("READY"))
+                .andExpect(jsonPath("$.content[0].overdue").value(true));
+
+        //不篩選時加起來等於未出貨金額，交期早的在前
+        MvcResult all = backlogSources(salesManager, order, "page", "0")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.content[0].salesOrderLineId").value(order.puLineId()))
+                .andReturn();
+        assertThat(sum(all, "$.content[*].amount")).isEqualByComparingTo("350");
+
+        //分頁在記憶體切：一頁 1 筆，第二頁是缺料的那一行
+        mockMvc.perform(get("/api/v1/analytics/sales/backlog-sources")
+                        .header("Authorization", bearer(salesManager))
+                        .param("customerId", order.customer().getId().toString())
+                        .param("page", "1")
+                        .param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].salesOrderLineId").value(fittingLineId))
                 .andExpect(jsonPath("$.totalPages").value(2));
     }
 
@@ -257,6 +337,15 @@ class SalesAnalyticsApiIntegrationTest extends ReceivableTestSupport {
                 .param("from", from.toString())
                 .param("to", to.toString())
                 .param("customerId", order.customer().getId().toString()));
+    }
+
+    //已接單未出貨的下鑽：不用期間，帶一個篩選參數；用客戶篩選鎖定這個情境的 SO
+    private ResultActions backlogSources(String token, MainOrder order, String name, String value)
+            throws Exception {
+        return mockMvc.perform(get("/api/v1/analytics/sales/backlog-sources")
+                .header("Authorization", bearer(token))
+                .param("customerId", order.customer().getId().toString())
+                .param(name, value));
     }
 
     //本期是今天往前 9 天到今天，前期是再往前 10 天；用客戶篩選鎖定這張 SO

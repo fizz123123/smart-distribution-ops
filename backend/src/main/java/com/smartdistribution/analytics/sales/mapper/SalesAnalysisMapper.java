@@ -7,6 +7,7 @@ import com.smartdistribution.analytics.sales.dto.response.SalesAnalysisResponse.
 import com.smartdistribution.analytics.sales.dto.response.SalesAnalysisResponse.MonthlyTrend;
 import com.smartdistribution.analytics.sales.dto.response.SalesAnalysisResponse.OnTimeDelivery;
 import com.smartdistribution.analytics.sales.dto.response.SalesAnalysisResponse.OnTimeStats;
+import com.smartdistribution.analytics.sales.dto.response.SalesAnalysisResponse.SupplyStatusAmount;
 import com.smartdistribution.analytics.sales.repository.projection.AmountByKeyProjection;
 import com.smartdistribution.analytics.sales.repository.projection.BacklogLineProjection;
 import com.smartdistribution.analytics.sales.repository.projection.ContributionProjection;
@@ -15,12 +16,14 @@ import com.smartdistribution.analytics.sales.repository.projection.OnTimeDeliver
 import com.smartdistribution.analytics.sales.repository.projection.RevenueTotalsProjection;
 import com.smartdistribution.analytics.common.service.AnalyticsNote;
 import com.smartdistribution.analytics.common.service.MetricChanges;
+import com.smartdistribution.analytics.common.service.SupplyStatus;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -114,16 +117,42 @@ public class SalesAnalysisMapper {
     }
 
     /**
-     * @param lines 還有未出貨量的 SO 明細
-     * @param today 交期早於今天的算逾期未出貨
-     * @return 未出貨合計與其中逾期的部分
+     * @param lines          還有未出貨量的 SO 明細
+     * @param supplyStatuses SO 明細 ID → 供應狀態
+     * @param today          交期早於今天的算逾期未出貨
+     * @return 未出貨合計、逾期的部分、缺料影響，以及依供應狀態的拆解
      */
-    public Backlog toBacklog(List<BacklogLineProjection> lines, LocalDate today) {
+    public Backlog toBacklog(
+            List<BacklogLineProjection> lines,
+            Map<Long, SupplyStatus> supplyStatuses,
+            LocalDate today
+    ) {
         List<BacklogLineProjection> overdue = lines.stream()
-                .filter(line -> line.deliveryDate() != null && line.deliveryDate().isBefore(today))
+                .filter(line -> line.isOverdue(today))
+                .toList();
+        List<BacklogLineProjection> shortageImpact = lines.stream()
+                .filter(line -> supplyStatuses.get(line.salesOrderLineId()).affectsShipment())
                 .toList();
 
-        return new Backlog(sumAmount(lines), lines.size(), sumAmount(overdue), overdue.size());
+        //六個狀態都列出來，沒有明細的是 0，前端不用自己補
+        List<SupplyStatusAmount> bySupplyStatus = Arrays.stream(SupplyStatus.values())
+                .map(status -> {
+                    List<BacklogLineProjection> matched = lines.stream()
+                            .filter(line -> supplyStatuses.get(line.salesOrderLineId()) == status)
+                            .toList();
+                    return new SupplyStatusAmount(status, sumAmount(matched), matched.size());
+                })
+                .toList();
+
+        return new Backlog(
+                sumAmount(lines),
+                lines.size(),
+                sumAmount(overdue),
+                overdue.size(),
+                sumAmount(shortageImpact),
+                shortageImpact.size(),
+                bySupplyStatus
+        );
     }
 
     private static OnTimeStats toOnTimeStats(OnTimeDeliveryProjection onTime) {

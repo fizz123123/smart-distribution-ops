@@ -3,6 +3,7 @@ package com.smartdistribution.analytics.sales.dto.response;
 import com.smartdistribution.analytics.common.dto.response.AnalyticsPeriodResponse;
 import com.smartdistribution.analytics.common.dto.response.MetricComparison;
 import com.smartdistribution.analytics.common.service.AnalyticsNote;
+import com.smartdistribution.analytics.common.service.SupplyStatus;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -97,13 +98,25 @@ public record SalesAnalysisResponse(
     }
 
     /**
-     * @param overdueAmount 交期早於今天、還沒出貨的部分
+     * @param overdueAmount        交期早於今天、還沒出貨的部分
+     * @param shortageImpactAmount 缺料影響：供應狀態是缺料待處理或採購延遲風險的部分
+     * @param bySupplyStatus       依供應狀態拆解，六個狀態都會列出；加起來等於 amount
      */
     public record Backlog(
             BigDecimal amount,
             int lineCount,
             BigDecimal overdueAmount,
-            int overdueLineCount
+            int overdueLineCount,
+            BigDecimal shortageImpactAmount,
+            int shortageImpactLineCount,
+            List<SupplyStatusAmount> bySupplyStatus
+    ) {
+    }
+
+    public record SupplyStatusAmount(
+            SupplyStatus status,
+            BigDecimal amount,
+            int lineCount
     ) {
     }
 }

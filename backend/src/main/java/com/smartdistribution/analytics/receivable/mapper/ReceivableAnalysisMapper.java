@@ -5,8 +5,8 @@ import com.smartdistribution.analytics.receivable.dto.response.ReceivableAnalysi
 import com.smartdistribution.analytics.receivable.dto.response.ReceivableAnalysisResponse.DueGroup;
 import com.smartdistribution.analytics.receivable.dto.response.ReceivableAnalysisResponse.DueReceivable;
 import com.smartdistribution.analytics.receivable.dto.response.ReceivableAnalysisResponse.Summary;
-import com.smartdistribution.analytics.receivable.repository.OpenReceivableProjection;
-import com.smartdistribution.analytics.receivable.repository.ReceivableTotalsProjection;
+import com.smartdistribution.analytics.receivable.repository.projection.OpenReceivableProjection;
+import com.smartdistribution.analytics.receivable.repository.projection.ReceivableTotalsProjection;
 import com.smartdistribution.analytics.receivable.service.AgingBucket;
 import com.smartdistribution.receivable.service.DueStatus;
 import org.springframework.stereotype.Component;

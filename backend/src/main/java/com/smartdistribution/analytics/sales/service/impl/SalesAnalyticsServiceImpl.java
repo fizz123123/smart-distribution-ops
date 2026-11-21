@@ -4,6 +4,8 @@ import com.smartdistribution.analytics.common.dto.response.AnalyticsPeriodRespon
 import com.smartdistribution.analytics.common.repository.AnalyticsFilter;
 import com.smartdistribution.analytics.common.service.AnalyticsPeriod;
 import com.smartdistribution.analytics.common.service.AnalyticsScope;
+import com.smartdistribution.analytics.common.service.SupplyStatus;
+import com.smartdistribution.analytics.sales.dto.response.BacklogSourceResponse;
 import com.smartdistribution.analytics.sales.dto.response.CancellationSourceResponse;
 import com.smartdistribution.analytics.sales.dto.response.NewOrderSourceResponse;
 import com.smartdistribution.analytics.sales.dto.response.RevenueSourceResponse;
@@ -14,8 +16,12 @@ import com.smartdistribution.analytics.sales.mapper.SalesSourceMapper;
 import com.smartdistribution.analytics.sales.repository.SalesAnalyticsRepository;
 import com.smartdistribution.analytics.sales.repository.SalesSourceRepository;
 import com.smartdistribution.analytics.sales.service.SalesAnalyticsService;
+import com.smartdistribution.sales.service.SalesOrderSupplyService;
+import com.smartdistribution.sales.service.SalesOrderSupplyService.ApprovedLineSupply;
 import com.smartdistribution.shared.web.response.PageResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -25,6 +31,8 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +46,7 @@ public class SalesAnalyticsServiceImpl implements SalesAnalyticsService {
     private final SalesAnalysisMapper salesAnalysisMapper;
     private final SalesSourceMapper salesSourceMapper;
     private final AnalyticsScope analyticsScope;
+    private final SalesOrderSupplyService salesOrderSupplyService;
 
     @Override
     @PreAuthorize("hasAnyAuthority('DASHBOARD_VIEW_ALL', 'ANALYTICS_SALES_VIEW_ALL', 'ANALYTICS_SALES_VIEW')")
@@ -77,7 +86,11 @@ public class SalesAnalyticsServiceImpl implements SalesAnalyticsService {
                                 filter, period.from(), period.to(), period.previousFrom(), period.previousTo()
                         )
                 ),
-                salesAnalysisMapper.toBacklog(salesAnalyticsRepository.findBacklogLines(filter), today)
+                salesAnalysisMapper.toBacklog(
+                        salesAnalyticsRepository.findBacklogLines(filter),
+                        findSupplyStatuses(filter, today),
+                        today
+                )
         );
     }
 
@@ -135,6 +148,29 @@ public class SalesAnalyticsServiceImpl implements SalesAnalyticsService {
                 .map(salesSourceMapper::toResponse));
     }
 
+    @Override
+    @PreAuthorize("hasAnyAuthority('DASHBOARD_VIEW_ALL', 'ANALYTICS_SALES_VIEW_ALL', 'ANALYTICS_SALES_VIEW')")
+    public PageResponse<BacklogSourceResponse> findBacklogSources(
+            Long customerId,
+            Long companyItemId,
+            Long responsibleSalesUserId,
+            SupplyStatus supplyStatus,
+            boolean overdueOnly,
+            Pageable pageable
+    ) {
+        LocalDate today = LocalDate.now(TAIPEI);
+        AnalyticsFilter filter = toFilter(customerId, companyItemId, responsibleSalesUserId);
+        Map<Long, SupplyStatus> supplyStatuses = findSupplyStatuses(filter, today);
+
+        List<BacklogSourceResponse> sources = salesAnalyticsRepository.findBacklogLines(filter).stream()
+                .filter(line -> supplyStatus == null || supplyStatuses.get(line.salesOrderLineId()) == supplyStatus)
+                .filter(line -> !overdueOnly || line.isOverdue(today))
+                .map(line -> salesSourceMapper.toResponse(line, supplyStatuses.get(line.salesOrderLineId()), today))
+                .toList();
+
+        return PageResponse.from(toPage(sources, pageable));
+    }
+
     //業務只有 ANALYTICS_SALES_VIEW 時，負責業務強制是自己
     private AnalyticsFilter toFilter(Long customerId, Long companyItemId, Long responsibleSalesUserId) {
         return new AnalyticsFilter(
@@ -151,5 +187,25 @@ public class SalesAnalyticsServiceImpl implements SalesAnalyticsService {
                 salesAnalyticsRepository.findCancellationAmount(filter, from, to),
                 salesAnalyticsRepository.findOnTimeDelivery(filter, from, to)
         );
+    }
+
+    /**
+     * 供應狀態要用銷售模組的尚待規劃算，不在 SQL 重算一次；有料號篩選時只查那個料號
+     * 和未出貨明細在同一個交易裡讀，兩邊看到的已核准明細相同
+     *
+     * @return SO 明細 ID → 供應狀態
+     */
+    private Map<Long, SupplyStatus> findSupplyStatuses(AnalyticsFilter filter, LocalDate today) {
+        return salesOrderSupplyService.findApprovedLineSupplies(filter.companyItemId()).stream()
+                .collect(Collectors.toMap(
+                        ApprovedLineSupply::salesOrderLineId,
+                        supply -> SupplyStatus.of(supply, today)
+                ));
+    }
+
+    private static <T> Page<T> toPage(List<T> all, Pageable pageable) {
+        int from = (int) Math.min(pageable.getOffset(), all.size());
+        int to = Math.min(from + pageable.getPageSize(), all.size());
+        return new PageImpl<>(all.subList(from, to), pageable, all.size());
     }
 }

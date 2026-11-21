@@ -1,12 +1,17 @@
 package com.smartdistribution.analytics.sales.mapper;
 
+import com.smartdistribution.analytics.common.service.SupplyStatus;
+import com.smartdistribution.analytics.sales.dto.response.BacklogSourceResponse;
 import com.smartdistribution.analytics.sales.dto.response.CancellationSourceResponse;
 import com.smartdistribution.analytics.sales.dto.response.NewOrderSourceResponse;
 import com.smartdistribution.analytics.sales.dto.response.RevenueSourceResponse;
+import com.smartdistribution.analytics.sales.repository.projection.BacklogLineProjection;
 import com.smartdistribution.analytics.sales.repository.projection.CancellationSourceProjection;
 import com.smartdistribution.analytics.sales.repository.projection.NewOrderSourceProjection;
 import com.smartdistribution.analytics.sales.repository.projection.RevenueSourceProjection;
 import org.springframework.stereotype.Component;
+
+import java.time.LocalDate;
 
 /**
  * 來源明細的查詢結果轉成回應；欄位一對一，查詢結果不直接當回應，和其他模組一樣經過 mapper
@@ -66,6 +71,31 @@ public class SalesSourceMapper {
                 row.quantity(),
                 row.unit(),
                 row.amount()
+        );
+    }
+
+    /**
+     * @param supplyStatus 這一行的供應狀態，由 service 判斷
+     * @param today        交期早於今天的標示逾期
+     */
+    public BacklogSourceResponse toResponse(BacklogLineProjection row, SupplyStatus supplyStatus, LocalDate today) {
+        return new BacklogSourceResponse(
+                row.salesOrderLineId(),
+                row.salesOrderId(),
+                row.soNumber(),
+                row.lineNo(),
+                row.customerId(),
+                row.customerCode(),
+                row.customerName(),
+                row.companyItemId(),
+                row.itemCode(),
+                row.itemName(),
+                row.deliveryDate(),
+                row.remainingQuantity(),
+                row.unit(),
+                row.amount(),
+                supplyStatus,
+                row.isOverdue(today)
         );
     }
 }

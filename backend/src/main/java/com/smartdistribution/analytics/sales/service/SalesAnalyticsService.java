@@ -1,5 +1,7 @@
 package com.smartdistribution.analytics.sales.service;
 
+import com.smartdistribution.analytics.common.service.SupplyStatus;
+import com.smartdistribution.analytics.sales.dto.response.BacklogSourceResponse;
 import com.smartdistribution.analytics.sales.dto.response.CancellationSourceResponse;
 import com.smartdistribution.analytics.sales.dto.response.NewOrderSourceResponse;
 import com.smartdistribution.analytics.sales.dto.response.RevenueSourceResponse;
@@ -68,6 +70,22 @@ public interface SalesAnalyticsService {
             Long customerId,
             Long companyItemId,
             Long responsibleSalesUserId,
+            Pageable pageable
+    );
+
+    /**
+     * 已接單未出貨的下鑽；狀態查詢，不受期間影響，依交期排序
+     *
+     * @param supplyStatus null 代表全部供應狀態
+     * @param overdueOnly  只列交期早於今天的明細
+     * @return 一頁 SO 明細；不篩選時加起來等於同樣條件下的已接單未出貨金額
+     */
+    PageResponse<BacklogSourceResponse> findBacklogSources(
+            Long customerId,
+            Long companyItemId,
+            Long responsibleSalesUserId,
+            SupplyStatus supplyStatus,
+            boolean overdueOnly,
             Pageable pageable
     );
 }

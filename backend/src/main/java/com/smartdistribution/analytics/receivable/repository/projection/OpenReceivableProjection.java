@@ -1,4 +1,4 @@
-package com.smartdistribution.analytics.receivable.repository;
+package com.smartdistribution.analytics.receivable.repository.projection;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;

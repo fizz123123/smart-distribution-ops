@@ -1,5 +1,7 @@
 package com.smartdistribution.analytics.receivable.repository;
 
+import com.smartdistribution.analytics.receivable.repository.projection.OpenReceivableProjection;
+import com.smartdistribution.analytics.receivable.repository.projection.ReceivableTotalsProjection;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;

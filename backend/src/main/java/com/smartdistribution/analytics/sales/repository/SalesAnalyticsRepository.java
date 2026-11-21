@@ -1,7 +1,12 @@
 package com.smartdistribution.analytics.sales.repository;
 
 import com.smartdistribution.analytics.common.repository.AnalyticsFilter;
-import com.smartdistribution.analytics.sales.repository.projection.*;
+import com.smartdistribution.analytics.sales.repository.projection.AmountByKeyProjection;
+import com.smartdistribution.analytics.sales.repository.projection.BacklogLineProjection;
+import com.smartdistribution.analytics.sales.repository.projection.ContributionProjection;
+import com.smartdistribution.analytics.sales.repository.projection.NewOrderTotalsProjection;
+import com.smartdistribution.analytics.sales.repository.projection.OnTimeDeliveryProjection;
+import com.smartdistribution.analytics.sales.repository.projection.RevenueTotalsProjection;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -210,24 +215,31 @@ public class SalesAnalyticsRepository {
     }
 
     /**
-     * 狀態查詢，不受期間影響
+     * 已接單未出貨的明細：狀態查詢，不受期間影響；合計和下鑽都用這份清單，供應狀態由 service 判斷
      *
-     * @return 已核准 SO 中還有未出貨量的明細，依交期排序
+     * @return 還有未出貨量的已核准 SO 明細
      */
     public List<BacklogLineProjection> findBacklogLines(AnalyticsFilter filter) {
         String sql = BACKLOG_LINES + """
-                SELECT sales_order_line_id,
-                       sales_order_id,
-                       so_number,
-                       line_no,
-                       customer_id,
-                       company_item_id,
-                       delivery_date,
-                       remaining_quantity,
-                       ROUND(remaining_quantity * unit_price, 2) AS amount
+                SELECT backlog_line.sales_order_line_id,
+                       backlog_line.sales_order_id,
+                       backlog_line.so_number,
+                       backlog_line.line_no,
+                       backlog_line.customer_id,
+                       customer.customer_code,
+                       customer.name AS customer_name,
+                       backlog_line.company_item_id,
+                       company_item.item_code,
+                       company_item.name AS item_name,
+                       backlog_line.delivery_date,
+                       backlog_line.remaining_quantity,
+                       backlog_line.unit_code,
+                       ROUND(backlog_line.remaining_quantity * backlog_line.unit_price, 2) AS amount
                 FROM backlog_line
-                WHERE remaining_quantity > 0
-                ORDER BY delivery_date, sales_order_line_id
+                JOIN customer ON customer.id = backlog_line.customer_id
+                JOIN company_item ON company_item.id = backlog_line.company_item_id
+                WHERE backlog_line.remaining_quantity > 0
+                ORDER BY backlog_line.delivery_date, backlog_line.sales_order_line_id
                 """;
 
         return jdbcTemplate.query(sql, scope(filter), (rs, rowNum) -> new BacklogLineProjection(
@@ -236,9 +248,14 @@ public class SalesAnalyticsRepository {
                 rs.getString("so_number"),
                 rs.getInt("line_no"),
                 rs.getLong("customer_id"),
+                rs.getString("customer_code"),
+                rs.getString("customer_name"),
                 rs.getLong("company_item_id"),
+                rs.getString("item_code"),
+                rs.getString("item_name"),
                 rs.getObject("delivery_date", LocalDate.class),
                 rs.getBigDecimal("remaining_quantity"),
+                rs.getString("unit_code"),
                 rs.getBigDecimal("amount")
         ));
     }

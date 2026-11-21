@@ -1,5 +1,7 @@
 package com.smartdistribution.analytics.sales.controller;
 
+import com.smartdistribution.analytics.common.service.SupplyStatus;
+import com.smartdistribution.analytics.sales.dto.response.BacklogSourceResponse;
 import com.smartdistribution.analytics.sales.dto.response.CancellationSourceResponse;
 import com.smartdistribution.analytics.sales.dto.response.NewOrderSourceResponse;
 import com.smartdistribution.analytics.sales.dto.response.RevenueSourceResponse;
@@ -81,6 +83,21 @@ public class SalesAnalyticsController {
     ) {
         return ResponseEntity.ok(salesAnalyticsService.findCancellationSources(
                 from, to, customerId, companyItemId, responsibleSalesUserId, pageable
+        ));
+    }
+
+    //已接單未出貨的下鑽：可依供應狀態、是否逾期篩選；查詢當下的狀態，不用期間，依交期排序
+    @GetMapping("/sales/backlog-sources")
+    public ResponseEntity<PageResponse<BacklogSourceResponse>> findBacklogSources(
+            @RequestParam(required = false) Long customerId,
+            @RequestParam(required = false) Long companyItemId,
+            @RequestParam(required = false) Long responsibleSalesUserId,
+            @RequestParam(required = false) SupplyStatus supplyStatus,
+            @RequestParam(defaultValue = "false") boolean overdueOnly,
+            @PageableDefault(size = 20) Pageable pageable
+    ) {
+        return ResponseEntity.ok(salesAnalyticsService.findBacklogSources(
+                customerId, companyItemId, responsibleSalesUserId, supplyStatus, overdueOnly, pageable
         ));
     }
 }
