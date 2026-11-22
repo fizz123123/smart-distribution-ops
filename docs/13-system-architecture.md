@@ -2,7 +2,7 @@
 
 > 文件版本：v1.0  
 > 建立日期：2026-10-05  
-> 最後更新：2026-11-07  
+> 最後更新：2026-11-23  
 > 文件定位：說明系統元件、部署方式、後端模組邊界、外部整合、安全責任與主要資料流，作為開發、部署及簡報架構圖的共同參考。
 
 ---
@@ -181,12 +181,12 @@ smart-distribution-documents
 | `identity` | 登入、使用者、角色、權限、JWT、密碼設定連結與寄信、閒置帳號停用排程 |
 | `masterdata` | 客戶、供應商、公司料號、客戶料號、價格、單位與付款條件 |
 | `approval` | 共用送審、核准與退回紀錄；各目標模組實作核准處理器，自行執行核准或退回後的效果 |
-| `sales` | SO、價格快照、核准後供應狀態及餘量取消；採購數量透過 `PurchaseSupplyProvider`、出貨數量透過 `ShipmentQuantityProvider` 取得，不依賴 `purchasing`、`fulfillment`（D-066、D-075） |
+| `sales` | SO、價格快照、核准後供應狀態及餘量取消；採購數量透過 `PurchaseSupplyProvider`、出貨數量透過 `ShipmentQuantityProvider` 取得，不依賴 `purchasing`、`fulfillment`（D-066、D-075）；以 `SalesOrderSupplyService` 提供已核准 SO 明細的供應狀態給儀表板（D-082） |
 | `purchasing` | PO、關聯 SO 需求、採購在途、驗收入庫、取消與短收結案 |
 | `inventory` | 庫存餘額、異動、預留、調整及一致性檢查；收貨入庫與補足預留由 `purchasing` 呼叫庫存服務完成 |
 | `fulfillment` | DO 通知、揀貨、三聯出貨單及出貨過帳；透過 `SalesOrderDeliveryService` 讀 SO，過帳時呼叫庫存服務扣庫存與使用預留，並呼叫應收服務建立應收草稿（D-077） |
 | `receivable` | 客戶應收、外部發票資料、收款及核銷；不含供應商應付與付款。透過 `SalesOrderBillingService` 取得 SO 的付款條件與單價快照；過帳時需要的 DO 資料由 `fulfillment` 傳入並存成快照，不讀出貨模組（D-076、D-077） |
-| `analytics` | 儀表板指標、風險規則、趨勢及來源下鑽 |
+| `analytics` | 儀表板指標、風險規則、趨勢及來源下鑽；沒有自己的資料表，以唯讀 SQL 讀其他模組的表，尚待規劃與供應狀態透過 `SalesOrderSupplyService` 取得（D-082） |
 | `ai` | OpenAI Client、LINE 解析 DTO、營運摘要輸入輸出及防護 |
 | `integration.line` | LINE 綁定碼、帳號綁定、Webhook、簽章、event ID 防重與確認流程 |
 | `document` | PO／DO PDF 產生、檔案儲存（開發環境為本機，部署為 S3）及文件狀態；以文件類型加來源 ID 對應單據，不認得各種單據 |
@@ -218,7 +218,7 @@ com.smartdistribution
 ├── audit
 ├── fulfillment         （同 sales 的分層，沒有 handler）
 ├── receivable          （同 sales 的分層，沒有 handler；應收與收款在同一個模組）
-├── analytics           （尚未實作）
+├── analytics           （依分析分子套件，見下方說明）
 ├── ai                  （尚未實作）
 ├── integration
 │   └── line            （尚未實作）
@@ -230,11 +230,25 @@ com.smartdistribution
     └── web（request：共用的 VersionRequest、ReasonRequest；response：PageResponse）
 ```
 
+`analytics` 和 `masterdata` 一樣，由幾個彼此獨立的子功能組成，所以先依分析分成子套件，每個子套件內再依 controller、dto、mapper、repository、service 分層：
+
+```text
+analytics
+├── common       各分析共用：期間、分析範圍、比較值、供應狀態、銷售明細的 SQL 片段
+├── sales        接單與營收、來源明細
+├── shortage     缺貨與採購、供應商表現
+├── cooling      客戶交易降溫
+├── receivable   應收與逾期
+└── overview     營運總覽（只組合前四個分析的服務，沒有 repository）
+```
+
+`analytics` 的 repository 是 `@Repository` 類別，以 `NamedParameterJdbcTemplate` 寫唯讀 SQL；查詢結果是 `repository/projection` 裡的 record。類別名稱帶分析名稱的前綴（例如 `SalesAnalyticsRepository`），避免和 `sales` 模組的類別混淆。
+
 共用規則：
 
 - Controller 只處理 HTTP 契約、基本格式驗證及呼叫 Service。
 - Service 負責交易邊界、權限後的業務操作及跨模組協調。
-- Repository 只由所屬模組的 Service 使用；其他模組不得直接修改其資料。
+- Repository 只由所屬模組的 Service 使用；其他模組不得直接修改其資料。唯一的例外是 `analytics`：它只讀不寫，以唯讀 SQL 讀其他模組的表做跨表加總，不 import 其他模組的 entity 或 repository（D-082）。
 - Entity 保存狀態及必要一致性行為，但不直接呼叫外部 API。
 - DTO 不直接作為 JPA Entity，也不將 Entity 原樣回傳前端。
 - `shared` 只放真正跨模組的技術能力，不作為無法分類程式碼的集中區。
@@ -254,10 +268,11 @@ com.smartdistribution
 | `Resolver` | 從多個來源算出一個結果 | 會 | `EffectivePermissionResolver` |
 | `Issuer` | 產生並發出某個東西 | 會 | `PasswordTokenIssuer` |
 | `Provider` | 由別的模組實作的介面，用來讓模組依賴只有一個方向 | 由實作決定 | `PurchaseSupplyProvider`（sales 定義、purchasing 實作） |
+| `Rules` | 判斷規則與計算公式，例如可支撐天數、再訂購點、交易週期；只有 static 方法與常數，不是 Spring bean | 不會 | `ShortageRules`、`CoolingRules` |
 | `PdfLayout` | 某種單據的 PDF 版面，呼叫 `document` 模組的 `PdfRenderer` 產生 | 會（查料號名稱） | `PurchaseOrderPdfLayout` |
 | 沒有後綴的 record | 模組之間傳遞的資料，不是 API 的 DTO；只服務一個介面時寫成該介面的巢狀 record | 不會 | `InventoryService.ReservationLine`、`SalesOrderDemandService.SalesOrderLineDemand`、`ShipmentQuantityProvider.ShipmentQuantity` |
 
-其他套件沿用 Spring 慣例：`Controller`、`Repository`、`Assembler`（需要查詢其他資料才能組出的回應）、`Mapper`（單純的欄位轉換）、`ApprovalHandler`（核准處理器）、`Projection`（查詢結果）。新增輔助類別時，先從上表挑一個符合的後綴；都不符合時，再新增後綴並補進本表。
+其他套件沿用 Spring 慣例：`Controller`、`Repository`、`Assembler`（需要查詢其他資料才能組出的回應）、`Mapper`（單純的欄位轉換；`analytics` 的 mapper 也負責把查詢結果組成分析回應）、`ApprovalHandler`（核准處理器）、`Projection`（查詢結果）、`Sql`（多個 repository 共用的唯讀 SQL 片段，例如 `SalesLineSql`）。新增輔助類別時，先從上表挑一個符合的後綴；都不符合時，再新增後綴並補進本表。
 
 只帶版本號、或只帶「原因＋版本號」的 request，不再各模組各寫一份，統一使用 `shared/web/request` 的 `VersionRequest`、`ReasonRequest`。request 還有其他欄位時，才在模組的 `dto/request` 另建。
 
@@ -403,7 +418,7 @@ flowchart LR
 | Beanstalk 單一應用執行個體 | 部署或主機異常時可能短暫中斷 | 調高 Auto Scaling 最小與最大數量，由既有 ALB 分流 |
 | ALB 到 EC2 採 VPC 內 HTTP | 不是端到端 TLS | 若未來出現合規要求，在執行個體配置 HTTPS 並將 Target Group 改為 HTTPS |
 | 單一 MySQL | 所有模組共享同一資料庫 | 先以模組邊界與權限隔離；有實際瓶頸後再評估拆分 |
-| 即時計算儀表板 | 資料量大時查詢成本可能上升 | 依量測結果增加索引、View、排程彙總或快照 |
+| 即時計算儀表板，不加快取（D-082） | 資料量大時查詢成本可能上升 | 依量測結果先增加索引，再考慮 View、排程彙總或快照 |
 | OpenAI 外部 API | 受網路、供應商限流與費用影響 | 加入 timeout、有限重試、錯誤提示及使用量監控 |
 | 不使用向量資料庫 | 不提供文件語意搜尋或 RAG | 只有出現明確知識檢索需求時才評估向量儲存 |
 

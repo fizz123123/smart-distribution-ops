@@ -2,7 +2,7 @@
 
 > 文件版本：v1.0  
 > 建立日期：2026-10-05  
-> 最後更新：2026-11-07  
+> 最後更新：2026-11-23  
 > 文件定位：依功能模組、角色權限、領域規則、資料模型及狀態轉換，定義前端畫面與後端 API 的責任邊界、主要操作、輸入輸出及錯誤處理。
 
 ---
@@ -69,6 +69,7 @@ RECEIVABLE_INVOICE_CORRECT
 PAYMENT_CONFIRM
 PAYMENT_VOID
 DASHBOARD_VIEW_ALL
+ANALYTICS_SALES_VIEW
 AI_SUMMARY_GENERATE
 LINE_AI_SO_DRAFT_CREATE
 ```
@@ -873,13 +874,17 @@ DO 的錯誤碼：
 
 | 資料 | Method | Path | 說明 |
 | --- | --- | --- | --- |
-| 營運總覽 | `GET` | `/analytics/overview` | 淨接單、營收、未出貨、缺貨、交易降溫與逾期應收摘要 |
-| 接單與營收 | `GET` | `/analytics/sales` | 趨勢、前後期比較及客戶／商品營收貢獻 |
-| 缺貨與採購 | `GET` | `/analytics/shortages` | 可用、預留、已規劃未下單、採購在途、近 30 日平均日出貨量、可支撐天數、平均採購週期、建議安全庫存與交期風險 |
-| 交易降溫 | `GET` | `/analytics/customer-cooling` | 客戶交易週期、近期變化及來源 |
-| 應收與逾期 | `GET` | `/analytics/receivables` | 未收、即將到期、逾期與明細 |
+| 營運總覽 | `GET` | `/analytics/overview` | 六張核心指標卡、近六個月趨勢與三張待處理清單 |
+| 接單與營收 | `GET` | `/analytics/sales` | 本期與前期比較（含準時交貨率）、近六個月趨勢、客戶／商品營收增減前三名、已接單未出貨與供應狀態拆解 |
+| 營收來源 | `GET` | `/analytics/sales/revenue-sources` | 期間內出貨的應收明細，分頁 |
+| 新增接單來源 | `GET` | `/analytics/sales/new-order-sources` | 期間內核准的 SO，一張一筆，分頁 |
+| 核准取消來源 | `GET` | `/analytics/sales/cancellation-sources` | 期間內核准的取消申請明細，分頁 |
+| 未出貨來源 | `GET` | `/analytics/sales/backlog-sources` | 還有未出貨量的 SO 明細，可依 `supplyStatus`、`overdueOnly` 篩選，分頁 |
+| 缺貨與採購 | `GET` | `/analytics/shortages` | 有風險的商品：可用、預留、安全庫存、尚待規劃、已規劃未下單、採購在途、近 30 日平均日出貨量、可支撐天數、平均採購週期、建議再訂購點、風險原因、受影響 SO 明細與相關 PO；另附供應商表現 |
+| 交易降溫 | `GET` | `/analytics/customer-cooling` | 客戶交易週期、比值、風險等級、平均月營收及補充證據 |
+| 應收與逾期 | `GET` | `/analytics/receivables` | 金額摘要、帳齡、即將到期與逾期明細 |
 
-共用 query：
+共用 query，各 API 用不到的參數會被忽略：
 
 ```text
 from=2026-10-01
@@ -887,15 +892,47 @@ to=2026-10-31
 customerId=
 companyItemId=
 responsibleSalesUserId=
+asOf=2026-11-23
 ```
 
-即時狀態型指標不受一般期間篩選時，response 必須標示 `asOf` 與採用的分析基準日。下鑽項目須提供來源類型及資源 ID，前端依使用者權限導向明細。
+| 參數 | 使用的 API |
+| --- | --- |
+| `from`、`to` | 總覽、接單與營收（含三種期間來源）、交易降溫的補充證據 |
+| `customerId` | 總覽、接單與營收、交易降溫、應收 |
+| `companyItemId` | 總覽、接單與營收、缺貨與採購 |
+| `responsibleSalesUserId` | 總覽、接單與營收、交易降溫、應收 |
+| `asOf` | 只有交易降溫；預設今日，不能是未來 |
 
-`/analytics/overview` 固定回傳六張核心指標卡、一組近六個月淨接單與營收趨勢，以及缺貨履約、交易降溫、應收三組待處理清單。`/analytics/sales` 分別提供營收增加及減少最多的前三名客戶與商品；不得回傳跨商品計算的全公司平均出貨單價。前期營收為 0 時，變化率回傳 `null` 並附上 `NO_PRIOR_BASELINE` 說明。
+- `from`、`to` 要一起帶或一起不帶；都不帶時是本月至今對上月同期（D-083）。只帶一個、起日晚於迄日或超過 366 天時回 `400 ANALYTICS_PERIOD_INVALID`；`asOf` 是未來時也回這個錯誤碼。
+- 期間型回應帶 `period`：`from`、`to`、`previousFrom`、`previousTo`、`periodComplete`。查前期的來源明細時，前端把 `previousFrom`、`previousTo` 帶進 `from`、`to`。
+- 狀態型指標不受期間影響，回應以 `asOf` 標示基準日。
+- 比較值的格式為 `current`、`previous`、`change`、`changeRate`、`note`；`changeRate` 是小數，`0.25` 代表 25%。
+- `note` 說明算不出來的原因：`NO_PRIOR_BASELINE`（前期為 0）、`INSUFFICIENT_DATA`（樣本不足）、`NO_RECENT_USAGE`（近 30 天沒有出貨）、`INSUFFICIENT_HISTORY`（沒有完整 PO 歷史）。
+- 來源明細的排序固定，不接受 `sort`：期間型來源依日期由新到舊，未出貨來源依交期由早到晚。分頁格式同第 2.4 節。
+- 下鑽以明確的 ID 欄位提供來源，例如 `salesOrderId`、`receivableId`、`deliveryOrderId`、`purchaseOrderId`、`customerId`、`companyItemId`、`supplierId`；前端依使用者權限決定能不能點，來源詳情 API 本身也會檢查權限。
+
+`/analytics/overview` 固定回傳六張核心指標卡、一組近六個月淨接單與營收趨勢，以及缺貨履約、交易降溫、應收三組待處理清單；清單各取前 10 筆並附總筆數。總覽的每個數字都取自對應詳情，和詳情相同。`/analytics/sales` 分別提供營收增加及減少最多的前三名客戶與商品；不得回傳跨商品計算的全公司平均出貨單價。前期營收為 0 時，變化率回傳 `null` 並附上 `NO_PRIOR_BASELINE` 說明。
 
 `/analytics/overview` 不取代 HOME-01，也不另外建立待辦中心。前端若在儀表板顯示「我的待辦」入口或數量，應連至 HOME-01；實際可執行項目仍依目前使用者權限由工作台及各模組查詢取得。
 
-缺貨分析的計算基準與資料不足處理以 [06-analytics-and-dashboard.md](06-analytics-and-dashboard.md) 為準。建議安全庫存只供決策參考，不得由查詢或 AI 摘要自動改寫主檔。
+缺貨分析的計算基準與資料不足處理以 [06-analytics-and-dashboard.md](06-analytics-and-dashboard.md) 為準。`/analytics/shortages` 不回傳售價與 PO 採購單價。建議再訂購點只供決策參考，不得由查詢或 AI 摘要自動改寫主檔。
+
+儀表板細部權限與預設角色（D-085）：
+
+| API | 權限（其中之一） |
+| --- | --- |
+| `/analytics/overview` | `DASHBOARD_VIEW_ALL` |
+| `/analytics/sales`、`/analytics/sales/*-sources`、`/analytics/customer-cooling` | `DASHBOARD_VIEW_ALL`、`ANALYTICS_SALES_VIEW_ALL`、`ANALYTICS_SALES_VIEW` |
+| `/analytics/shortages` | `DASHBOARD_VIEW_ALL`、`ANALYTICS_SHORTAGE_VIEW` |
+| `/analytics/receivables` | `DASHBOARD_VIEW_ALL`、`ANALYTICS_RECEIVABLE_VIEW` |
+
+只有 `ANALYTICS_SALES_VIEW` 時，沒帶 `responsibleSalesUserId` 自動帶入自己；帶其他業務的 ID 回 `403 ACCESS_DENIED`。各權限的預設角色見 [04-roles-and-permissions.md](04-roles-and-permissions.md) 的「分析權限」。
+
+儀表板錯誤碼：
+
+| 錯誤碼 | HTTP | 情境 |
+| --- | --- | --- |
+| `ANALYTICS_PERIOD_INVALID` | 400 | `from`、`to` 只帶一個、起日晚於迄日、超過 366 天，或 `asOf` 是未來 |
 
 ### 10.2 AI 營運摘要
 
@@ -1004,7 +1041,7 @@ POST /integrations/line/webhook
 
 - JWT access token 與 refresh token 的有效時間及撤銷方式。
 - 查詢 API 的實際索引、最大分頁筆數及模糊搜尋策略。
-- 權限代碼的完整 seed 清單及各角色預設對應（帳號權限見 D-036，主檔權限見第 5.3 節，SO 權限見 6.3 節，PO 與收貨權限見 7.2 節，庫存權限見 7.3 節，DO 權限見 8.3 節，其餘模組實作時補齊）。
+- 權限代碼的完整 seed 清單及各角色預設對應（帳號權限見 D-036，主檔權限見第 5.3 節，SO 權限見 6.3 節，PO 與收貨權限見 7.2 節，庫存權限見 7.3 節，DO 權限見 8.3 節，應收與收款權限見 9.3 節，儀表板權限見 10.1 節，其餘模組實作時補齊）。
 - API 文件以 SpringDoc OpenAPI 產生的 schema 與範例。
 - LINE 確認 token 與 webhook event ID 的保存期限。
 
