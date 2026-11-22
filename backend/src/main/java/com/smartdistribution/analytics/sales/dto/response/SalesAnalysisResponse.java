@@ -98,9 +98,10 @@ public record SalesAnalysisResponse(
     }
 
     /**
-     * @param overdueAmount        交期早於今天、還沒出貨的部分
-     * @param shortageImpactAmount 缺料影響：供應狀態是缺料待處理或採購延遲風險的部分
-     * @param bySupplyStatus       依供應狀態拆解，六個狀態都會列出；加起來等於 amount
+     * @param overdueAmount           交期早於今天、還沒出貨的部分
+     * @param shortageImpactAmount    缺料影響：供應狀態是缺料待處理或採購延遲風險的部分
+     * @param shortageImpactItemCount 缺料影響涉及幾個料號；總覽卡片的副標
+     * @param bySupplyStatus          依供應狀態拆解，六個狀態都會列出；加起來等於 amount
      */
     public record Backlog(
             BigDecimal amount,
@@ -109,6 +110,7 @@ public record SalesAnalysisResponse(
             int overdueLineCount,
             BigDecimal shortageImpactAmount,
             int shortageImpactLineCount,
+            int shortageImpactItemCount,
             List<SupplyStatusAmount> bySupplyStatus
     ) {
     }

@@ -151,6 +151,7 @@ public class SalesAnalysisMapper {
                 overdue.size(),
                 sumAmount(shortageImpact),
                 shortageImpact.size(),
+                (int) shortageImpact.stream().map(BacklogLineProjection::companyItemId).distinct().count(),
                 bySupplyStatus
         );
     }
