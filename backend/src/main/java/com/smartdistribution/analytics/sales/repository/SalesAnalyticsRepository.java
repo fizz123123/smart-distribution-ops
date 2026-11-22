@@ -17,16 +17,16 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
-import static com.smartdistribution.analytics.sales.repository.SalesAnalyticsSql.BACKLOG_LINES;
-import static com.smartdistribution.analytics.sales.repository.SalesAnalyticsSql.CANCELLATION_LINES;
-import static com.smartdistribution.analytics.sales.repository.SalesAnalyticsSql.NEW_ORDER_LINES;
-import static com.smartdistribution.analytics.sales.repository.SalesAnalyticsSql.REVENUE_LINES;
-import static com.smartdistribution.analytics.sales.repository.SalesAnalyticsSql.SHIPPED_LINES;
-import static com.smartdistribution.analytics.sales.repository.SalesAnalyticsSql.params;
-import static com.smartdistribution.analytics.sales.repository.SalesAnalyticsSql.scope;
+import static com.smartdistribution.analytics.common.repository.SalesLineSql.BACKLOG_LINES;
+import static com.smartdistribution.analytics.common.repository.SalesLineSql.CANCELLATION_LINES;
+import static com.smartdistribution.analytics.common.repository.SalesLineSql.NEW_ORDER_LINES;
+import static com.smartdistribution.analytics.common.repository.SalesLineSql.REVENUE_LINES;
+import static com.smartdistribution.analytics.common.repository.SalesLineSql.SHIPPED_LINES;
+import static com.smartdistribution.analytics.common.repository.SalesLineSql.params;
+import static com.smartdistribution.analytics.common.repository.SalesLineSql.scope;
 
 /**
- * 接單與營收分析的合計查詢：每種資料的明細 CTE 在 SalesAnalyticsSql，這裡只做期間篩選與加總
+ * 接單與營收分析的合計查詢：每種資料的明細 CTE 在 SalesLineSql，這裡只做期間篩選與加總
  * 金額都是未稅
  */
 @Repository

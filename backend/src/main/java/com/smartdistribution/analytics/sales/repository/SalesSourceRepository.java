@@ -15,10 +15,10 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.util.List;
 
-import static com.smartdistribution.analytics.sales.repository.SalesAnalyticsSql.CANCELLATION_LINES;
-import static com.smartdistribution.analytics.sales.repository.SalesAnalyticsSql.NEW_ORDER_LINES;
-import static com.smartdistribution.analytics.sales.repository.SalesAnalyticsSql.REVENUE_LINES;
-import static com.smartdistribution.analytics.sales.repository.SalesAnalyticsSql.params;
+import static com.smartdistribution.analytics.common.repository.SalesLineSql.CANCELLATION_LINES;
+import static com.smartdistribution.analytics.common.repository.SalesLineSql.NEW_ORDER_LINES;
+import static com.smartdistribution.analytics.common.repository.SalesLineSql.REVENUE_LINES;
+import static com.smartdistribution.analytics.common.repository.SalesLineSql.params;
 
 /**
  * 營收、新增接單、核准取消的來源明細，給儀表板下鑽用

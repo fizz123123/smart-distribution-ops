@@ -98,4 +98,14 @@ class AnalyticsPeriodTest {
                 YearMonth.of(2026, 2)
         );
     }
+
+    @Test
+    void asOfDefaultsToTodayAndCannotBeInTheFuture() {
+        LocalDate today = LocalDate.of(2026, 11, 23);
+
+        assertThat(AnalyticsPeriod.resolveAsOf(null, today)).isEqualTo(today);
+        assertThat(AnalyticsPeriod.resolveAsOf(today.minusDays(30), today)).isEqualTo(today.minusDays(30));
+        assertThatThrownBy(() -> AnalyticsPeriod.resolveAsOf(today.plusDays(1), today))
+                .isInstanceOf(BusinessException.class);
+    }
 }

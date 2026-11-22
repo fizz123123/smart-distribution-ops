@@ -60,6 +60,23 @@ public record AnalyticsPeriod(
     }
 
     /**
+     * 交易降溫的分析基準日；庫存、應收沒有歷史快照，所以只有交易降溫能指定過去的日期
+     *
+     * @param asOf  基準日；沒帶時是今天
+     * @param today 今天（台北時間）
+     * @return 基準日；是未來時回 ANALYTICS_PERIOD_INVALID
+     */
+    public static LocalDate resolveAsOf(LocalDate asOf, LocalDate today) {
+        if (asOf == null) {
+            return today;
+        }
+        if (asOf.isAfter(today)) {
+            throw new BusinessException(ErrorCode.ANALYTICS_PERIOD_INVALID);
+        }
+        return asOf;
+    }
+
+    /**
      * 近六個月趨勢：今天所在的月份往前共六個自然月，含本月，由舊到新
      *
      * @param today 今天（台北時間）
