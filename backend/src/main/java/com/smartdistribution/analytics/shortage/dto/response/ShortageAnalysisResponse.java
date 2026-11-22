@@ -13,11 +13,13 @@ import java.util.List;
  * 缺貨與採購：以 asOf（今天）為準，只列出至少有一項風險的料號
  * 數量都是庫存基準單位；不含任何價格，採購、倉管也看得到這份分析
  *
- * @param items 依受影響 SO 明細的最早交期排序，最急的在前；只有庫存面風險的料號排在後面
+ * @param items     依受影響 SO 明細的最早交期排序，最急的在前；只有庫存面風險的料號排在後面
+ * @param suppliers 最近六個月的供應商表現，準時到貨率最低的在前；有料號篩選時只看這個料號的 PO
  */
 public record ShortageAnalysisResponse(
         LocalDate asOf,
-        List<ItemRisk> items
+        List<ItemRisk> items,
+        List<SupplierPerformance> suppliers
 ) {
 
     /**
@@ -111,6 +113,30 @@ public record ShortageAnalysisResponse(
             String status,
             LocalDate expectedArrivalDate,
             BigDecimal openQty
+    ) {
+    }
+
+    /**
+     * @param closedLineCount           最近六個月結束的 PO 明細筆數（收齊與短收結案）
+     * @param onTimeRate                收齊而且不晚於預計到貨日的比例；短收結案算不準時
+     * @param onTimeNote                統計筆數少於 3 筆時是 INSUFFICIENT_DATA
+     * @param averageLeadTimeDays       收齊的明細從核准到最後一次合格收貨的平均天數
+     * @param exceptionRate             收貨明細中有破損或不合格的比例；沒有收貨時是 null
+     * @param overduePurchaseOrderCount 目前已核准還沒收齊、過了預計到貨日的 PO 張數
+     */
+    public record SupplierPerformance(
+            Long supplierId,
+            String supplierCode,
+            String supplierName,
+            int closedLineCount,
+            int onTimeLineCount,
+            BigDecimal onTimeRate,
+            AnalyticsNote onTimeNote,
+            BigDecimal averageLeadTimeDays,
+            int receiptLineCount,
+            int exceptionLineCount,
+            BigDecimal exceptionRate,
+            int overduePurchaseOrderCount
     ) {
     }
 }

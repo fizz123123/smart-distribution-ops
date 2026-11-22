@@ -8,9 +8,11 @@ import com.smartdistribution.analytics.shortage.dto.response.ShortageAnalysisRes
 import com.smartdistribution.analytics.shortage.dto.response.ShortageAnalysisResponse.PurchaseOrderRef;
 import com.smartdistribution.analytics.shortage.dto.response.ShortageAnalysisResponse.Replenishment;
 import com.smartdistribution.analytics.shortage.dto.response.ShortageAnalysisResponse.Stock;
+import com.smartdistribution.analytics.shortage.dto.response.ShortageAnalysisResponse.SupplierPerformance;
 import com.smartdistribution.analytics.shortage.repository.projection.CustomerNameProjection;
 import com.smartdistribution.analytics.shortage.repository.projection.ItemStockProjection;
 import com.smartdistribution.analytics.shortage.repository.projection.OpenPurchaseLineProjection;
+import com.smartdistribution.analytics.shortage.repository.projection.SupplierPerformanceProjection;
 import com.smartdistribution.analytics.shortage.service.ShortageRules;
 import com.smartdistribution.sales.service.PurchaseSupplyProvider.LinkedPurchaseOrder;
 import com.smartdistribution.sales.service.SalesOrderSupplyService.ApprovedLineSupply;
@@ -28,7 +30,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
- * 把庫存、SO 明細的供應狀態與還沒結的 PO 依料號組起來，判斷風險，只留下有風險的料號
+ * 把庫存、SO 明細的供應狀態與還沒結的 PO 依料號組起來，判斷風險，只留下有風險的料號；再加上供應商表現
  */
 @Component
 public class ShortageAnalysisMapper {
@@ -51,14 +53,16 @@ public class ShortageAnalysisMapper {
      * @param supplies      已核准 SO 明細的供應狀態，依交期排序
      * @param purchaseLines 還沒結的 PO 明細，依預計到貨日排序
      * @param customers     客戶 ID → 代碼與名稱
-     * @return 有風險的料號，依最早交期排序
+     * @param suppliers     最近六個月的供應商表現
+     * @return 有風險的料號依最早交期排序；供應商依準時到貨率由低到高
      */
     public ShortageAnalysisResponse toResponse(
             LocalDate today,
             List<ItemStockProjection> items,
             List<ApprovedLineSupply> supplies,
             List<OpenPurchaseLineProjection> purchaseLines,
-            Map<Long, CustomerNameProjection> customers
+            Map<Long, CustomerNameProjection> customers,
+            List<SupplierPerformanceProjection> suppliers
     ) {
         Map<Long, List<ApprovedLineSupply>> suppliesByItem = supplies.stream()
                 .collect(Collectors.groupingBy(ApprovedLineSupply::companyItemId));
@@ -79,7 +83,32 @@ public class ShortageAnalysisMapper {
                         .thenComparing(ItemRisk::itemCode))
                 .toList();
 
-        return new ShortageAnalysisResponse(today, riskyItems);
+        //表現最差的在前；還沒有結束的明細、算不出準時到貨率的排最後
+        List<SupplierPerformance> supplierPerformance = suppliers.stream()
+                .map(ShortageAnalysisMapper::toSupplierPerformance)
+                .sorted(Comparator
+                        .comparing(SupplierPerformance::onTimeRate, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(SupplierPerformance::supplierCode))
+                .toList();
+
+        return new ShortageAnalysisResponse(today, riskyItems, supplierPerformance);
+    }
+
+    private static SupplierPerformance toSupplierPerformance(SupplierPerformanceProjection supplier) {
+        return new SupplierPerformance(
+                supplier.supplierId(),
+                supplier.supplierCode(),
+                supplier.supplierName(),
+                supplier.closedLineCount(),
+                supplier.onTimeLineCount(),
+                ShortageRules.ratio(supplier.onTimeLineCount(), supplier.closedLineCount()),
+                supplier.closedLineCount() < ShortageRules.MIN_SUPPLIER_LINES ? AnalyticsNote.INSUFFICIENT_DATA : null,
+                supplier.averageLeadTimeDays(),
+                supplier.receiptLineCount(),
+                supplier.exceptionLineCount(),
+                ShortageRules.ratio(supplier.exceptionLineCount(), supplier.receiptLineCount()),
+                supplier.overduePurchaseOrderCount()
+        );
     }
 
     private static ItemRisk toItemRisk(

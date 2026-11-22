@@ -24,8 +24,8 @@ public class ShortageAnalyticsServiceImpl implements ShortageAnalyticsService {
 
     private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
 
-    //平均採購週期看最近幾個月收齊的 PO 明細
-    private static final int LEAD_TIME_HISTORY_MONTHS = 6;
+    //平均採購週期與供應商表現看最近幾個月
+    private static final int HISTORY_MONTHS = 6;
 
     private final ShortageAnalyticsRepository shortageAnalyticsRepository;
     private final ShortageAnalysisMapper shortageAnalysisMapper;
@@ -35,6 +35,7 @@ public class ShortageAnalyticsServiceImpl implements ShortageAnalyticsService {
     @PreAuthorize("hasAnyAuthority('DASHBOARD_VIEW_ALL', 'ANALYTICS_SHORTAGE_VIEW')")
     public ShortageAnalysisResponse findShortageAnalysis(Long companyItemId) {
         LocalDate today = LocalDate.now(TAIPEI);
+        LocalDate historyFrom = today.minusMonths(HISTORY_MONTHS);
         //尚待規劃用銷售模組的算法，和 SO 詳情、缺料清單一致
         List<ApprovedLineSupply> supplies = salesOrderSupplyService.findApprovedLineSupplies(companyItemId);
 
@@ -44,13 +45,14 @@ public class ShortageAnalyticsServiceImpl implements ShortageAnalyticsService {
                         companyItemId,
                         today.minusDays(ShortageRules.USAGE_DAYS - 1),
                         today,
-                        today.minusMonths(LEAD_TIME_HISTORY_MONTHS)
+                        historyFrom
                 ),
                 supplies,
                 shortageAnalyticsRepository.findOpenPurchaseLines(companyItemId),
                 shortageAnalyticsRepository.findCustomerNames(
                         supplies.stream().map(ApprovedLineSupply::customerId).collect(Collectors.toSet())
-                )
+                ),
+                shortageAnalyticsRepository.findSupplierPerformance(companyItemId, today, historyFrom)
         );
     }
 }

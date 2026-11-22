@@ -1,6 +1,7 @@
 package com.smartdistribution.analytics.shortage;
 
 import com.jayway.jsonpath.JsonPath;
+import com.smartdistribution.masterdata.common.UnitOfMeasure;
 import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.supplier.entity.Supplier;
 import com.smartdistribution.receivable.ReceivableTestSupport;
@@ -20,7 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 缺貨與採購分析：供應面的風險跟著 PO 的進度變化、庫存面用近 30 天出貨與採購週期、排序與權限
+ * 缺貨與採購分析：供應面的風險跟著 PO 的進度變化、庫存面用近 30 天出貨與採購週期、供應商表現、排序與權限
  * 開發資料庫裡有其他資料，所以每個情境都用 companyItemId 鎖定自己建立的料號
  */
 @SpringBootTest
@@ -142,6 +143,72 @@ class ShortageAnalyticsApiIntegrationTest extends ReceivableTestSupport {
                 .andExpect(jsonPath("$.items[0].stock.reorderPoint").value(50))
                 .andExpect(jsonPath("$.items[0].stock.coverageNote").doesNotExist())
                 .andExpect(jsonPath("$.items[0].stock.leadTimeNote").doesNotExist());
+    }
+
+    @Test
+    void supplierPerformanceCountsOnTimeShortCloseAndReceiptExceptions() throws Exception {
+        String warehouseManager = login(createUser("wh-manager", "WAREHOUSE_MANAGER"));
+        String purchasing = login(createUser("purchasing", "PURCHASING"));
+        String purchasingManager = login(createUser("purchasing-manager", "PURCHASING_MANAGER"));
+        Supplier supplier = createActiveSupplier();
+        CompanyItem item = createActiveItem(UnitOfMeasure.PCS);
+
+        //準時：預計 5 天前到，6 天前收齊；核准到收齊 10 天
+        Long onTime = receive(purchasing, purchasingManager, warehouseManager, supplier, item, "5", "5");
+        setExpectedArrivalDate(onTime, today().minusDays(5));
+        setPurchaseDates(onTime, today().minusDays(16), today().minusDays(6));
+
+        //晚到：預計 10 天前到，4 天前才收齊；核准到收齊 20 天；第一次收貨有 1 個破損
+        Long late = createApprovedPo(purchasing, purchasingManager, poBody(supplier, poLine(item, null, "5", "100")));
+        Long lateLineId = findPoLineId(late);
+        postReceipt(warehouseManager, late, receiptLine(lateLineId, "5", "4", "1", "外箱破損"))
+                .andExpect(status().isCreated());
+        postReceipt(warehouseManager, late, receiptLine(lateLineId, "1", "1", "0", null))
+                .andExpect(status().isCreated());
+        setExpectedArrivalDate(late, today().minusDays(10));
+        setPurchaseDates(late, today().minusDays(24), today().minusDays(4));
+
+        //短收結案：一律算不準時，也不算平均交期
+        Long closedShort = receive(purchasing, purchasingManager, warehouseManager, supplier, item, "5", "2");
+        closePo(purchasingManager, "close-short", closedShort, "供應商缺貨", poVersion(purchasing, closedShort))
+                .andExpect(status().isOk());
+        setPurchaseDates(closedShort, today().minusDays(8), today().minusDays(1));
+
+        //已核准、昨天該到還沒到
+        Long overdue = createApprovedPo(
+                purchasing, purchasingManager, poBody(supplier, poLine(item, null, "5", "100"))
+        );
+        setExpectedArrivalDate(overdue, today().minusDays(1));
+
+        shortages(purchasing, item)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.suppliers.length()").value(1))
+                .andExpect(jsonPath("$.suppliers[0].supplierId").value(supplier.getId()))
+                //結束 3 筆，準時 1 筆
+                .andExpect(jsonPath("$.suppliers[0].closedLineCount").value(3))
+                .andExpect(jsonPath("$.suppliers[0].onTimeLineCount").value(1))
+                .andExpect(jsonPath("$.suppliers[0].onTimeRate").value(0.3333))
+                .andExpect(jsonPath("$.suppliers[0].onTimeNote").doesNotExist())
+                //(10 ＋ 20) ÷ 2
+                .andExpect(jsonPath("$.suppliers[0].averageLeadTimeDays").value(15))
+                //收貨明細 4 筆（晚到的那張收了兩次），破損 1 筆
+                .andExpect(jsonPath("$.suppliers[0].receiptLineCount").value(4))
+                .andExpect(jsonPath("$.suppliers[0].exceptionLineCount").value(1))
+                .andExpect(jsonPath("$.suppliers[0].exceptionRate").value(0.25))
+                .andExpect(jsonPath("$.suppliers[0].overduePurchaseOrderCount").value(1))
+                .andExpect(jsonPath("$..unitPriceExcludingTax").doesNotExist());
+
+        //另一個料號只有一筆收齊的明細：筆數不足，準時到貨率附註
+        CompanyItem rarelyBought = createActiveItem(UnitOfMeasure.PCS);
+        Long single = receive(purchasing, purchasingManager, warehouseManager, supplier, rarelyBought, "5", "5");
+        setExpectedArrivalDate(single, today().minusDays(5));
+        setPurchaseDates(single, today().minusDays(10), today().minusDays(6));
+
+        shortages(purchasing, rarelyBought)
+                .andExpect(jsonPath("$.suppliers[0].closedLineCount").value(1))
+                .andExpect(jsonPath("$.suppliers[0].onTimeRate").value(1))
+                .andExpect(jsonPath("$.suppliers[0].onTimeNote").value("INSUFFICIENT_DATA"))
+                .andExpect(jsonPath("$.suppliers[0].overduePurchaseOrderCount").value(0));
     }
 
     @Test

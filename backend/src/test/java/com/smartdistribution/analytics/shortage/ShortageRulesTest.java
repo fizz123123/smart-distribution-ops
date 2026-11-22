@@ -15,7 +15,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 日出貨量、可支撐天數、再訂購點的算法，以及六種風險的判斷
+ * 日出貨量、可支撐天數、再訂購點、比例的算法，以及六種風險的判斷
  */
 class ShortageRulesTest {
 
@@ -41,6 +41,13 @@ class ShortageRulesTest {
         assertThat(ShortageRules.reorderPoint(new BigDecimal("45"), null, UnitOfMeasure.PCS)).isNull();
         assertThat(ShortageRules.reorderPoint(BigDecimal.ZERO, new BigDecimal("7.5"), UnitOfMeasure.PCS))
                 .isEqualByComparingTo("0");
+    }
+
+    @Test
+    void ratioIsNullWithoutData() {
+        assertThat(ShortageRules.ratio(1, 3)).isEqualByComparingTo("0.3333");
+        assertThat(ShortageRules.ratio(0, 4)).isEqualByComparingTo("0");
+        assertThat(ShortageRules.ratio(0, 0)).isNull();
     }
 
     @Test

@@ -19,6 +19,9 @@ public final class ShortageRules {
     //平均日出貨量看最近幾天（含今天）
     public static final int USAGE_DAYS = 30;
 
+    //供應商結束的 PO 明細少於這個筆數時，準時到貨率附 INSUFFICIENT_DATA，避免一兩筆就下結論
+    public static final int MIN_SUPPLIER_LINES = 3;
+
     private static final BigDecimal USAGE_DAYS_DECIMAL = BigDecimal.valueOf(USAGE_DAYS);
 
     private ShortageRules() {
@@ -56,6 +59,18 @@ public final class ShortageRules {
         }
         return shippedQty.multiply(leadTimeDays)
                 .divide(USAGE_DAYS_DECIMAL, baseUnit.getDecimalPlaces(), RoundingMode.CEILING);
+    }
+
+    /**
+     * 準時到貨率、收貨異常率共用
+     *
+     * @return part ÷ total，小數 4 位，例如 0.25 代表 25%；total 是 0 時算不出來，回傳 null
+     */
+    public static BigDecimal ratio(int part, int total) {
+        if (total == 0) {
+            return null;
+        }
+        return BigDecimal.valueOf(part).divide(BigDecimal.valueOf(total), 4, RoundingMode.HALF_UP);
     }
 
     /**
