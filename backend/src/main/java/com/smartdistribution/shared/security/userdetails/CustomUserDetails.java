@@ -47,6 +47,17 @@ public class CustomUserDetails implements UserDetails {
         return roleCodes;
     }
 
+    /**
+     * 程式要依權限決定資料範圍時用，例如儀表板的業務只看自己、核准清單只列有權限的類型；
+     * 單純的「能不能呼叫」仍然寫在 @PreAuthorize
+     *
+     * @param permissionCode 權限碼，例如 DASHBOARD_VIEW_ALL
+     * @return 這個使用者有沒有這個權限
+     */
+    public boolean hasAuthority(String permissionCode) {
+        return authorities.stream().anyMatch(authority -> permissionCode.equals(authority.getAuthority()));
+    }
+
     @Override
     public String getUsername() {
         return email;

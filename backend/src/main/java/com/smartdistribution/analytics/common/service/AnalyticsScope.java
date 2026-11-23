@@ -5,7 +5,6 @@ import com.smartdistribution.shared.exception.ErrorCode;
 import com.smartdistribution.shared.security.currentuser.CurrentUserProvider;
 import com.smartdistribution.shared.security.userdetails.CustomUserDetails;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Component;
 
 /**
@@ -25,7 +24,7 @@ public class AnalyticsScope {
      */
     public Long resolveResponsibleSales(Long requested) {
         CustomUserDetails user = currentUserProvider.getCurrentUserDetails();
-        if (hasAuthority(user, "DASHBOARD_VIEW_ALL") || hasAuthority(user, "ANALYTICS_SALES_VIEW_ALL")) {
+        if (user.hasAuthority("DASHBOARD_VIEW_ALL") || user.hasAuthority("ANALYTICS_SALES_VIEW_ALL")) {
             return requested;
         }
 
@@ -33,15 +32,5 @@ public class AnalyticsScope {
             throw new BusinessException(ErrorCode.ACCESS_DENIED);
         }
         return user.getUserId();
-    }
-
-    private static boolean hasAuthority(CustomUserDetails user, String permissionCode) {
-        for (GrantedAuthority authority : user.getAuthorities()) {
-            if (permissionCode.equals(authority.getAuthority())) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

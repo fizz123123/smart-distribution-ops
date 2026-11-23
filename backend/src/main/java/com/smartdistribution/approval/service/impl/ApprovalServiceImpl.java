@@ -27,7 +27,6 @@ import com.smartdistribution.shared.web.response.PageResponse;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -175,8 +174,8 @@ public class ApprovalServiceImpl implements ApprovalService {
     @Override
     public ApprovalHistoryResponse findHistory(ApprovalTargetType targetType, Long targetId) {
         CustomUserDetails user = currentUserProvider.getCurrentUserDetails();
-        if (!hasAuthority(user, targetType.getViewPermissionCode())
-                && !hasAuthority(user, targetType.getPermissionCode())) {
+        if (!user.hasAuthority(targetType.getViewPermissionCode())
+                && !user.hasAuthority(targetType.getPermissionCode())) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED);
         }
 
@@ -309,7 +308,7 @@ public class ApprovalServiceImpl implements ApprovalService {
             ApprovalTargetType targetType,
             CustomUserDetails user
     ) {
-        if (!hasAuthority(user, targetType.getPermissionCode())) {
+        if (!user.hasAuthority(targetType.getPermissionCode())) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED);
         }
     }
@@ -320,22 +319,12 @@ public class ApprovalServiceImpl implements ApprovalService {
         Set<ApprovalTargetType> targetTypes = new HashSet<>();
 
         for (ApprovalTargetType targetType : ApprovalTargetType.values()) {
-            if (hasAuthority(user, targetType.getPermissionCode())) {
+            if (user.hasAuthority(targetType.getPermissionCode())) {
                 targetTypes.add(targetType);
             }
         }
 
         return targetTypes;
-    }
-
-    private boolean hasAuthority(CustomUserDetails user, String permissionCode) {
-        for (GrantedAuthority authority : user.getAuthorities()) {
-            if (permissionCode.equals(authority.getAuthority())) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private ApprovalDetailResponse toDetail(ApprovalRequest approvalRequest) {
