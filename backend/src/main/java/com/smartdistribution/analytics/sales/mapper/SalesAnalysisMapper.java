@@ -15,6 +15,7 @@ import com.smartdistribution.analytics.sales.repository.projection.NewOrderTotal
 import com.smartdistribution.analytics.sales.repository.projection.OnTimeDeliveryProjection;
 import com.smartdistribution.analytics.sales.repository.projection.RevenueTotalsProjection;
 import com.smartdistribution.analytics.common.service.AnalyticsNote;
+import com.smartdistribution.analytics.common.service.AnalyticsRules;
 import com.smartdistribution.analytics.common.service.MetricChanges;
 import com.smartdistribution.analytics.common.service.SupplyStatus;
 import org.springframework.stereotype.Component;
@@ -161,9 +162,12 @@ public class SalesAnalysisMapper {
             return new OnTimeStats(0, 0, null, AnalyticsNote.INSUFFICIENT_DATA);
         }
 
-        BigDecimal rate = BigDecimal.valueOf(onTime.onTimeLineCount())
-                .divide(BigDecimal.valueOf(onTime.shippedLineCount()), 4, RoundingMode.HALF_UP);
-        return new OnTimeStats(onTime.shippedLineCount(), onTime.onTimeLineCount(), rate, null);
+        return new OnTimeStats(
+                onTime.shippedLineCount(),
+                onTime.onTimeLineCount(),
+                AnalyticsRules.ratio(onTime.onTimeLineCount(), onTime.shippedLineCount()),
+                null
+        );
     }
 
     private static List<Contribution> toChanges(List<ContributionProjection> rows) {

@@ -18,6 +18,8 @@ import com.smartdistribution.analytics.sales.repository.SalesSourceRepository;
 import com.smartdistribution.analytics.sales.service.SalesAnalyticsService;
 import com.smartdistribution.sales.service.SalesOrderSupplyService;
 import com.smartdistribution.sales.service.SalesOrderSupplyService.ApprovedLineSupply;
+import com.smartdistribution.shared.exception.BusinessException;
+import com.smartdistribution.shared.exception.ErrorCode;
 import com.smartdistribution.shared.web.response.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -104,6 +106,7 @@ public class SalesAnalyticsServiceImpl implements SalesAnalyticsService {
             Long responsibleSalesUserId,
             Pageable pageable
     ) {
+        rejectSort(pageable);
         AnalyticsPeriod period = AnalyticsPeriod.resolve(from, to, LocalDate.now(TAIPEI));
         AnalyticsFilter filter = toFilter(customerId, companyItemId, responsibleSalesUserId);
 
@@ -122,6 +125,7 @@ public class SalesAnalyticsServiceImpl implements SalesAnalyticsService {
             Long responsibleSalesUserId,
             Pageable pageable
     ) {
+        rejectSort(pageable);
         AnalyticsPeriod period = AnalyticsPeriod.resolve(from, to, LocalDate.now(TAIPEI));
         AnalyticsFilter filter = toFilter(customerId, companyItemId, responsibleSalesUserId);
 
@@ -140,6 +144,7 @@ public class SalesAnalyticsServiceImpl implements SalesAnalyticsService {
             Long responsibleSalesUserId,
             Pageable pageable
     ) {
+        rejectSort(pageable);
         AnalyticsPeriod period = AnalyticsPeriod.resolve(from, to, LocalDate.now(TAIPEI));
         AnalyticsFilter filter = toFilter(customerId, companyItemId, responsibleSalesUserId);
 
@@ -158,6 +163,7 @@ public class SalesAnalyticsServiceImpl implements SalesAnalyticsService {
             boolean overdueOnly,
             Pageable pageable
     ) {
+        rejectSort(pageable);
         LocalDate today = LocalDate.now(TAIPEI);
         AnalyticsFilter filter = toFilter(customerId, companyItemId, responsibleSalesUserId);
         Map<Long, SupplyStatus> supplyStatuses = findSupplyStatuses(filter, today);
@@ -169,6 +175,13 @@ public class SalesAnalyticsServiceImpl implements SalesAnalyticsService {
                 .toList();
 
         return PageResponse.from(toPage(sources, pageable));
+    }
+
+    //來源明細的排序固定；帶了 sort 就擋下，和其他清單 API 遇到不支援的排序一樣回 400
+    private static void rejectSort(Pageable pageable) {
+        if (pageable.getSort().isSorted()) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "來源明細的排序固定，不接受 sort。");
+        }
     }
 
     //業務只有 ANALYTICS_SALES_VIEW 時，負責業務強制是自己

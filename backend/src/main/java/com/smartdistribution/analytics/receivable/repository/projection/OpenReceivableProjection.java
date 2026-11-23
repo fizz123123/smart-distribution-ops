@@ -23,6 +23,9 @@ public record OpenReceivableProjection(
         BigDecimal outstandingAmount
 ) {
 
+    /**
+     * @return 還沒確認的應收草稿；即將到期與逾期會另外列出這種筆數
+     */
     public boolean isUnconfirmed() {
         return "PENDING_CONFIRMATION".equals(status);
     }

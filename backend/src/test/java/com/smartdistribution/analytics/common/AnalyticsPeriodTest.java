@@ -108,4 +108,13 @@ class AnalyticsPeriodTest {
         assertThatThrownBy(() -> AnalyticsPeriod.resolveAsOf(today.plusDays(1), today))
                 .isInstanceOf(BusinessException.class);
     }
+
+    @Test
+    void lastSixMonthsCoverExactlySixMonthsIncludingBothEnds() {
+        assertThat(AnalyticsPeriod.startOfLastMonths(LocalDate.of(2026, 11, 24), 6))
+                .isEqualTo(LocalDate.of(2026, 5, 25));
+        //8/31 往前 6 個月是 2/28，起日是隔天 3/1
+        assertThat(AnalyticsPeriod.startOfLastMonths(LocalDate.of(2026, 8, 31), 6))
+                .isEqualTo(LocalDate.of(2026, 3, 1));
+    }
 }

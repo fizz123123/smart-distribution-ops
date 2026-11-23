@@ -908,7 +908,7 @@ asOf=2026-11-23
 - 狀態型指標不受期間影響，回應以 `asOf` 標示基準日。
 - 比較值的格式為 `current`、`previous`、`change`、`changeRate`、`note`；`changeRate` 是小數，`0.25` 代表 25%。
 - `note` 說明算不出來的原因：`NO_PRIOR_BASELINE`（前期為 0）、`INSUFFICIENT_DATA`（樣本不足）、`NO_RECENT_USAGE`（近 30 天沒有出貨）、`INSUFFICIENT_HISTORY`（沒有完整 PO 歷史）。
-- 來源明細的排序固定，不接受 `sort`：期間型來源依日期由新到舊，未出貨來源依交期由早到晚。分頁格式同第 2.4 節。
+- 來源明細的排序固定：期間型來源依日期由新到舊，未出貨來源依交期由早到晚；帶 `sort` 回 `400 VALIDATION_FAILED`。分頁格式同第 2.4 節。
 - 下鑽以明確的 ID 欄位提供來源，例如 `salesOrderId`、`receivableId`、`deliveryOrderId`、`purchaseOrderId`、`customerId`、`companyItemId`、`supplierId`；前端依使用者權限決定能不能點，來源詳情 API 本身也會檢查權限。
 
 `/analytics/overview` 固定回傳六張核心指標卡、一組近六個月淨接單與營收趨勢，以及缺貨履約、交易降溫、應收三組待處理清單；清單各取前 10 筆並附總筆數。總覽的每個數字都取自對應詳情，和詳情相同。`/analytics/sales` 分別提供營收增加及減少最多的前三名客戶與商品；不得回傳跨商品計算的全公司平均出貨單價。前期營收為 0 時，變化率回傳 `null` 並附上 `NO_PRIOR_BASELINE` 說明。

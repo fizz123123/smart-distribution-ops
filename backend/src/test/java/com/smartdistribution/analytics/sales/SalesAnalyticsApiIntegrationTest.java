@@ -142,6 +142,14 @@ class SalesAnalyticsApiIntegrationTest extends ReceivableTestSupport {
                 .andExpect(jsonPath("$.content.length()").value(1))
                 .andExpect(jsonPath("$.totalElements").value(4))
                 .andExpect(jsonPath("$.totalPages").value(2));
+
+        //排序固定：帶 sort 和其他清單 API 遇到不支援的排序一樣回 400
+        mockMvc.perform(get("/api/v1/analytics/sales/revenue-sources")
+                        .header("Authorization", bearer(salesManager))
+                        .param("customerId", order.customer().getId().toString())
+                        .param("sort", "amount,desc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
     }
 
     @Test

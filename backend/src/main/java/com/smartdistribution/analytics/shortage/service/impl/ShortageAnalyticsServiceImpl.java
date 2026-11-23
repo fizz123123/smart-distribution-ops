@@ -1,5 +1,6 @@
 package com.smartdistribution.analytics.shortage.service.impl;
 
+import com.smartdistribution.analytics.common.service.AnalyticsPeriod;
 import com.smartdistribution.analytics.shortage.dto.response.ShortageAnalysisResponse;
 import com.smartdistribution.analytics.shortage.mapper.ShortageAnalysisMapper;
 import com.smartdistribution.analytics.shortage.repository.ShortageAnalyticsRepository;
@@ -35,7 +36,7 @@ public class ShortageAnalyticsServiceImpl implements ShortageAnalyticsService {
     @PreAuthorize("hasAnyAuthority('DASHBOARD_VIEW_ALL', 'ANALYTICS_SHORTAGE_VIEW')")
     public ShortageAnalysisResponse findShortageAnalysis(Long companyItemId) {
         LocalDate today = LocalDate.now(TAIPEI);
-        LocalDate historyFrom = today.minusMonths(HISTORY_MONTHS);
+        LocalDate historyFrom = AnalyticsPeriod.startOfLastMonths(today, HISTORY_MONTHS);
         //尚待規劃用銷售模組的算法，和 SO 詳情、缺料清單一致
         List<ApprovedLineSupply> supplies = salesOrderSupplyService.findApprovedLineSupplies(companyItemId);
 

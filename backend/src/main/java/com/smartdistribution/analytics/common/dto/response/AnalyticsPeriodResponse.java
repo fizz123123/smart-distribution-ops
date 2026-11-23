@@ -15,6 +15,9 @@ public record AnalyticsPeriodResponse(
         boolean periodComplete
 ) {
 
+    /**
+     * @return 回應用的期間，欄位和 AnalyticsPeriod 相同
+     */
     public static AnalyticsPeriodResponse from(AnalyticsPeriod period) {
         return new AnalyticsPeriodResponse(
                 period.from(),

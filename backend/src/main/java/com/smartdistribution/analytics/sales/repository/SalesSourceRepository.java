@@ -41,11 +41,23 @@ public class SalesSourceRepository {
             Pageable pageable
     ) {
         String sql = REVENUE_LINES + """
-                SELECT revenue_line.*,
+                SELECT revenue_line.business_date,
+                       revenue_line.receivable_id,
+                       revenue_line.receivable_number,
+                       revenue_line.delivery_order_id,
+                       revenue_line.do_number,
+                       revenue_line.sales_order_id,
+                       revenue_line.so_number,
+                       revenue_line.customer_id,
                        customer.customer_code,
                        customer.name AS customer_name,
+                       revenue_line.company_item_id,
                        company_item.item_code,
-                       company_item.name AS item_name
+                       company_item.name AS item_name,
+                       revenue_line.quantity,
+                       revenue_line.unit_code,
+                       revenue_line.unit_price,
+                       revenue_line.amount
                 FROM revenue_line
                 JOIN customer ON customer.id = revenue_line.customer_id
                 JOIN company_item ON company_item.id = revenue_line.company_item_id
@@ -96,29 +108,32 @@ public class SalesSourceRepository {
             LocalDate to,
             Pageable pageable
     ) {
+        //先把明細加總成一張 SO 一筆，再補客戶與負責業務的名稱
         String sql = NEW_ORDER_LINES + """
-                SELECT new_order_line.business_date,
-                       new_order_line.sales_order_id,
-                       new_order_line.so_number,
-                       new_order_line.customer_id,
+                , new_order AS (
+                    SELECT sales_order_id,
+                           so_number,
+                           business_date,
+                           customer_id,
+                           responsible_sales_user_id,
+                           SUM(amount) AS amount
+                    FROM new_order_line
+                    WHERE business_date BETWEEN :from AND :to
+                    GROUP BY sales_order_id, so_number, business_date, customer_id, responsible_sales_user_id
+                )
+                SELECT new_order.business_date,
+                       new_order.sales_order_id,
+                       new_order.so_number,
+                       new_order.customer_id,
                        customer.customer_code,
                        customer.name AS customer_name,
-                       new_order_line.responsible_sales_user_id,
+                       new_order.responsible_sales_user_id,
                        app_user.name AS responsible_sales_name,
-                       SUM(new_order_line.amount) AS amount
-                FROM new_order_line
-                JOIN customer ON customer.id = new_order_line.customer_id
-                JOIN app_user ON app_user.id = new_order_line.responsible_sales_user_id
-                WHERE business_date BETWEEN :from AND :to
-                GROUP BY new_order_line.business_date,
-                         new_order_line.sales_order_id,
-                         new_order_line.so_number,
-                         new_order_line.customer_id,
-                         customer.customer_code,
-                         customer.name,
-                         new_order_line.responsible_sales_user_id,
-                         app_user.name
-                ORDER BY business_date DESC, sales_order_id DESC
+                       new_order.amount
+                FROM new_order
+                JOIN customer ON customer.id = new_order.customer_id
+                JOIN app_user ON app_user.id = new_order.responsible_sales_user_id
+                ORDER BY new_order.business_date DESC, new_order.sales_order_id DESC
                 LIMIT :limit OFFSET :offset
                 """;
         String countSql = NEW_ORDER_LINES + """
@@ -155,11 +170,20 @@ public class SalesSourceRepository {
             Pageable pageable
     ) {
         String sql = CANCELLATION_LINES + """
-                SELECT cancellation_line.*,
+                SELECT cancellation_line.business_date,
+                       cancellation_line.cancellation_id,
+                       cancellation_line.cancellation_number,
+                       cancellation_line.sales_order_id,
+                       cancellation_line.so_number,
+                       cancellation_line.customer_id,
                        customer.customer_code,
                        customer.name AS customer_name,
+                       cancellation_line.company_item_id,
                        company_item.item_code,
-                       company_item.name AS item_name
+                       company_item.name AS item_name,
+                       cancellation_line.quantity,
+                       cancellation_line.unit_code,
+                       cancellation_line.amount
                 FROM cancellation_line
                 JOIN customer ON customer.id = cancellation_line.customer_id
                 JOIN company_item ON company_item.id = cancellation_line.company_item_id
@@ -196,9 +220,9 @@ public class SalesSourceRepository {
         return new PageImpl<>(content, pageable, count(countSql, params));
     }
 
+    //COUNT 一定有一列結果，不會是 null
     private long count(String countSql, MapSqlParameterSource params) {
-        Long total = jdbcTemplate.queryForObject(countSql, params, Long.class);
-        return total == null ? 0 : total;
+        return jdbcTemplate.queryForObject(countSql, params, Long.class);
     }
 
     //分頁：limit 是每頁筆數，offset 是要跳過的筆數

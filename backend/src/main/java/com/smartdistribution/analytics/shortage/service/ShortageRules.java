@@ -1,5 +1,6 @@
 package com.smartdistribution.analytics.shortage.service;
 
+import com.smartdistribution.analytics.common.service.PurchaseStatusRules;
 import com.smartdistribution.analytics.common.service.SupplyStatus;
 import com.smartdistribution.analytics.shortage.repository.projection.OpenPurchaseLineProjection;
 import com.smartdistribution.masterdata.common.UnitOfMeasure;
@@ -62,18 +63,6 @@ public final class ShortageRules {
     }
 
     /**
-     * 準時到貨率、收貨異常率共用
-     *
-     * @return part ÷ total，小數 4 位，例如 0.25 代表 25%；total 是 0 時算不出來，回傳 null
-     */
-    public static BigDecimal ratio(int part, int total) {
-        if (total == 0) {
-            return null;
-        }
-        return BigDecimal.valueOf(part).divide(BigDecimal.valueOf(total), 4, RoundingMode.HALF_UP);
-    }
-
-    /**
      * 停用的料號不會再補貨，所以不判斷庫存面的風險
      *
      * @param safetyStockQty 沒有設定時是 null
@@ -122,8 +111,8 @@ public final class ShortageRules {
         if (lines.stream().anyMatch(SupplyStatus::arrivesAfterDelivery)) {
             risks.add(ShortageRisk.ARRIVAL_AFTER_DELIVERY);
         }
-        if (purchaseLines.stream().anyMatch(po -> po.approved()
-                && po.expectedArrivalDate() != null
+        //已核准的 PO 送審時一定有預計到貨日
+        if (purchaseLines.stream().anyMatch(po -> PurchaseStatusRules.isApproved(po.status())
                 && po.expectedArrivalDate().isBefore(today))) {
             risks.add(ShortageRisk.ARRIVAL_OVERDUE);
         }

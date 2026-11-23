@@ -41,7 +41,7 @@ public class SalesAnalyticsController {
         ));
     }
 
-    //營收的來源明細：期間內出貨的應收明細；排序固定為日期由新到舊，不接受 sort
+    //營收的來源明細：期間內出貨的應收明細；排序固定為日期由新到舊，帶 sort 回 400
     @GetMapping("/sales/revenue-sources")
     public ResponseEntity<PageResponse<RevenueSourceResponse>> findRevenueSources(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -86,7 +86,7 @@ public class SalesAnalyticsController {
         ));
     }
 
-    //已接單未出貨的下鑽：可依供應狀態、是否逾期篩選；查詢當下的狀態，不用期間，依交期排序
+    //已接單未出貨的下鑽：可依供應狀態、是否逾期篩選；查詢當下的狀態，不用期間，依交期排序，帶 sort 回 400
     @GetMapping("/sales/backlog-sources")
     public ResponseEntity<PageResponse<BacklogSourceResponse>> findBacklogSources(
             @RequestParam(required = false) Long customerId,

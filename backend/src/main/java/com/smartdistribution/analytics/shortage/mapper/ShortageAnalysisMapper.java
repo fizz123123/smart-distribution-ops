@@ -1,6 +1,8 @@
 package com.smartdistribution.analytics.shortage.mapper;
 
 import com.smartdistribution.analytics.common.service.AnalyticsNote;
+import com.smartdistribution.analytics.common.service.AnalyticsRules;
+import com.smartdistribution.analytics.common.service.PurchaseStatusRules;
 import com.smartdistribution.analytics.common.service.SupplyStatus;
 import com.smartdistribution.analytics.shortage.dto.response.ShortageAnalysisResponse;
 import com.smartdistribution.analytics.shortage.dto.response.ShortageAnalysisResponse.AffectedLine;
@@ -40,11 +42,6 @@ public class ShortageAnalysisMapper {
             SupplyStatus.UNPLANNED,
             SupplyStatus.PURCHASE_DELAY_RISK,
             SupplyStatus.PLANNED_NOT_ORDERED
-    );
-
-    //SO 明細關聯的 PO 中還沒結的；已取消、已結案的只是歷史紀錄
-    private static final Set<String> OPEN_PO_STATUSES = Set.of(
-            "DRAFT", "PENDING_APPROVAL", "RETURNED", "APPROVED", "PARTIALLY_RECEIVED"
     );
 
     /**
@@ -101,12 +98,12 @@ public class ShortageAnalysisMapper {
                 supplier.supplierName(),
                 supplier.closedLineCount(),
                 supplier.onTimeLineCount(),
-                ShortageRules.ratio(supplier.onTimeLineCount(), supplier.closedLineCount()),
+                AnalyticsRules.ratio(supplier.onTimeLineCount(), supplier.closedLineCount()),
                 supplier.closedLineCount() < ShortageRules.MIN_SUPPLIER_LINES ? AnalyticsNote.INSUFFICIENT_DATA : null,
                 supplier.averageLeadTimeDays(),
                 supplier.receiptLineCount(),
                 supplier.exceptionLineCount(),
-                ShortageRules.ratio(supplier.exceptionLineCount(), supplier.receiptLineCount()),
+                AnalyticsRules.ratio(supplier.exceptionLineCount(), supplier.receiptLineCount()),
                 supplier.overduePurchaseOrderCount()
         );
     }
@@ -118,8 +115,11 @@ public class ShortageAnalysisMapper {
             Map<Long, CustomerNameProjection> customers,
             LocalDate today
     ) {
-        BigDecimal plannedNotOrderedQty = sumOpenQty(purchaseLines, line -> !line.approved());
-        BigDecimal inTransitQty = sumOpenQty(purchaseLines, OpenPurchaseLineProjection::approved);
+        //已核准的是採購在途，還沒核准的是已規劃未下單
+        BigDecimal inTransitQty = sumOpenQty(purchaseLines, line -> PurchaseStatusRules.isApproved(line.status()));
+        BigDecimal plannedNotOrderedQty = sumOpenQty(
+                purchaseLines, line -> !PurchaseStatusRules.isApproved(line.status())
+        );
         BigDecimal unplannedQty = lines.stream()
                 .map(ApprovedLineSupply::unplannedQty)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -185,14 +185,14 @@ public class ShortageAnalysisMapper {
                 line.salesOrderLineId(),
                 line.lineNo(),
                 line.customerId(),
-                customer == null ? null : customer.customerCode(),
-                customer == null ? null : customer.customerName(),
+                customer.customerCode(),
+                customer.customerName(),
                 line.deliveryDate(),
                 line.remainingQty(),
                 line.unplannedQty(),
                 supplyStatus,
                 line.purchaseOrders().stream()
-                        .filter(po -> OPEN_PO_STATUSES.contains(po.status()) && "OPEN".equals(po.lineStatus()))
+                        .filter(po -> PurchaseStatusRules.isOpen(po.status(), po.lineStatus()))
                         .map(ShortageAnalysisMapper::toPurchaseOrderRef)
                         .toList()
         );

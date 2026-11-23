@@ -45,7 +45,7 @@ public class ShortageAnalyticsRepository {
      * lead_time：收齊（COMPLETED）的 PO 明細，從核准日到最後一次合格收貨的平均天數；短收結案、取消的不算
      *
      * @param usageFrom   出貨量從這天算起（今天往前 29 天）
-     * @param historyFrom 採購週期只看最後收貨日在這天以後的明細（六個月前）
+     * @param historyFrom 採購週期只看最後收貨日在這天以後的明細（最近六個月的起日）
      * @return 每個料號一筆，依料號代碼排序
      */
     public List<ItemStockProjection> findItemStocks(
@@ -169,9 +169,10 @@ public class ShortageAnalyticsRepository {
         String sql = "WITH " + LAST_RECEIPT + """
                 , closed_line AS (
                     SELECT purchase_order.supplier_id,
-                           COALESCE(purchase_order_line.status = 'COMPLETED'
-                                    AND last_receipt.received_date <= purchase_order.expected_arrival_date, FALSE)
-                               AS on_time,
+                           CASE WHEN purchase_order_line.status = 'COMPLETED'
+                                     AND last_receipt.received_date <= purchase_order.expected_arrival_date
+                                THEN TRUE ELSE FALSE
+                           END AS on_time,
                            CASE WHEN purchase_order_line.status = 'COMPLETED'
                                 THEN DATEDIFF(last_receipt.received_date, DATE(purchase_order.approved_at))
                            END AS lead_days
@@ -185,17 +186,18 @@ public class ShortageAnalyticsRepository {
                 ),
                 line_stats AS (
                     SELECT supplier_id,
-                           COUNT(*) AS closed_line_count,
-                           SUM(on_time) AS on_time_line_count,
-                           ROUND(AVG(lead_days), 1) AS average_lead_days
+                           COUNT(*)                            AS closed_line_count,
+                           COUNT(CASE WHEN on_time THEN 1 END) AS on_time_line_count,
+                           ROUND(AVG(lead_days), 1)            AS average_lead_days
                     FROM closed_line
                     GROUP BY supplier_id
                 ),
                 receipt_stats AS (
                     SELECT purchase_order.supplier_id,
                            COUNT(*) AS receipt_line_count,
-                           SUM(goods_receipt_line.damaged_qty > 0
-                               OR goods_receipt_line.nonconforming_qty > 0) AS exception_line_count
+                           COUNT(CASE WHEN goods_receipt_line.damaged_qty > 0
+                                        OR goods_receipt_line.nonconforming_qty > 0
+                                      THEN 1 END) AS exception_line_count
                     FROM goods_receipt_line
                     JOIN goods_receipt ON goods_receipt.id = goods_receipt_line.goods_receipt_id
                     JOIN purchase_order ON purchase_order.id = goods_receipt.purchase_order_id

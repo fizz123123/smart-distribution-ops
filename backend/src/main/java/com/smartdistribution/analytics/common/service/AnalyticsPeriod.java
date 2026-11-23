@@ -77,6 +77,18 @@ public record AnalyticsPeriod(
     }
 
     /**
+     * 最近幾個月的起日，含頭尾剛好那麼多個月：例如 11/24 往前 6 個月是 5/25～11/24
+     * 交易降溫的平均月營收、採購週期與供應商表現都用它，「最近六個月」只有一種算法
+     *
+     * @param end    迄日，通常是今天或 asOf
+     * @param months 往前幾個月
+     * @return 起日
+     */
+    public static LocalDate startOfLastMonths(LocalDate end, int months) {
+        return end.minusMonths(months).plusDays(1);
+    }
+
+    /**
      * 近六個月趨勢：今天所在的月份往前共六個自然月，含本月，由舊到新
      *
      * @param today 今天（台北時間）

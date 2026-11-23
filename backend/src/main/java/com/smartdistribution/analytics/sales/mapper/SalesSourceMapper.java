@@ -19,6 +19,9 @@ import java.time.LocalDate;
 @Component
 public class SalesSourceMapper {
 
+    /**
+     * @return 營收的一筆來源：一筆應收明細
+     */
     public RevenueSourceResponse toResponse(RevenueSourceProjection row) {
         return new RevenueSourceResponse(
                 row.shipmentDate(),
@@ -41,6 +44,9 @@ public class SalesSourceMapper {
         );
     }
 
+    /**
+     * @return 新增接單的一筆來源：一張 SO
+     */
     public NewOrderSourceResponse toResponse(NewOrderSourceProjection row) {
         return new NewOrderSourceResponse(
                 row.approvedDate(),
@@ -55,6 +61,9 @@ public class SalesSourceMapper {
         );
     }
 
+    /**
+     * @return 核准取消的一筆來源：一筆取消申請明細
+     */
     public CancellationSourceResponse toResponse(CancellationSourceProjection row) {
         return new CancellationSourceResponse(
                 row.approvedDate(),

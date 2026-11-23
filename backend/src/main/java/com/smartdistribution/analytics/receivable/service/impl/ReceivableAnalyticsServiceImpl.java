@@ -1,5 +1,6 @@
 package com.smartdistribution.analytics.receivable.service.impl;
 
+import com.smartdistribution.analytics.common.repository.AnalyticsFilter;
 import com.smartdistribution.analytics.receivable.dto.response.ReceivableAnalysisResponse;
 import com.smartdistribution.analytics.receivable.mapper.ReceivableAnalysisMapper;
 import com.smartdistribution.analytics.receivable.repository.ReceivableAnalyticsRepository;
@@ -25,10 +26,13 @@ public class ReceivableAnalyticsServiceImpl implements ReceivableAnalyticsServic
     @Override
     @PreAuthorize("hasAnyAuthority('DASHBOARD_VIEW_ALL', 'ANALYTICS_RECEIVABLE_VIEW')")
     public ReceivableAnalysisResponse findReceivableAnalysis(Long customerId, Long responsibleSalesUserId) {
+        //應收沒有料號的篩選；財務看全部業務，所以不經過 AnalyticsScope
+        AnalyticsFilter filter = new AnalyticsFilter(customerId, null, responsibleSalesUserId);
+
         return receivableAnalysisMapper.toResponse(
                 LocalDate.now(TAIPEI),
-                receivableAnalyticsRepository.findTotals(customerId, responsibleSalesUserId),
-                receivableAnalyticsRepository.findOpenReceivables(customerId, responsibleSalesUserId)
+                receivableAnalyticsRepository.findTotals(filter),
+                receivableAnalyticsRepository.findOpenReceivables(filter)
         );
     }
 }

@@ -31,6 +31,9 @@ public final class MetricChanges {
         return new MetricComparison(current, previous, change, change.divide(previous, 4, RoundingMode.HALF_UP), null);
     }
 
+    /**
+     * 張數、客戶數這類整數指標用，規則和金額相同
+     */
     public static MetricComparison compare(long current, long previous) {
         return compare(BigDecimal.valueOf(current), BigDecimal.valueOf(previous));
     }

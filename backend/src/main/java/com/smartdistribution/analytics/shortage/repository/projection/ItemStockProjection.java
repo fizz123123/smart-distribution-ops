@@ -25,7 +25,9 @@ public record ItemStockProjection(
         BigDecimal averageLeadTimeDays
 ) {
 
-    //可用量 ＝ 實體數量 － 已預留
+    /**
+     * @return 可用量 ＝ 實體數量 － 已預留
+     */
     public BigDecimal availableQty() {
         return onHandQty.subtract(reservedQty);
     }

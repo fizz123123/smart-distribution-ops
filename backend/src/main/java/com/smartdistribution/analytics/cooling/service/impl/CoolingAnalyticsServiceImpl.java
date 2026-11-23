@@ -58,7 +58,7 @@ public class CoolingAnalyticsServiceImpl implements CoolingAnalyticsService {
                 period,
                 coolingAnalyticsRepository.findCustomerTrades(filter, baseDate),
                 coolingAnalyticsRepository.findRevenueByCustomer(
-                        filter, baseDate.minusMonths(CoolingRules.REVENUE_MONTHS).plusDays(1), baseDate
+                        filter, AnalyticsPeriod.startOfLastMonths(baseDate, CoolingRules.REVENUE_MONTHS), baseDate
                 ),
                 new EvidenceData(
                         coolingAnalyticsRepository.findRevenueByCustomer(filter, period.from(), period.to()),

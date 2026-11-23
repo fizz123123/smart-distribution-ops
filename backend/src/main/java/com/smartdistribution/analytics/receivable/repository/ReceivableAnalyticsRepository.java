@@ -1,5 +1,6 @@
 package com.smartdistribution.analytics.receivable.repository;
 
+import com.smartdistribution.analytics.common.repository.AnalyticsFilter;
 import com.smartdistribution.analytics.receivable.repository.projection.OpenReceivableProjection;
 import com.smartdistribution.analytics.receivable.repository.projection.ReceivableTotalsProjection;
 import lombok.RequiredArgsConstructor;
@@ -61,11 +62,10 @@ public class ReceivableAnalyticsRepository {
     /**
      * 應收總額與未收餘額只算正式應收；待確認的草稿另外計算筆數與金額
      *
-     * @param customerId             null 代表全部客戶
-     * @param responsibleSalesUserId null 代表全部業務
+     * @param filter 客戶與負責業務；應收沒有料號的篩選
      * @return 金額合計
      */
-    public ReceivableTotalsProjection findTotals(Long customerId, Long responsibleSalesUserId) {
+    public ReceivableTotalsProjection findTotals(AnalyticsFilter filter) {
         String sql = RECEIVABLE_BALANCES + """
                 SELECT
                     COALESCE(SUM(CASE WHEN confirmed     THEN total_amount       END), 0) AS total_amount,
@@ -77,7 +77,7 @@ public class ReceivableAnalyticsRepository {
 
         return jdbcTemplate.queryForObject(
                 sql,
-                filters(customerId, responsibleSalesUserId),
+                filters(filter),
                 (rs, rowNum) -> new ReceivableTotalsProjection(
                         rs.getBigDecimal("total_amount"),
                         rs.getBigDecimal("outstanding_amount"),
@@ -90,14 +90,23 @@ public class ReceivableAnalyticsRepository {
     /**
      * 還沒收清的應收，包含待確認的草稿；依到期日排序
      *
-     * @param customerId             null 代表全部客戶
-     * @param responsibleSalesUserId null 代表全部業務
+     * @param filter 客戶與負責業務；應收沒有料號的篩選
      * @return 每筆應收的未收餘額與到期日
      */
-    public List<OpenReceivableProjection> findOpenReceivables(Long customerId, Long responsibleSalesUserId) {
-
+    public List<OpenReceivableProjection> findOpenReceivables(AnalyticsFilter filter) {
         String sql = RECEIVABLE_BALANCES + """
-                SELECT *
+                SELECT id,
+                       receivable_number,
+                       status,
+                       customer_id,
+                       customer_code,
+                       customer_name,
+                       sales_order_id,
+                       so_number,
+                       delivery_order_id,
+                       do_number,
+                       due_date,
+                       outstanding_amount
                 FROM receivable_balance
                 WHERE outstanding_amount > 0
                 ORDER BY due_date, id
@@ -105,7 +114,7 @@ public class ReceivableAnalyticsRepository {
 
         return jdbcTemplate.query(
                 sql,
-                filters(customerId, responsibleSalesUserId),
+                filters(filter),
                 (rs, rowNum) -> new OpenReceivableProjection(
                         rs.getLong("id"),
                         rs.getString("receivable_number"),
@@ -123,9 +132,9 @@ public class ReceivableAnalyticsRepository {
         );
     }
 
-    private static MapSqlParameterSource filters(Long customerId, Long responsibleSalesUserId) {
+    private static MapSqlParameterSource filters(AnalyticsFilter filter) {
         return new MapSqlParameterSource()
-                .addValue("customerId", customerId)
-                .addValue("responsibleSalesUserId", responsibleSalesUserId);
+                .addValue("customerId", filter.customerId())
+                .addValue("responsibleSalesUserId", filter.responsibleSalesUserId());
     }
 }

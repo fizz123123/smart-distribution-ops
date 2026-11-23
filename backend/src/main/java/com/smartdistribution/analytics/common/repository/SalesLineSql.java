@@ -86,11 +86,14 @@ public final class SalesLineSql {
             """;
 
     //準時交貨：已過帳 DO 的每一筆出貨明細，實際出貨日不晚於 SO 明細交期就算準時
+    //交期沒有值的舊資料算不準時；準時交貨率與交易降溫的延遲出貨都用這個欄位，判斷只有一份
     public static final String SHIPPED_LINES = """
             WITH shipped_line AS (
                 SELECT delivery_order.actual_shipment_date AS business_date,
                        sales_order.customer_id,
-                       delivery_order.actual_shipment_date <= sales_order_line.delivery_date AS on_time
+                       CASE WHEN delivery_order.actual_shipment_date <= sales_order_line.delivery_date
+                            THEN TRUE ELSE FALSE
+                       END AS on_time
                 FROM delivery_order_line
                 JOIN delivery_order ON delivery_order.id = delivery_order_line.delivery_order_id
                 JOIN sales_order_line ON sales_order_line.id = delivery_order_line.sales_order_line_id
@@ -150,7 +153,11 @@ public final class SalesLineSql {
     private SalesLineSql() {
     }
 
-    //篩選參數；名稱要和上面 CTE 裡的 :customerId、:companyItemId、:responsibleSalesUserId 一致
+    /**
+     * 狀態型查詢（例如已接單未出貨）用，不帶期間
+     *
+     * @return 篩選參數；名稱和上面 CTE 裡的 :customerId、:companyItemId、:responsibleSalesUserId 一致
+     */
     public static MapSqlParameterSource scope(AnalyticsFilter filter) {
         return new MapSqlParameterSource()
                 .addValue("customerId", filter.customerId())
@@ -158,7 +165,11 @@ public final class SalesLineSql {
                 .addValue("responsibleSalesUserId", filter.responsibleSalesUserId());
     }
 
-    //篩選參數加上期間
+    /**
+     * 期間型查詢用
+     *
+     * @return 篩選參數加上 :from、:to
+     */
     public static MapSqlParameterSource params(AnalyticsFilter filter, LocalDate from, LocalDate to) {
         return scope(filter)
                 .addValue("from", from)

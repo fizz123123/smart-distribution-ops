@@ -162,6 +162,8 @@ public class SalesAnalyticsRepository {
 
     /**
      * 本期與前期各自的營收，依客戶分組；兩期都沒有營收的客戶不會出現
+     * WHERE 只是先把範圍縮到「前期起日～本期迄日」，真正分成兩期的是 SELECT 裡的 CASE WHEN；
+     * 本月至今對上月同期時兩期中間有空檔，空檔的營收兩邊都不算
      */
     public List<ContributionProjection> findRevenueByCustomer(
             AnalyticsFilter filter,
@@ -189,6 +191,7 @@ public class SalesAnalyticsRepository {
 
     /**
      * 本期與前期各自的營收，依公司料號分組；兩期都沒有營收的料號不會出現
+     * 期間的篩選方式和 findRevenueByCustomer 相同
      */
     public List<ContributionProjection> findRevenueByItem(
             AnalyticsFilter filter,
