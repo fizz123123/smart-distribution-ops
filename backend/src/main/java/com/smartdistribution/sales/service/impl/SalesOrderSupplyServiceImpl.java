@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -24,8 +25,20 @@ public class SalesOrderSupplyServiceImpl implements SalesOrderSupplyService {
 
     @Override
     public List<ApprovedLineSupply> findApprovedLineSupplies(Long companyItemId) {
-        //和缺料清單讀同一批明細、用同一個 findSupplies 算供應狀態
-        List<SalesOrderLine> lines = salesOrderLineRepository.findApprovedLines(companyItemId);
+        //和缺料清單讀同一批明細
+        return toApprovedLineSupplies(salesOrderLineRepository.findApprovedLines(companyItemId));
+    }
+
+    @Override
+    public List<ApprovedLineSupply> findLineSupplies(Collection<Long> salesOrderLineIds) {
+        if (salesOrderLineIds.isEmpty()) {
+            return List.of();
+        }
+        return toApprovedLineSupplies(salesOrderLineRepository.findApprovedLinesByIds(salesOrderLineIds));
+    }
+
+    //用和 SO 詳情、缺料清單同一個 findSupplies 算供應狀態
+    private List<ApprovedLineSupply> toApprovedLineSupplies(List<SalesOrderLine> lines) {
         Map<Long, Supply> supplies = salesOrderAssembler.findSupplies(lines);
 
         return lines.stream()

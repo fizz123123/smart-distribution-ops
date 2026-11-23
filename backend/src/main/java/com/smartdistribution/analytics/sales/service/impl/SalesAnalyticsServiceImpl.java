@@ -10,11 +10,13 @@ import com.smartdistribution.analytics.sales.dto.response.CancellationSourceResp
 import com.smartdistribution.analytics.sales.dto.response.NewOrderSourceResponse;
 import com.smartdistribution.analytics.sales.dto.response.RevenueSourceResponse;
 import com.smartdistribution.analytics.sales.dto.response.SalesAnalysisResponse;
+import com.smartdistribution.analytics.sales.dto.response.SalesAnalysisResponse.Backlog;
 import com.smartdistribution.analytics.sales.mapper.SalesAnalysisMapper;
 import com.smartdistribution.analytics.sales.mapper.SalesAnalysisMapper.PeriodTotals;
 import com.smartdistribution.analytics.sales.mapper.SalesSourceMapper;
 import com.smartdistribution.analytics.sales.repository.SalesAnalyticsRepository;
 import com.smartdistribution.analytics.sales.repository.SalesSourceRepository;
+import com.smartdistribution.analytics.sales.repository.projection.BacklogLineProjection;
 import com.smartdistribution.analytics.sales.service.SalesAnalyticsService;
 import com.smartdistribution.sales.service.SalesOrderSupplyService;
 import com.smartdistribution.sales.service.SalesOrderSupplyService.ApprovedLineSupply;
@@ -88,11 +90,7 @@ public class SalesAnalyticsServiceImpl implements SalesAnalyticsService {
                                 filter, period.from(), period.to(), period.previousFrom(), period.previousTo()
                         )
                 ),
-                salesAnalysisMapper.toBacklog(
-                        salesAnalyticsRepository.findBacklogLines(filter),
-                        findSupplyStatuses(filter, today),
-                        today
-                )
+                toBacklog(filter, today)
         );
     }
 
@@ -166,9 +164,10 @@ public class SalesAnalyticsServiceImpl implements SalesAnalyticsService {
         rejectSort(pageable);
         LocalDate today = LocalDate.now(TAIPEI);
         AnalyticsFilter filter = toFilter(customerId, companyItemId, responsibleSalesUserId);
-        Map<Long, SupplyStatus> supplyStatuses = findSupplyStatuses(filter, today);
+        List<BacklogLineProjection> backlogLines = salesAnalyticsRepository.findBacklogLines(filter);
+        Map<Long, SupplyStatus> supplyStatuses = findSupplyStatuses(backlogLines, today);
 
-        List<BacklogSourceResponse> sources = salesAnalyticsRepository.findBacklogLines(filter).stream()
+        List<BacklogSourceResponse> sources = backlogLines.stream()
                 .filter(line -> supplyStatus == null || supplyStatuses.get(line.salesOrderLineId()) == supplyStatus)
                 .filter(line -> !overdueOnly || line.isOverdue(today))
                 .map(line -> salesSourceMapper.toResponse(line, supplyStatuses.get(line.salesOrderLineId()), today))
@@ -202,14 +201,21 @@ public class SalesAnalyticsServiceImpl implements SalesAnalyticsService {
         );
     }
 
+    //已接單未出貨：先查未出貨的明細，再只算這幾筆的供應狀態
+    private Backlog toBacklog(AnalyticsFilter filter, LocalDate today) {
+        List<BacklogLineProjection> backlogLines = salesAnalyticsRepository.findBacklogLines(filter);
+        return salesAnalysisMapper.toBacklog(backlogLines, findSupplyStatuses(backlogLines, today), today);
+    }
+
     /**
-     * 供應狀態要用銷售模組的尚待規劃算，不在 SQL 重算一次；有料號篩選時只查那個料號
+     * 供應狀態要用銷售模組的尚待規劃算，不在 SQL 重算一次；只算未出貨的這幾筆明細
      * 和未出貨明細在同一個交易裡讀，兩邊看到的已核准明細相同
      *
      * @return SO 明細 ID → 供應狀態
      */
-    private Map<Long, SupplyStatus> findSupplyStatuses(AnalyticsFilter filter, LocalDate today) {
-        return salesOrderSupplyService.findApprovedLineSupplies(filter.companyItemId()).stream()
+    private Map<Long, SupplyStatus> findSupplyStatuses(List<BacklogLineProjection> backlogLines, LocalDate today) {
+        List<Long> lineIds = backlogLines.stream().map(BacklogLineProjection::salesOrderLineId).toList();
+        return salesOrderSupplyService.findLineSupplies(lineIds).stream()
                 .collect(Collectors.toMap(
                         ApprovedLineSupply::salesOrderLineId,
                         supply -> SupplyStatus.of(supply, today)

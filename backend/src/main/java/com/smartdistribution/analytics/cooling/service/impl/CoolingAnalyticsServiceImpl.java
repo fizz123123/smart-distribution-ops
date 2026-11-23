@@ -18,8 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -77,17 +77,15 @@ public class CoolingAnalyticsServiceImpl implements CoolingAnalyticsService {
     }
 
     /**
-     * 缺料用銷售模組的尚待規劃算，和 SO 詳情一致；套用和其他證據一樣的客戶、負責業務篩選
+     * 缺料用銷售模組的尚待規劃算，和 SO 詳情一致；只算篩選範圍內還沒出貨的明細
      *
      * @return 客戶 ID → 目前還有尚待規劃的 SO 明細數
      */
     private Map<Long, Integer> countShortageLines(AnalyticsFilter filter) {
-        return salesOrderSupplyService.findApprovedLineSupplies(null).stream()
+        List<Long> backlogLineIds = coolingAnalyticsRepository.findBacklogLineIds(filter);
+
+        return salesOrderSupplyService.findLineSupplies(backlogLineIds).stream()
                 .filter(line -> line.unplannedQty().signum() > 0)
-                .filter(line -> filter.customerId() == null
-                        || Objects.equals(filter.customerId(), line.customerId()))
-                .filter(line -> filter.responsibleSalesUserId() == null
-                        || Objects.equals(filter.responsibleSalesUserId(), line.responsibleSalesUserId()))
                 .collect(Collectors.groupingBy(ApprovedLineSupply::customerId, Collectors.summingInt(line -> 1)));
     }
 }

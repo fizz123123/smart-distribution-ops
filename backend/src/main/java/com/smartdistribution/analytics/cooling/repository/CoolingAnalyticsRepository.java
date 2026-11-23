@@ -15,6 +15,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static com.smartdistribution.analytics.common.repository.SalesLineSql.BACKLOG_LINES;
 import static com.smartdistribution.analytics.common.repository.SalesLineSql.CANCELLATION_LINES;
 import static com.smartdistribution.analytics.common.repository.SalesLineSql.NEW_ORDER_LINES;
 import static com.smartdistribution.analytics.common.repository.SalesLineSql.REVENUE_LINES;
@@ -152,6 +153,21 @@ public class CoolingAnalyticsRepository {
                 """;
 
         return queryCounts(sql, params(filter, from, to));
+    }
+
+    /**
+     * 缺料的明細一定還沒出貨，所以只要算這幾筆的供應狀態；和已接單未出貨讀同一段 CTE
+     *
+     * @return 還有未出貨量的已核准 SO 明細 ID
+     */
+    public List<Long> findBacklogLineIds(AnalyticsFilter filter) {
+        String sql = BACKLOG_LINES + """
+                SELECT sales_order_line_id
+                FROM backlog_line
+                WHERE remaining_quantity > 0
+                """;
+
+        return jdbcTemplate.queryForList(sql, scope(filter), Long.class);
     }
 
     private Map<Long, Integer> queryCounts(String sql, MapSqlParameterSource params) {

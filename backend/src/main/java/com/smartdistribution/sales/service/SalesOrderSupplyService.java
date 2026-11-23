@@ -4,6 +4,7 @@ import com.smartdistribution.sales.service.PurchaseSupplyProvider.LinkedPurchase
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -17,6 +18,14 @@ public interface SalesOrderSupplyService {
      * @return 已核准 SO 的每一筆明細與供應狀態，依交期排序
      */
     List<ApprovedLineSupply> findApprovedLineSupplies(Long companyItemId);
+
+    /**
+     * 只算指定的明細，例如已接單未出貨的那幾筆；不必為了幾筆明細算全公司的供應狀態
+     *
+     * @param salesOrderLineIds SO 明細 ID；不屬於已核准 SO 的會被略過
+     * @return 這些明細的供應狀態，依交期排序
+     */
+    List<ApprovedLineSupply> findLineSupplies(Collection<Long> salesOrderLineIds);
 
     /**
      * 一筆已核准 SO 明細的供應狀態，數量都是庫存基準單位
