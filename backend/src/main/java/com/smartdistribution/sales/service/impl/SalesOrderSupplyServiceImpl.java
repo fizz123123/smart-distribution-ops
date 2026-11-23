@@ -1,10 +1,10 @@
 package com.smartdistribution.sales.service.impl;
 
-import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse.Supply;
 import com.smartdistribution.sales.entity.SalesOrder;
 import com.smartdistribution.sales.entity.SalesOrderLine;
-import com.smartdistribution.sales.mapper.SalesOrderAssembler;
 import com.smartdistribution.sales.repository.SalesOrderLineRepository;
+import com.smartdistribution.sales.service.SalesOrderSupplyQuantities.Supply;
+import com.smartdistribution.sales.service.SalesOrderSupplyQuantities;
 import com.smartdistribution.sales.service.SalesOrderSupplyService.ApprovedLineSupply;
 import com.smartdistribution.sales.service.SalesOrderSupplyService;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +21,7 @@ import java.util.Map;
 public class SalesOrderSupplyServiceImpl implements SalesOrderSupplyService {
 
     private final SalesOrderLineRepository salesOrderLineRepository;
-    private final SalesOrderAssembler salesOrderAssembler;
+    private final SalesOrderSupplyQuantities salesOrderSupplyQuantities;
 
     @Override
     public List<ApprovedLineSupply> findApprovedLineSupplies(Long companyItemId) {
@@ -37,9 +37,9 @@ public class SalesOrderSupplyServiceImpl implements SalesOrderSupplyService {
         return toApprovedLineSupplies(salesOrderLineRepository.findApprovedLinesByIds(salesOrderLineIds));
     }
 
-    //用和 SO 詳情、缺料清單同一個 findSupplies 算供應狀態
+    //和 SO 詳情、缺料清單用同一個 findSupplies
     private List<ApprovedLineSupply> toApprovedLineSupplies(List<SalesOrderLine> lines) {
-        Map<Long, Supply> supplies = salesOrderAssembler.findSupplies(lines);
+        Map<Long, Supply> supplies = salesOrderSupplyQuantities.findSupplies(lines);
 
         return lines.stream()
                 .map(line -> toApprovedLineSupply(line, supplies.get(line.getId())))
