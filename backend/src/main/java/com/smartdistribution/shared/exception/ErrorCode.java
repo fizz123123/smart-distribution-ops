@@ -452,6 +452,12 @@ public enum ErrorCode {
             "核銷金額超過應收的未收餘額。"
     ),
 
+    // Analytics
+    ANALYTICS_PERIOD_INVALID(
+            HttpStatus.BAD_REQUEST,
+            "分析期間不正確：起訖日要一起帶、起日不能晚於迄日、最長 366 天，分析基準日不能是未來。"
+    ),
+
     // Document
     DOCUMENT_NOT_FOUND(
             HttpStatus.NOT_FOUND,

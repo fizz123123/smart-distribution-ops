@@ -1,0 +1,110 @@
+package com.smartdistribution.analytics.sales.mapper;
+
+import com.smartdistribution.analytics.common.service.SupplyStatus;
+import com.smartdistribution.analytics.sales.dto.response.BacklogSourceResponse;
+import com.smartdistribution.analytics.sales.dto.response.CancellationSourceResponse;
+import com.smartdistribution.analytics.sales.dto.response.NewOrderSourceResponse;
+import com.smartdistribution.analytics.sales.dto.response.RevenueSourceResponse;
+import com.smartdistribution.analytics.sales.repository.projection.BacklogLineProjection;
+import com.smartdistribution.analytics.sales.repository.projection.CancellationSourceProjection;
+import com.smartdistribution.analytics.sales.repository.projection.NewOrderSourceProjection;
+import com.smartdistribution.analytics.sales.repository.projection.RevenueSourceProjection;
+import org.springframework.stereotype.Component;
+
+import java.time.LocalDate;
+
+/**
+ * 來源明細的查詢結果轉成回應；欄位一對一，查詢結果不直接當回應，和其他模組一樣經過 mapper
+ */
+@Component
+public class SalesSourceMapper {
+
+    /**
+     * @return 營收的一筆來源：一筆應收明細
+     */
+    public RevenueSourceResponse toResponse(RevenueSourceProjection row) {
+        return new RevenueSourceResponse(
+                row.shipmentDate(),
+                row.receivableId(),
+                row.receivableNumber(),
+                row.deliveryOrderId(),
+                row.doNumber(),
+                row.salesOrderId(),
+                row.soNumber(),
+                row.customerId(),
+                row.customerCode(),
+                row.customerName(),
+                row.companyItemId(),
+                row.itemCode(),
+                row.itemName(),
+                row.quantity(),
+                row.unit(),
+                row.unitPrice(),
+                row.amount()
+        );
+    }
+
+    /**
+     * @return 新增接單的一筆來源：一張 SO
+     */
+    public NewOrderSourceResponse toResponse(NewOrderSourceProjection row) {
+        return new NewOrderSourceResponse(
+                row.approvedDate(),
+                row.salesOrderId(),
+                row.soNumber(),
+                row.customerId(),
+                row.customerCode(),
+                row.customerName(),
+                row.responsibleSalesUserId(),
+                row.responsibleSalesName(),
+                row.amount()
+        );
+    }
+
+    /**
+     * @return 核准取消的一筆來源：一筆取消申請明細
+     */
+    public CancellationSourceResponse toResponse(CancellationSourceProjection row) {
+        return new CancellationSourceResponse(
+                row.approvedDate(),
+                row.cancellationId(),
+                row.cancellationNumber(),
+                row.salesOrderId(),
+                row.soNumber(),
+                row.customerId(),
+                row.customerCode(),
+                row.customerName(),
+                row.companyItemId(),
+                row.itemCode(),
+                row.itemName(),
+                row.quantity(),
+                row.unit(),
+                row.amount()
+        );
+    }
+
+    /**
+     * @param supplyStatus 這一行的供應狀態，由 service 判斷
+     * @param today        交期早於今天的標示逾期
+     */
+    public BacklogSourceResponse toResponse(BacklogLineProjection row, SupplyStatus supplyStatus, LocalDate today) {
+        return new BacklogSourceResponse(
+                row.salesOrderLineId(),
+                row.salesOrderId(),
+                row.soNumber(),
+                row.lineNo(),
+                row.customerId(),
+                row.customerCode(),
+                row.customerName(),
+                row.companyItemId(),
+                row.itemCode(),
+                row.itemName(),
+                row.deliveryDate(),
+                row.remainingQuantity(),
+                row.unit(),
+                row.amount(),
+                supplyStatus,
+                row.isOverdue(today)
+        );
+    }
+}

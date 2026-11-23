@@ -5,7 +5,7 @@ import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.customer.entity.Customer;
 import com.smartdistribution.masterdata.customer.entity.PaymentTerm;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
-import com.smartdistribution.sales.SalesOrderTestSupport;
+import com.smartdistribution.purchasing.PurchaseOrderTestSupport;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.http.MediaType;
@@ -21,9 +21,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * DO 整合測試共用的資料準備與清理；客戶、料號、SO 與帳號沿用 SO 測試的工具
+ * DO 整合測試共用的資料準備與清理；客戶、料號、SO、PO 與帳號沿用 SO、PO 測試的工具
  */
-public abstract class DeliveryOrderTestSupport extends SalesOrderTestSupport {
+public abstract class DeliveryOrderTestSupport extends PurchaseOrderTestSupport {
 
     //SO 測試的清理（父類別）只認得 SO；DO 只存 SO 的 ID，沒有外鍵，先後都可以
     @BeforeEach

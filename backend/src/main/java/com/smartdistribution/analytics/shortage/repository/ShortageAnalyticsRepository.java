@@ -1,0 +1,280 @@
+package com.smartdistribution.analytics.shortage.repository;
+
+import com.smartdistribution.analytics.shortage.repository.projection.CustomerNameProjection;
+import com.smartdistribution.analytics.shortage.repository.projection.ItemStockProjection;
+import com.smartdistribution.analytics.shortage.repository.projection.OpenPurchaseLineProjection;
+import com.smartdistribution.analytics.shortage.repository.projection.SupplierPerformanceProjection;
+import com.smartdistribution.masterdata.common.UnitOfMeasure;
+import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.stereotype.Repository;
+
+import java.time.LocalDate;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+/**
+ * 缺貨分析的唯讀查詢：庫存、安全庫存、出貨量、採購週期、還沒結的 PO 與供應商表現
+ * 尚待規劃不在這裡算，由銷售模組的 SalesOrderSupplyService 提供；全部數量都是庫存基準單位
+ */
+@Repository
+@RequiredArgsConstructor
+public class ShortageAnalyticsRepository {
+
+    //每筆 PO 明細最後一次有合格數量的收貨日；料號的平均採購週期和供應商的平均交期都從這裡算，算法只有一份
+    private static final String LAST_RECEIPT = """
+            last_receipt AS (
+                SELECT goods_receipt_line.purchase_order_line_id,
+                       MAX(goods_receipt.received_date) AS received_date
+                FROM goods_receipt_line
+                JOIN goods_receipt ON goods_receipt.id = goods_receipt_line.goods_receipt_id
+                WHERE goods_receipt_line.accepted_base_qty > 0
+                GROUP BY goods_receipt_line.purchase_order_line_id
+            )
+            """;
+
+    private final NamedParameterJdbcTemplate jdbcTemplate;
+
+    /**
+     * last_receipt：每筆 PO 明細最後一次有合格數量的收貨日
+     * shipped：期間內已過帳 DO 的實際出貨量，依料號加總
+     * lead_time：收齊（COMPLETED）的 PO 明細，從核准日到最後一次合格收貨的平均天數；短收結案、取消的不算
+     *
+     * @param usageFrom   出貨量從這天算起（今天往前 29 天）
+     * @param historyFrom 採購週期只看最後收貨日在這天以後的明細（最近六個月的起日）
+     * @return 每個料號一筆，依料號代碼排序
+     */
+    public List<ItemStockProjection> findItemStocks(
+            Long companyItemId,
+            LocalDate usageFrom,
+            LocalDate today,
+            LocalDate historyFrom
+    ) {
+        String sql = "WITH " + LAST_RECEIPT + """
+                , shipped AS (
+                    SELECT delivery_order_line.company_item_id,
+                           SUM(delivery_order_line.actual_base_qty) AS quantity
+                    FROM delivery_order_line
+                    JOIN delivery_order ON delivery_order.id = delivery_order_line.delivery_order_id
+                    WHERE delivery_order.status = 'POSTED'
+                      AND delivery_order.actual_shipment_date BETWEEN :usageFrom AND :today
+                    GROUP BY delivery_order_line.company_item_id
+                ),
+                lead_time AS (
+                    SELECT purchase_order_line.company_item_id,
+                           ROUND(AVG(DATEDIFF(last_receipt.received_date, DATE(purchase_order.approved_at))), 1)
+                               AS days
+                    FROM purchase_order_line
+                    JOIN purchase_order ON purchase_order.id = purchase_order_line.purchase_order_id
+                    JOIN last_receipt ON last_receipt.purchase_order_line_id = purchase_order_line.id
+                    WHERE purchase_order_line.status = 'COMPLETED'
+                      AND last_receipt.received_date >= :historyFrom
+                    GROUP BY purchase_order_line.company_item_id
+                )
+                SELECT company_item.id,
+                       company_item.item_code,
+                       company_item.name,
+                       company_item.base_unit_code,
+                       company_item.status = 'ACTIVE' AS active,
+                       COALESCE(inventory_balance.on_hand_qty, 0) AS on_hand_qty,
+                       COALESCE(inventory_balance.reserved_qty, 0) AS reserved_qty,
+                       inventory_policy.safety_stock_base_qty,
+                       COALESCE(shipped.quantity, 0) AS shipped_qty,
+                       lead_time.days AS lead_time_days
+                FROM company_item
+                LEFT JOIN inventory_balance ON inventory_balance.company_item_id = company_item.id
+                LEFT JOIN inventory_policy ON inventory_policy.company_item_id = company_item.id
+                LEFT JOIN shipped ON shipped.company_item_id = company_item.id
+                LEFT JOIN lead_time ON lead_time.company_item_id = company_item.id
+                WHERE (:companyItemId IS NULL OR company_item.id = :companyItemId)
+                ORDER BY company_item.item_code
+                """;
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("companyItemId", companyItemId)
+                .addValue("usageFrom", usageFrom)
+                .addValue("today", today)
+                .addValue("historyFrom", historyFrom);
+
+        return jdbcTemplate.query(sql, params, (rs, rowNum) -> new ItemStockProjection(
+                rs.getLong("id"),
+                rs.getString("item_code"),
+                rs.getString("name"),
+                UnitOfMeasure.valueOf(rs.getString("base_unit_code")),
+                rs.getBoolean("active"),
+                rs.getBigDecimal("on_hand_qty"),
+                rs.getBigDecimal("reserved_qty"),
+                rs.getBigDecimal("safety_stock_base_qty"),
+                rs.getBigDecimal("shipped_qty"),
+                rs.getBigDecimal("lead_time_days")
+        ));
+    }
+
+    /**
+     * 還沒結的 PO 明細：未核准的（已規劃未下單）與已核准未收齊的（採購在途），包含一般補庫的 PO
+     *
+     * @return 依預計到貨日排序
+     */
+    public List<OpenPurchaseLineProjection> findOpenPurchaseLines(Long companyItemId) {
+        String sql = """
+                SELECT purchase_order_line.company_item_id,
+                       purchase_order.id AS purchase_order_id,
+                       purchase_order.po_number,
+                       purchase_order.status,
+                       purchase_order.expected_arrival_date,
+                       purchase_order_line.base_qty
+                           - purchase_order_line.accepted_base_qty
+                           - purchase_order_line.cancelled_base_qty AS open_qty
+                FROM purchase_order_line
+                JOIN purchase_order ON purchase_order.id = purchase_order_line.purchase_order_id
+                WHERE purchase_order.status IN (
+                          'DRAFT', 'PENDING_APPROVAL', 'RETURNED', 'APPROVED', 'PARTIALLY_RECEIVED'
+                      )
+                  AND purchase_order_line.status = 'OPEN'
+                  AND (:companyItemId IS NULL OR purchase_order_line.company_item_id = :companyItemId)
+                ORDER BY purchase_order.expected_arrival_date, purchase_order.id, purchase_order_line.line_no
+                """;
+
+        return jdbcTemplate.query(
+                sql,
+                new MapSqlParameterSource("companyItemId", companyItemId),
+                (rs, rowNum) -> new OpenPurchaseLineProjection(
+                        rs.getLong("company_item_id"),
+                        rs.getLong("purchase_order_id"),
+                        rs.getString("po_number"),
+                        rs.getString("status"),
+                        rs.getObject("expected_arrival_date", LocalDate.class),
+                        rs.getBigDecimal("open_qty")
+                )
+        );
+    }
+
+    /**
+     * 供應商表現，只算最近六個月；有料號篩選時只看這個料號的 PO 明細
+     * closed_line：結束的 PO 明細，收齊的以最後一次合格收貨日、短收結案的以結案日判斷是否在期間內
+     *   準時 ＝ 收齊而且最後一次合格收貨日不晚於預計到貨日；短收結案一律不準時
+     * receipt_stats：期間內的收貨明細，有破損或不合格數量的算異常；用筆數，因為不同料號的單位不能加總
+     * overdue：已核准還沒收齊、預計到貨日早於今天的 PO 張數
+     *
+     * @return 期間內有結束的明細、有收貨或目前有逾期 PO 的供應商
+     */
+    public List<SupplierPerformanceProjection> findSupplierPerformance(
+            Long companyItemId,
+            LocalDate today,
+            LocalDate historyFrom
+    ) {
+        String sql = "WITH " + LAST_RECEIPT + """
+                , closed_line AS (
+                    SELECT purchase_order.supplier_id,
+                           CASE WHEN purchase_order_line.status = 'COMPLETED'
+                                     AND last_receipt.received_date <= purchase_order.expected_arrival_date
+                                THEN TRUE ELSE FALSE
+                           END AS on_time,
+                           CASE WHEN purchase_order_line.status = 'COMPLETED'
+                                THEN DATEDIFF(last_receipt.received_date, DATE(purchase_order.approved_at))
+                           END AS lead_days
+                    FROM purchase_order_line
+                    JOIN purchase_order ON purchase_order.id = purchase_order_line.purchase_order_id
+                    LEFT JOIN last_receipt ON last_receipt.purchase_order_line_id = purchase_order_line.id
+                    WHERE (:companyItemId IS NULL OR purchase_order_line.company_item_id = :companyItemId)
+                      AND ((purchase_order_line.status = 'COMPLETED' AND last_receipt.received_date >= :historyFrom)
+                           OR (purchase_order_line.status = 'CLOSED_SHORT'
+                               AND DATE(purchase_order.closed_at) >= :historyFrom))
+                ),
+                line_stats AS (
+                    SELECT supplier_id,
+                           COUNT(*)                            AS closed_line_count,
+                           COUNT(CASE WHEN on_time THEN 1 END) AS on_time_line_count,
+                           ROUND(AVG(lead_days), 1)            AS average_lead_days
+                    FROM closed_line
+                    GROUP BY supplier_id
+                ),
+                receipt_stats AS (
+                    SELECT purchase_order.supplier_id,
+                           COUNT(*) AS receipt_line_count,
+                           COUNT(CASE WHEN goods_receipt_line.damaged_qty > 0
+                                        OR goods_receipt_line.nonconforming_qty > 0
+                                      THEN 1 END) AS exception_line_count
+                    FROM goods_receipt_line
+                    JOIN goods_receipt ON goods_receipt.id = goods_receipt_line.goods_receipt_id
+                    JOIN purchase_order ON purchase_order.id = goods_receipt.purchase_order_id
+                    JOIN purchase_order_line ON purchase_order_line.id = goods_receipt_line.purchase_order_line_id
+                    WHERE goods_receipt.received_date >= :historyFrom
+                      AND (:companyItemId IS NULL OR purchase_order_line.company_item_id = :companyItemId)
+                    GROUP BY purchase_order.supplier_id
+                ),
+                overdue AS (
+                    SELECT purchase_order.supplier_id,
+                           COUNT(DISTINCT purchase_order.id) AS overdue_po_count
+                    FROM purchase_order
+                    JOIN purchase_order_line ON purchase_order_line.purchase_order_id = purchase_order.id
+                    WHERE purchase_order.status IN ('APPROVED', 'PARTIALLY_RECEIVED')
+                      AND purchase_order_line.status = 'OPEN'
+                      AND purchase_order.expected_arrival_date < :today
+                      AND (:companyItemId IS NULL OR purchase_order_line.company_item_id = :companyItemId)
+                    GROUP BY purchase_order.supplier_id
+                )
+                SELECT supplier.id,
+                       supplier.supplier_code,
+                       supplier.name,
+                       COALESCE(line_stats.closed_line_count, 0) AS closed_line_count,
+                       COALESCE(line_stats.on_time_line_count, 0) AS on_time_line_count,
+                       line_stats.average_lead_days,
+                       COALESCE(receipt_stats.receipt_line_count, 0) AS receipt_line_count,
+                       COALESCE(receipt_stats.exception_line_count, 0) AS exception_line_count,
+                       COALESCE(overdue.overdue_po_count, 0) AS overdue_po_count
+                FROM supplier
+                LEFT JOIN line_stats ON line_stats.supplier_id = supplier.id
+                LEFT JOIN receipt_stats ON receipt_stats.supplier_id = supplier.id
+                LEFT JOIN overdue ON overdue.supplier_id = supplier.id
+                WHERE line_stats.supplier_id IS NOT NULL
+                   OR receipt_stats.supplier_id IS NOT NULL
+                   OR overdue.supplier_id IS NOT NULL
+                """;
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("companyItemId", companyItemId)
+                .addValue("today", today)
+                .addValue("historyFrom", historyFrom);
+
+        return jdbcTemplate.query(sql, params, (rs, rowNum) -> new SupplierPerformanceProjection(
+                rs.getLong("id"),
+                rs.getString("supplier_code"),
+                rs.getString("name"),
+                rs.getInt("closed_line_count"),
+                rs.getInt("on_time_line_count"),
+                rs.getBigDecimal("average_lead_days"),
+                rs.getInt("receipt_line_count"),
+                rs.getInt("exception_line_count"),
+                rs.getInt("overdue_po_count")
+        ));
+    }
+
+    /**
+     * @return 客戶 ID → 代碼與名稱
+     */
+    public Map<Long, CustomerNameProjection> findCustomerNames(Collection<Long> customerIds) {
+        if (customerIds.isEmpty()) {
+            return Map.of();
+        }
+
+        String sql = """
+                SELECT id, customer_code, name
+                FROM customer
+                WHERE id IN (:customerIds)
+                """;
+
+        return jdbcTemplate.query(
+                        sql,
+                        new MapSqlParameterSource("customerIds", customerIds),
+                        (rs, rowNum) -> new CustomerNameProjection(
+                                rs.getLong("id"),
+                                rs.getString("customer_code"),
+                                rs.getString("name")
+                        )
+                ).stream()
+                .collect(Collectors.toMap(CustomerNameProjection::customerId, Function.identity()));
+    }
+}

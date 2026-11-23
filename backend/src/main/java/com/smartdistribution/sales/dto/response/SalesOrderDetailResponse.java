@@ -4,9 +4,9 @@ import com.smartdistribution.masterdata.common.UnitOfMeasure;
 import com.smartdistribution.masterdata.customer.entity.PaymentTerm;
 import com.smartdistribution.pricing.service.PriceSource;
 import com.smartdistribution.sales.entity.DeliveryMethod;
-import com.smartdistribution.sales.service.PurchaseSupplyProvider.LinkedPurchaseOrder;
 import com.smartdistribution.sales.entity.SalesOrderChannel;
 import com.smartdistribution.sales.entity.SalesOrderStatus;
+import com.smartdistribution.sales.service.SalesOrderSupplyQuantities.Supply;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -86,25 +86,7 @@ public record SalesOrderDetailResponse(
             BigDecimal effectiveLineAmount,
             LocalDate requestedDeliveryDate, //業務填的交期，null 代表沿用表頭
             LocalDate deliveryDate, //實際交期：草稿是依表頭試算，送審後是快照
-            Supply supply //核准後才有值
-    ) {
-    }
-
-    /**
-     * 供應狀態：全部以庫存基準單位表示
-     * 已規劃未下單與採購在途來自 PO；進行中 DO 與已出貨來自 DO
-     *
-     * @param deliveringQty 已排入 DO、還沒過帳的數量，仍在預留裡；可再通知出貨 ＝ 預留 － 這個數量
-     */
-    public record Supply(
-            BigDecimal reservedQty,
-            BigDecimal plannedNotOrderedQty,
-            BigDecimal inTransitQty,
-            BigDecimal deliveringQty,
-            BigDecimal shippedQty,
-            BigDecimal cancelledQty,
-            BigDecimal unplannedQty,
-            List<LinkedPurchaseOrder> purchaseOrders //關聯這一行的所有 PO，不含單價
+            Supply supply //核准後才有值；欄位說明見 SalesOrderSupplyQuantities.Supply
     ) {
     }
 }

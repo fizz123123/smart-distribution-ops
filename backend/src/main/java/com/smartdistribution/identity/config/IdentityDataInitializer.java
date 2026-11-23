@@ -115,7 +115,12 @@ public class IdentityDataInitializer implements ApplicationRunner {
             new PermissionSeed("RECEIVABLE", "INVOICE_CORRECT"),
             new PermissionSeed("PAYMENT", "VIEW"),
             new PermissionSeed("PAYMENT", "CONFIRM"),
-            new PermissionSeed("PAYMENT", "VOID")
+            new PermissionSeed("PAYMENT", "VOID"),
+            new PermissionSeed("DASHBOARD", "VIEW_ALL"),
+            new PermissionSeed("ANALYTICS_SALES", "VIEW"),
+            new PermissionSeed("ANALYTICS_SALES", "VIEW_ALL"),
+            new PermissionSeed("ANALYTICS_SHORTAGE", "VIEW"),
+            new PermissionSeed("ANALYTICS_RECEIVABLE", "VIEW")
     );
 
     private static final List<String> APP_ADMIN_PERMISSIONS = List.of(
@@ -148,7 +153,9 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "SO_CANCELLATION_SUBMIT",
             "DO_VIEW",
             "DO_CREATE",
-            "DO_DOCUMENT_VIEW"
+            "DO_DOCUMENT_VIEW",
+            //接單營收與交易降溫，只看自己負責的 SO
+            "ANALYTICS_SALES_VIEW"
     );
 
     //業務主管包含業務的全部權限（啟動時一併指派，對照見 RoleInclusions），這裡只列主管額外的權限
@@ -163,7 +170,10 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "STANDARD_PRICE_REVOKE",
             "INVENTORY_RESERVATION_VIEW",
             "SO_APPROVE",
-            "SO_CANCELLATION_APPROVE"
+            "SO_CANCELLATION_APPROVE",
+            //接單營收與交易降溫看全部業務；和業務的 ANALYTICS_SALES_VIEW 同時存在時以這個為準
+            "ANALYTICS_SALES_VIEW_ALL",
+            "ANALYTICS_SHORTAGE_VIEW"
     );
 
     private static final List<String> PURCHASING_PERMISSIONS = List.of(
@@ -185,7 +195,8 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "PO_UPDATE",
             "PO_SUBMIT",
             "PO_DOCUMENT_VIEW",
-            "GOODS_RECEIPT_VIEW"
+            "GOODS_RECEIPT_VIEW",
+            "ANALYTICS_SHORTAGE_VIEW"
     );
 
     //採購主管包含採購的全部權限，這裡只列主管額外的權限
@@ -209,7 +220,8 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "DO_VOID",
             "DO_READY",
             "DO_POST",
-            "DO_DOCUMENT_VIEW"
+            "DO_DOCUMENT_VIEW",
+            "ANALYTICS_SHORTAGE_VIEW"
     );
 
     //倉管主管包含倉管的全部權限，這裡只列主管額外的權限
@@ -223,7 +235,8 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "RECEIVABLE_VIEW",
             "RECEIVABLE_CONFIRM",
             "PAYMENT_VIEW",
-            "PAYMENT_CONFIRM"
+            "PAYMENT_CONFIRM",
+            "ANALYTICS_RECEIVABLE_VIEW"
     );
 
     //財務主管包含財務的全部權限，這裡只列主管額外的權限
@@ -260,7 +273,9 @@ public class IdentityDataInitializer implements ApplicationRunner {
             "DO_VIEW",
             "DO_DOCUMENT_VIEW",
             "RECEIVABLE_VIEW",
-            "PAYMENT_VIEW"
+            "PAYMENT_VIEW",
+            //儀表板總覽與所有分析，全公司
+            "DASHBOARD_VIEW_ALL"
     );
 
     private final RoleRepository roleRepository;

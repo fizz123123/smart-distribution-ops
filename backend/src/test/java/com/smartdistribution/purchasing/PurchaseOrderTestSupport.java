@@ -25,19 +25,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * PO 整合測試共用的資料準備與清理；客戶、料號、SO 與帳號沿用 SO 測試的工具
+ * DO 的測試工具也繼承這裡，儀表板的缺貨分析要同時建立 PO 與 DO
  * 供應商直接透過 entity 建立並轉為啟用，不經過核准流程
  */
-abstract class PurchaseOrderTestSupport extends SalesOrderTestSupport {
+public abstract class PurchaseOrderTestSupport extends SalesOrderTestSupport {
 
-    static final String SUPPLIER_NAME_PREFIX = "整合測試供應商-PO-";
+    protected static final String SUPPLIER_NAME_PREFIX = "整合測試供應商-PO-";
 
     @Autowired
-    SupplierRepository supplierRepository;
+    protected SupplierRepository supplierRepository;
 
     //SO 測試的清理（父類別）在之前執行；兩邊沒有外鍵，順序不影響
     @BeforeEach
     @AfterEach
-    void cleanPurchaseOrders() {
+    protected void cleanPurchaseOrders() {
         List<Long> purchaseOrderIds = jdbcTemplate.queryForList(
                 """
                 SELECT po.id FROM purchase_order po
@@ -85,7 +86,7 @@ abstract class PurchaseOrderTestSupport extends SalesOrderTestSupport {
 
     // ===== 主檔與 SO =====
 
-    Supplier createActiveSupplier() {
+    protected Supplier createActiveSupplier() {
         Supplier supplier = supplierRepository.saveAndFlush(new Supplier(
                 SUPPLIER_NAME_PREFIX + UUID.randomUUID().toString().substring(0, 8),
                 null,
@@ -106,8 +107,12 @@ abstract class PurchaseOrderTestSupport extends SalesOrderTestSupport {
      * 建立一張已核准、會缺料的 SO：料號期初庫存 available 個，訂購 ordered 個
      * 例如 available 2、ordered 5 → 預留 2、尚待規劃 3
      */
-    ShortageOrder createShortageOrder(String warehouseManager, String salesManager, String available, String ordered)
-            throws Exception {
+    protected ShortageOrder createShortageOrder(
+            String warehouseManager,
+            String salesManager,
+            String available,
+            String ordered
+    ) throws Exception {
         String sales = login(createUser("po-sales", "SALES"));
         Customer customer = createActiveCustomer(PaymentTerm.DUE_0);
         CompanyItem item = createActiveItem(UnitOfMeasure.PCS);
@@ -126,13 +131,13 @@ abstract class PurchaseOrderTestSupport extends SalesOrderTestSupport {
 
     // ===== PO =====
 
-    String poLine(CompanyItem item, Long salesOrderLineId, String quantity, String unitPrice) {
+    protected String poLine(CompanyItem item, Long salesOrderLineId, String quantity, String unitPrice) {
         return """
                 {"companyItemId": %d, "salesOrderLineId": %s, "quantity": %s, "unit": "PCS", "unitPriceExcludingTax": %s}
                 """.formatted(item.getId(), salesOrderLineId, quantity, unitPrice);
     }
 
-    String poBody(Supplier supplier, String lines) {
+    protected String poBody(Supplier supplier, String lines) {
         return """
                 {
                   "supplierId": %d,
@@ -142,14 +147,14 @@ abstract class PurchaseOrderTestSupport extends SalesOrderTestSupport {
                 """.formatted(supplier.getId(), lines);
     }
 
-    ResultActions performCreatePo(String token, String body) throws Exception {
+    protected ResultActions performCreatePo(String token, String body) throws Exception {
         return mockMvc.perform(post("/api/v1/purchase-orders")
                 .header("Authorization", bearer(token))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));
     }
 
-    PurchaseOrderVersion createPoDraft(String token, String body) throws Exception {
+    protected PurchaseOrderVersion createPoDraft(String token, String body) throws Exception {
         MvcResult result = performCreatePo(token, body)
                 .andExpect(status().isCreated())
                 .andReturn();
@@ -157,7 +162,7 @@ abstract class PurchaseOrderTestSupport extends SalesOrderTestSupport {
         return new PurchaseOrderVersion(readLong(result, "$.id"), readLong(result, "$.version"));
     }
 
-    ResultActions updatePo(String token, PurchaseOrderVersion purchaseOrder, Supplier supplier, String lines)
+    protected ResultActions updatePo(String token, PurchaseOrderVersion purchaseOrder, Supplier supplier, String lines)
             throws Exception {
         return mockMvc.perform(put("/api/v1/purchase-orders/{id}", purchaseOrder.id())
                 .header("Authorization", bearer(token))
@@ -172,7 +177,7 @@ abstract class PurchaseOrderTestSupport extends SalesOrderTestSupport {
                         """.formatted(supplier.getId(), lines, purchaseOrder.version())));
     }
 
-    ResultActions submitPo(String token, PurchaseOrderVersion purchaseOrder) throws Exception {
+    protected ResultActions submitPo(String token, PurchaseOrderVersion purchaseOrder) throws Exception {
         return mockMvc.perform(post("/api/v1/purchase-orders/{id}/submit", purchaseOrder.id())
                 .header("Authorization", bearer(token))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -182,14 +187,14 @@ abstract class PurchaseOrderTestSupport extends SalesOrderTestSupport {
     }
 
     //建立草稿並送審，回傳 PO ID
-    Long createSubmittedPo(String token, String body) throws Exception {
+    protected Long createSubmittedPo(String token, String body) throws Exception {
         PurchaseOrderVersion draft = createPoDraft(token, body);
         submitPo(token, draft).andExpect(status().isOk());
 
         return draft.id();
     }
 
-    Long findPendingPoApprovalId(Long purchaseOrderId) {
+    protected Long findPendingPoApprovalId(Long purchaseOrderId) {
         return jdbcTemplate.queryForObject(
                 """
                 SELECT id FROM approval_request
@@ -200,27 +205,27 @@ abstract class PurchaseOrderTestSupport extends SalesOrderTestSupport {
         );
     }
 
-    ResultActions approvePo(String token, Long purchaseOrderId) throws Exception {
+    protected ResultActions approvePo(String token, Long purchaseOrderId) throws Exception {
         return mockMvc.perform(post("/api/v1/approval-requests/{id}/approve", findPendingPoApprovalId(purchaseOrderId))
                 .header("Authorization", bearer(token))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"));
     }
 
-    ResultActions getPo(String token, Long purchaseOrderId) throws Exception {
+    protected ResultActions getPo(String token, Long purchaseOrderId) throws Exception {
         return mockMvc.perform(get("/api/v1/purchase-orders/{id}", purchaseOrderId)
                 .header("Authorization", bearer(token)));
     }
 
     //建立、送審並核准，回傳 PO ID
-    Long createApprovedPo(String purchasing, String purchasingManager, String body) throws Exception {
+    protected Long createApprovedPo(String purchasing, String purchasingManager, String body) throws Exception {
         Long purchaseOrderId = createSubmittedPo(purchasing, body);
         approvePo(purchasingManager, purchaseOrderId).andExpect(status().isOk());
 
         return purchaseOrderId;
     }
 
-    Long findPoLineId(Long purchaseOrderId) {
+    protected Long findPoLineId(Long purchaseOrderId) {
         return jdbcTemplate.queryForObject(
                 "SELECT id FROM purchase_order_line WHERE purchase_order_id = ? ORDER BY line_no LIMIT 1",
                 Long.class,
@@ -228,12 +233,12 @@ abstract class PurchaseOrderTestSupport extends SalesOrderTestSupport {
         );
     }
 
-    Long poVersion(String token, Long purchaseOrderId) throws Exception {
+    protected Long poVersion(String token, Long purchaseOrderId) throws Exception {
         return readLong(getPo(token, purchaseOrderId).andExpect(status().isOk()).andReturn(), "$.version");
     }
 
     //action 是 cancel 或 close-short，兩者的 request 相同
-    ResultActions closePo(String token, String action, Long purchaseOrderId, String reason, Long version)
+    protected ResultActions closePo(String token, String action, Long purchaseOrderId, String reason, Long version)
             throws Exception {
         return mockMvc.perform(post("/api/v1/purchase-orders/{id}/" + action, purchaseOrderId)
                 .header("Authorization", bearer(token))
@@ -245,7 +250,13 @@ abstract class PurchaseOrderTestSupport extends SalesOrderTestSupport {
 
     // ===== 收貨 =====
 
-    String receiptLine(Long purchaseOrderLineId, String received, String accepted, String damaged, String reason) {
+    protected String receiptLine(
+            Long purchaseOrderLineId,
+            String received,
+            String accepted,
+            String damaged,
+            String reason
+    ) {
         return """
                 {"purchaseOrderLineId": %d, "receivedQuantity": %s, "acceptedQuantity": %s,
                  "damagedQuantity": %s, "nonconformingQuantity": 0, "exceptionReason": %s}
@@ -254,7 +265,7 @@ abstract class PurchaseOrderTestSupport extends SalesOrderTestSupport {
         );
     }
 
-    ResultActions postReceipt(String token, Long purchaseOrderId, String lines) throws Exception {
+    protected ResultActions postReceipt(String token, Long purchaseOrderId, String lines) throws Exception {
         return mockMvc.perform(post("/api/v1/purchase-orders/{id}/goods-receipts", purchaseOrderId)
                 .header("Authorization", bearer(token))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -263,13 +274,13 @@ abstract class PurchaseOrderTestSupport extends SalesOrderTestSupport {
                         """.formatted(lines)));
     }
 
-    record PurchaseOrderVersion(Long id, Long version) {
+    protected record PurchaseOrderVersion(Long id, Long version) {
     }
 
     /**
      * @param salesOrderLineId 會缺料的那一筆 SO 明細
      * @param salesToken       建立這張 SO 的業務，之後申請餘量取消會用到
      */
-    record ShortageOrder(Long salesOrderId, Long salesOrderLineId, CompanyItem item, String salesToken) {
+    protected record ShortageOrder(Long salesOrderId, Long salesOrderLineId, CompanyItem item, String salesToken) {
     }
 }

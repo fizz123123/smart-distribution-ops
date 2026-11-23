@@ -28,6 +28,17 @@ public interface SalesOrderLineRepository extends JpaRepository<SalesOrderLine, 
             """)
     List<SalesOrderLine> findApprovedLines(@Param("companyItemId") Long companyItemId);
 
+    //儀表板：指定的明細中屬於已核准 SO 的，連同表頭一起載入，依交期排序
+    @EntityGraph(attributePaths = "salesOrder")
+    @Query("""
+            SELECT line
+            FROM SalesOrderLine line
+            WHERE line.id IN :salesOrderLineIds
+              AND line.salesOrder.status = com.smartdistribution.sales.entity.SalesOrderStatus.APPROVED
+            ORDER BY line.deliveryDate ASC, line.salesOrder.id ASC, line.lineNo ASC
+            """)
+    List<SalesOrderLine> findApprovedLinesByIds(@Param("salesOrderLineIds") Collection<Long> salesOrderLineIds);
+
     //草稿整批取代明細時使用；直接下 DELETE，避免和新明細的行號唯一約束衝突
     @Modifying(flushAutomatically = true)
     @Query("DELETE FROM SalesOrderLine line WHERE line.salesOrder.id = :salesOrderId")

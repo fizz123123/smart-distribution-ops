@@ -1,7 +1,6 @@
 package com.smartdistribution.sales.mapper;
 
 import com.smartdistribution.identity.service.UserDirectoryService;
-import com.smartdistribution.inventory.service.InventoryService;
 import com.smartdistribution.masterdata.common.MasterDataStatus;
 import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.customer.entity.Customer;
@@ -10,7 +9,6 @@ import com.smartdistribution.masterdata.supplier.entity.Supplier;
 import com.smartdistribution.pricing.service.PriceLookupService;
 import com.smartdistribution.pricing.service.PriceLookupService.ApplicablePrice;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse.Line;
-import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse.Supply;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderShortageResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderSummaryResponse;
@@ -19,12 +17,11 @@ import com.smartdistribution.sales.entity.SalesOrderLine;
 import com.smartdistribution.sales.entity.SalesOrderStatus;
 import com.smartdistribution.sales.repository.CancelledQuantityProjection;
 import com.smartdistribution.sales.repository.SalesOrderLineRepository;
-import com.smartdistribution.sales.service.PurchaseSupplyProvider.PurchaseSupply;
-import com.smartdistribution.sales.service.PurchaseSupplyProvider;
 import com.smartdistribution.sales.service.SalesOrderAmounts;
 import com.smartdistribution.sales.service.SalesOrderMasterData;
 import com.smartdistribution.sales.service.SalesOrderQuantities;
-import com.smartdistribution.sales.service.ShipmentQuantityProvider.ShipmentQuantity;
+import com.smartdistribution.sales.service.SalesOrderSupplyQuantities.Supply;
+import com.smartdistribution.sales.service.SalesOrderSupplyQuantities;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Component;
@@ -52,9 +49,8 @@ public class SalesOrderAssembler {
     private final SalesOrderMasterData salesOrderMasterData;
     private final PriceLookupService priceLookupService;
     private final UserDirectoryService userDirectoryService;
-    private final InventoryService inventoryService;
     private final SalesOrderQuantities salesOrderQuantities;
-    private final PurchaseSupplyProvider purchaseSupplyProvider;
+    private final SalesOrderSupplyQuantities salesOrderSupplyQuantities;
 
     public Page<SalesOrderSummaryResponse> toSummaries(Page<SalesOrder> salesOrders) {
         Set<Long> customerIds = new HashSet<>();
@@ -248,7 +244,9 @@ public class SalesOrderAssembler {
         Map<Long, CancelledQuantityProjection> cancellations = approved
                 ? salesOrderQuantities.findCancellations(lines.stream().map(SalesOrderLine::getId).toList())
                 : Map.of();
-        Map<Long, Supply> supplies = approved ? findSupplies(lines, cancellations) : Map.of();
+        Map<Long, Supply> supplies = approved
+                ? salesOrderSupplyQuantities.findSupplies(lines, cancellations)
+                : Map.of();
 
         return lines.stream()
                 .map(line -> {
@@ -292,43 +290,6 @@ public class SalesOrderAssembler {
     }
 
     /**
-     * 已核准 SO 明細的供應狀態；SO 詳情與缺料清單共用，兩邊的尚待規劃才會一致
-     *
-     * @param lines 已核准或已結案 SO 的明細
-     * @return SO 明細 ID → 供應狀態
-     */
-    public Map<Long, Supply> findSupplies(List<SalesOrderLine> lines) {
-        return findSupplies(
-                lines,
-                salesOrderQuantities.findCancellations(lines.stream().map(SalesOrderLine::getId).toList())
-        );
-    }
-
-    //SO 詳情已經查過取消數量，直接傳進來，不必再查一次
-    private Map<Long, Supply> findSupplies(
-            List<SalesOrderLine> lines,
-            Map<Long, CancelledQuantityProjection> cancellations
-    ) {
-        List<Long> lineIds = lines.stream().map(SalesOrderLine::getId).toList();
-        if (lineIds.isEmpty()) {
-            return Map.of();
-        }
-
-        Map<Long, BigDecimal> reservedByLine = inventoryService.findOpenQtyBySalesOrderLines(lineIds);
-        Map<Long, BigDecimal> cancelledByLine = new HashMap<>();
-        cancellations.forEach((lineId, cancellation) -> cancelledByLine.put(lineId, cancellation.cancelledQty()));
-        Map<Long, PurchaseSupply> purchaseByLine = purchaseSupplyProvider.findBySalesOrderLines(lineIds);
-        Map<Long, ShipmentQuantity> shipmentsByLine = salesOrderQuantities.findShipments(lineIds);
-
-        Map<Long, Supply> supplies = new HashMap<>();
-        for (SalesOrderLine line : lines) {
-            supplies.put(line.getId(), toSupply(line, reservedByLine, cancelledByLine, purchaseByLine, shipmentsByLine));
-        }
-
-        return supplies;
-    }
-
-    /**
      * 缺料清單：先依偏好供應商縮小範圍，再算尚待規劃，只留大於 0 的明細
      *
      * @param lines               已核准 SO 的明細，已依交期排序
@@ -345,7 +306,7 @@ public class SalesOrderAssembler {
                         || preferredSupplierId.equals(items.get(line.getCompanyItemId()).getPreferredSupplierId()))
                 .toList();
 
-        Map<Long, Supply> supplies = findSupplies(candidateLines);
+        Map<Long, Supply> supplies = salesOrderSupplyQuantities.findSupplies(candidateLines);
         List<SalesOrderLine> shortageLines = candidateLines.stream()
                 .filter(line -> supplies.get(line.getId()).unplannedQty().signum() > 0)
                 .toList();
@@ -389,46 +350,6 @@ public class SalesOrderAssembler {
                     );
                 })
                 .toList();
-    }
-
-    /**
-     * 尚待規劃 ＝ 有效訂購量 － 已出貨 － 已預留 － 已規劃未下單 － 採購在途，最低為 0
-     * 有效訂購量 ＝ 訂購基準數量 － 已核准取消量；已規劃未下單與採購在途由採購模組提供，已出貨與進行中 DO 由出貨模組提供
-     * 進行中 DO 的數量仍在預留裡，所以不另外扣
-     */
-    private Supply toSupply(
-            SalesOrderLine line,
-            Map<Long, BigDecimal> reservedByLine,
-            Map<Long, BigDecimal> cancelledByLine,
-            Map<Long, PurchaseSupply> purchaseByLine,
-            Map<Long, ShipmentQuantity> shipmentsByLine
-    ) {
-        BigDecimal reservedQty = reservedByLine.getOrDefault(line.getId(), BigDecimal.ZERO);
-        PurchaseSupply purchase = purchaseByLine.getOrDefault(line.getId(), PurchaseSupply.NONE);
-        BigDecimal plannedNotOrderedQty = purchase.plannedNotOrderedQty();
-        BigDecimal inTransitQty = purchase.inTransitQty();
-        ShipmentQuantity shipment = shipmentsByLine.getOrDefault(line.getId(), ShipmentQuantity.NONE);
-        BigDecimal shippedQty = shipment.shippedQty();
-        BigDecimal cancelledQty = cancelledByLine.getOrDefault(line.getId(), BigDecimal.ZERO);
-
-        BigDecimal unplannedQty = line.getBaseQty()
-                .subtract(cancelledQty)
-                .subtract(shippedQty)
-                .subtract(reservedQty)
-                .subtract(plannedNotOrderedQty)
-                .subtract(inTransitQty)
-                .max(BigDecimal.ZERO);
-
-        return new Supply(
-                reservedQty,
-                plannedNotOrderedQty,
-                inTransitQty,
-                shipment.deliveringQty(),
-                shippedQty,
-                cancelledQty,
-                unplannedQty,
-                purchase.purchaseOrders()
-        );
     }
 
     private SalesOrderDetailResponse.UserRef userRef(Long userId) {
