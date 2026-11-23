@@ -24,7 +24,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Objects;
 
 @Service
@@ -37,6 +39,7 @@ public class CustomerPriceServiceImpl implements CustomerPriceService {
     private final ApprovalService approvalService;
     private final CurrentUserProvider currentUserProvider;
     private final CustomerPriceMapper customerPriceMapper;
+    private final Clock clock;
 
     @Override
     @PreAuthorize("hasAuthority('CUSTOMER_PRICE_VIEW')")
@@ -66,7 +69,8 @@ public class CustomerPriceServiceImpl implements CustomerPriceService {
         CustomerItemMapping mapping =
                 customerPriceRules.lockUsableMapping(request.customerItemMappingId());
         customerPriceRules.ensurePricingUnitAllowed(mapping, request.pricingUnit());
-        PricePeriods.validateRequested(request.effectiveFrom(), request.effectiveTo());
+        LocalDate today = LocalDate.now(clock);
+        PricePeriods.validateRequested(request.effectiveFrom(), request.effectiveTo(), today);
 
         //同一客戶料號與計價單位同時最多一筆待覆核
         if (customerPriceRepository.existsByCustomerItemMappingIdAndPricingUnitAndStatus(
@@ -82,7 +86,7 @@ public class CustomerPriceServiceImpl implements CustomerPriceService {
                 customerPriceRules.findLatestVersion(mapping.getId(), request.pricingUnit())
                         .map(CustomerPrice::getEffectiveFrom)
                         .orElse(null),
-                PricePeriods.resolveEffectiveFrom(request.effectiveFrom())
+                PricePeriods.resolveEffectiveFrom(request.effectiveFrom(), today)
         );
 
         CustomerPrice price = new CustomerPrice(

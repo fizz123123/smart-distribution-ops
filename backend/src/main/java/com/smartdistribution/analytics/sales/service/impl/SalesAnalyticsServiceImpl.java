@@ -31,9 +31,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -43,14 +43,13 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class SalesAnalyticsServiceImpl implements SalesAnalyticsService {
 
-    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
-
     private final SalesAnalyticsRepository salesAnalyticsRepository;
     private final SalesSourceRepository salesSourceRepository;
     private final SalesAnalysisMapper salesAnalysisMapper;
     private final SalesSourceMapper salesSourceMapper;
     private final AnalyticsScope analyticsScope;
     private final SalesOrderSupplyService salesOrderSupplyService;
+    private final Clock clock;
 
     @Override
     @PreAuthorize("hasAnyAuthority('DASHBOARD_VIEW_ALL', 'ANALYTICS_SALES_VIEW_ALL', 'ANALYTICS_SALES_VIEW')")
@@ -61,7 +60,7 @@ public class SalesAnalyticsServiceImpl implements SalesAnalyticsService {
             Long companyItemId,
             Long responsibleSalesUserId
     ) {
-        LocalDate today = LocalDate.now(TAIPEI);
+        LocalDate today = LocalDate.now(clock);
         AnalyticsPeriod period = AnalyticsPeriod.resolve(from, to, today);
         AnalyticsFilter filter = toFilter(customerId, companyItemId, responsibleSalesUserId);
 
@@ -105,7 +104,7 @@ public class SalesAnalyticsServiceImpl implements SalesAnalyticsService {
             Pageable pageable
     ) {
         rejectSort(pageable);
-        AnalyticsPeriod period = AnalyticsPeriod.resolve(from, to, LocalDate.now(TAIPEI));
+        AnalyticsPeriod period = AnalyticsPeriod.resolve(from, to, LocalDate.now(clock));
         AnalyticsFilter filter = toFilter(customerId, companyItemId, responsibleSalesUserId);
 
         return PageResponse.from(salesSourceRepository
@@ -124,7 +123,7 @@ public class SalesAnalyticsServiceImpl implements SalesAnalyticsService {
             Pageable pageable
     ) {
         rejectSort(pageable);
-        AnalyticsPeriod period = AnalyticsPeriod.resolve(from, to, LocalDate.now(TAIPEI));
+        AnalyticsPeriod period = AnalyticsPeriod.resolve(from, to, LocalDate.now(clock));
         AnalyticsFilter filter = toFilter(customerId, companyItemId, responsibleSalesUserId);
 
         return PageResponse.from(salesSourceRepository
@@ -143,7 +142,7 @@ public class SalesAnalyticsServiceImpl implements SalesAnalyticsService {
             Pageable pageable
     ) {
         rejectSort(pageable);
-        AnalyticsPeriod period = AnalyticsPeriod.resolve(from, to, LocalDate.now(TAIPEI));
+        AnalyticsPeriod period = AnalyticsPeriod.resolve(from, to, LocalDate.now(clock));
         AnalyticsFilter filter = toFilter(customerId, companyItemId, responsibleSalesUserId);
 
         return PageResponse.from(salesSourceRepository
@@ -162,7 +161,7 @@ public class SalesAnalyticsServiceImpl implements SalesAnalyticsService {
             Pageable pageable
     ) {
         rejectSort(pageable);
-        LocalDate today = LocalDate.now(TAIPEI);
+        LocalDate today = LocalDate.now(clock);
         AnalyticsFilter filter = toFilter(customerId, companyItemId, responsibleSalesUserId);
         List<BacklogLineProjection> backlogLines = salesAnalyticsRepository.findBacklogLines(filter);
         Map<Long, SupplyStatus> supplyStatuses = findSupplyStatuses(backlogLines, today);

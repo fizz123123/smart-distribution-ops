@@ -23,7 +23,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Objects;
 
 @Service
@@ -36,6 +38,7 @@ public class StandardPriceServiceImpl implements StandardPriceService {
     private final ApprovalService approvalService;
     private final CurrentUserProvider currentUserProvider;
     private final StandardPriceMapper standardPriceMapper;
+    private final Clock clock;
 
     @Override
     @PreAuthorize("hasAuthority('STANDARD_PRICE_VIEW')")
@@ -58,7 +61,8 @@ public class StandardPriceServiceImpl implements StandardPriceService {
         //先鎖定料號列：同時建立同一料號的標準售價時，後到者會等前一筆完成才繼續檢查
         CompanyItem item = standardPriceRules.lockUsableItem(request.companyItemId());
         standardPriceRules.ensurePricingUnitAllowed(item, request.pricingUnit());
-        PricePeriods.validateRequested(request.effectiveFrom(), request.effectiveTo());
+        LocalDate today = LocalDate.now(clock);
+        PricePeriods.validateRequested(request.effectiveFrom(), request.effectiveTo(), today);
 
         //同一料號與計價單位同時最多一筆待覆核
         if (standardPriceRepository.existsByCompanyItemIdAndPricingUnitAndStatus(
@@ -74,7 +78,7 @@ public class StandardPriceServiceImpl implements StandardPriceService {
                 standardPriceRules.findLatestVersion(item.getId(), request.pricingUnit())
                         .map(StandardPrice::getEffectiveFrom)
                         .orElse(null),
-                PricePeriods.resolveEffectiveFrom(request.effectiveFrom())
+                PricePeriods.resolveEffectiveFrom(request.effectiveFrom(), today)
         );
 
         StandardPrice price = new StandardPrice(

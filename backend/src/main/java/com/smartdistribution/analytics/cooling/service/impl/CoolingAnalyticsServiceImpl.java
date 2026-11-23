@@ -16,8 +16,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -27,12 +27,11 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class CoolingAnalyticsServiceImpl implements CoolingAnalyticsService {
 
-    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
-
     private final CoolingAnalyticsRepository coolingAnalyticsRepository;
     private final CoolingAnalysisMapper coolingAnalysisMapper;
     private final AnalyticsScope analyticsScope;
     private final SalesOrderSupplyService salesOrderSupplyService;
+    private final Clock clock;
 
     @Override
     @PreAuthorize("hasAnyAuthority('DASHBOARD_VIEW_ALL', 'ANALYTICS_SALES_VIEW_ALL', 'ANALYTICS_SALES_VIEW')")
@@ -43,7 +42,7 @@ public class CoolingAnalyticsServiceImpl implements CoolingAnalyticsService {
             Long customerId,
             Long responsibleSalesUserId
     ) {
-        LocalDate today = LocalDate.now(TAIPEI);
+        LocalDate today = LocalDate.now(clock);
         LocalDate baseDate = AnalyticsPeriod.resolveAsOf(asOf, today);
         AnalyticsPeriod period = AnalyticsPeriod.resolve(from, to, today);
         //交易降溫看的是客戶，不用料號篩選

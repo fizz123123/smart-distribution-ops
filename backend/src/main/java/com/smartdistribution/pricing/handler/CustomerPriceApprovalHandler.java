@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -30,6 +31,7 @@ public class CustomerPriceApprovalHandler implements ApprovalHandler {
     private final CustomerPriceRepository customerPriceRepository;
     private final CustomerPriceRules customerPriceRules;
     private final StandardPriceRepository standardPriceRepository;
+    private final Clock clock;
 
     @Override
     public ApprovalTargetType targetType() {
@@ -49,7 +51,10 @@ public class CustomerPriceApprovalHandler implements ApprovalHandler {
 
         List<String> warnings = new ArrayList<>();
         if (price.getStatus() == PriceStatus.PENDING_REVIEW) {
-            LocalDate effectiveFrom = PricePeriods.resolveEffectiveFrom(price.getEffectiveFrom());
+            LocalDate effectiveFrom = PricePeriods.resolveEffectiveFrom(
+                    price.getEffectiveFrom(),
+                    LocalDate.now(clock)
+            );
             Optional<CustomerPrice> latest = findLatestVersion(price);
 
             if (latest.isPresent()
@@ -79,7 +84,10 @@ public class CustomerPriceApprovalHandler implements ApprovalHandler {
                 customerPriceRules.lockUsableMapping(price.getCustomerItemMapping().getId());
         customerPriceRules.ensurePricingUnitAllowed(mapping, price.getPricingUnit());
 
-        LocalDate effectiveFrom = PricePeriods.resolveEffectiveFrom(price.getEffectiveFrom());
+        LocalDate effectiveFrom = PricePeriods.resolveEffectiveFrom(
+                price.getEffectiveFrom(),
+                LocalDate.now(clock)
+        );
         PricePeriods.ensureNotEnded(effectiveFrom, price.getEffectiveTo());
 
         Optional<CustomerPrice> latest = findLatestVersion(price);

@@ -10,18 +10,17 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneId;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ReceivableAnalyticsServiceImpl implements ReceivableAnalyticsService {
 
-    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
-
     private final ReceivableAnalyticsRepository receivableAnalyticsRepository;
     private final ReceivableAnalysisMapper receivableAnalysisMapper;
+    private final Clock clock;
 
     @Override
     @PreAuthorize("hasAnyAuthority('DASHBOARD_VIEW_ALL', 'ANALYTICS_RECEIVABLE_VIEW')")
@@ -30,7 +29,7 @@ public class ReceivableAnalyticsServiceImpl implements ReceivableAnalyticsServic
         AnalyticsFilter filter = new AnalyticsFilter(customerId, null, responsibleSalesUserId);
 
         return receivableAnalysisMapper.toResponse(
-                LocalDate.now(TAIPEI),
+                LocalDate.now(clock),
                 receivableAnalyticsRepository.findTotals(filter),
                 receivableAnalyticsRepository.findOpenReceivables(filter)
         );

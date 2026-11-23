@@ -3,11 +3,17 @@ package com.smartdistribution.pricing.mapper;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.pricing.dto.response.CustomerPriceResponse;
 import com.smartdistribution.pricing.entity.CustomerPrice;
-import com.smartdistribution.pricing.service.PricePeriods;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
+import java.time.LocalDate;
+
 @Component
+@RequiredArgsConstructor
 public class CustomerPriceMapper {
+
+    private final Clock clock;
 
     public CustomerPriceResponse toResponse(CustomerPrice price) {
         CustomerItemMapping mapping = price.getCustomerItemMapping();
@@ -22,7 +28,7 @@ public class CustomerPriceMapper {
                 price.getUnitPriceExcludingTax(),
                 price.getEffectiveFrom(),
                 price.getEffectiveTo(),
-                price.isExpiredOn(PricePeriods.today()),
+                price.isExpiredOn(LocalDate.now(clock)),
                 price.getStatus(),
                 price.getCreatedBy(),
                 price.getCreatedAt(),

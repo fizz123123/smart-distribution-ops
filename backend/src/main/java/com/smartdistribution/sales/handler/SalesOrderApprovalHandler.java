@@ -23,9 +23,9 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.text.NumberFormat;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -37,13 +37,12 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class SalesOrderApprovalHandler implements ApprovalHandler {
 
-    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
-
     private final SalesOrderRepository salesOrderRepository;
     private final SalesOrderLineRepository salesOrderLineRepository;
     private final SalesOrderMasterData salesOrderMasterData;
     private final PriceLookupService priceLookupService;
     private final InventoryService inventoryService;
+    private final Clock clock;
 
     @Override
     public ApprovalTargetType targetType() {
@@ -139,13 +138,13 @@ public class SalesOrderApprovalHandler implements ApprovalHandler {
         List<String> warnings = new ArrayList<>();
 
         //補登的訂單：價格是依訂單日期取的，提醒主管確認日期合理
-        LocalDate submittedDate = LocalDate.ofInstant(salesOrder.getSubmittedAt(), TAIPEI);
+        LocalDate submittedDate = LocalDate.ofInstant(salesOrder.getSubmittedAt(), clock.getZone());
         if (salesOrder.getOrderDate().isBefore(submittedDate)) {
             warnings.add("訂單日期 " + salesOrder.getOrderDate()
                     + "，送審日 " + submittedDate + "，價格依訂單日期計算");
         }
 
-        LocalDate today = LocalDate.now(TAIPEI);
+        LocalDate today = LocalDate.now(clock);
         for (SalesOrderLine line : lines) {
             String prefix = "第 " + line.getLineNo() + " 行 " + line.getCustomerItemCode() + "：";
 

@@ -17,8 +17,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -30,13 +30,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ReceivableAssembler {
 
-    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
-
     private final ReceivableLineRepository receivableLineRepository;
     private final PaymentAllocationRepository paymentAllocationRepository;
     private final ReceivableMasterData receivableMasterData;
     private final ReceivableBalances receivableBalances;
     private final UserDirectoryService userDirectoryService;
+    private final Clock clock;
 
     //清單頁一次查好這一頁的客戶與已收金額
     public Page<ReceivableSummaryResponse> toSummaries(Page<Receivable> receivables) {
@@ -46,7 +45,7 @@ public class ReceivableAssembler {
         Map<Long, BigDecimal> paidAmounts = receivableBalances.findPaidAmounts(
                 receivables.stream().map(Receivable::getId).toList()
         );
-        LocalDate today = LocalDate.now(TAIPEI);
+        LocalDate today = LocalDate.now(clock);
 
         return receivables.map(receivable -> {
             Customer customer = customers.get(receivable.getCustomerId());
@@ -75,7 +74,7 @@ public class ReceivableAssembler {
         Map<Long, BigDecimal> paidAmounts = receivableBalances.findPaidAmounts(
                 receivables.stream().map(Receivable::getId).toList()
         );
-        LocalDate today = LocalDate.now(TAIPEI);
+        LocalDate today = LocalDate.now(clock);
 
         return receivables.stream()
                 .map(receivable -> new OutstandingReceivableResponse(
@@ -121,7 +120,7 @@ public class ReceivableAssembler {
                 ),
                 receivable.getPaymentTerm(),
                 receivable.getDueDate(),
-                receivable.dueStatus(LocalDate.now(TAIPEI)),
+                receivable.dueStatus(LocalDate.now(clock)),
                 receivable.getUntaxedAmount(),
                 receivable.getTaxAmount(),
                 receivable.getTotalAmount(),

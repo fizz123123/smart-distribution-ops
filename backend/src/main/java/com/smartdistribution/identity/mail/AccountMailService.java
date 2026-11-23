@@ -15,7 +15,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.util.HtmlUtils;
 
 import java.io.UnsupportedEncodingException;
-import java.time.ZoneId;
+import java.time.Clock;
 import java.time.format.DateTimeFormatter;
 
 /**
@@ -29,11 +29,12 @@ import java.time.format.DateTimeFormatter;
 public class AccountMailService {
 
     private static final String SENDER_NAME = "智慧營運管理系統";
-    private static final DateTimeFormatter EXPIRY_FORMAT =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.of("Asia/Taipei"));
+    //時區由注入的 Clock 決定，格式化時再套上
+    private static final DateTimeFormatter EXPIRY_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final JavaMailSender mailSender;
     private final AccountProperties accountProperties;
+    private final Clock clock;
 
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -78,7 +79,7 @@ public class AccountMailService {
         }
 
         String link = accountProperties.frontendBaseUrl() + "/set-password?token=" + event.rawToken();
-        String expiresAt = EXPIRY_FORMAT.format(event.expiresAt());
+        String expiresAt = EXPIRY_FORMAT.withZone(clock.getZone()).format(event.expiresAt());
 
         String name = HtmlUtils.htmlEscape(event.name(), "UTF-8");
 

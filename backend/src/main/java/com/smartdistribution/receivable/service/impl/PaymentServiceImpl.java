@@ -26,9 +26,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -42,14 +42,13 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class PaymentServiceImpl implements PaymentService {
 
-    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
-
     private final PaymentRepository paymentRepository;
     private final PaymentAllocationRepository paymentAllocationRepository;
     private final ReceivableRepository receivableRepository;
     private final ReceivableBalances receivableBalances;
     private final PaymentAssembler paymentAssembler;
     private final CurrentUserProvider currentUserProvider;
+    private final Clock clock;
 
     @Override
     @PreAuthorize("hasAuthority('PAYMENT_VIEW')")
@@ -147,7 +146,7 @@ public class PaymentServiceImpl implements PaymentService {
      * 金額大於 0、整數元由 request 的驗證註解處理
      */
     private void checkRequest(ConfirmPaymentRequest request) {
-        if (request.receivedDate().isAfter(LocalDate.now(TAIPEI))) {
+        if (request.receivedDate().isAfter(LocalDate.now(clock))) {
             throw new BusinessException(ErrorCode.PAYMENT_INVALID, "收款日期不能晚於今天。");
         }
 

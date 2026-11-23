@@ -20,8 +20,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.util.HtmlUtils;
 
 import java.io.UnsupportedEncodingException;
+import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
 import java.util.List;
@@ -39,12 +39,13 @@ import java.util.Set;
 public class ApprovalMailService {
 
     private static final String SENDER_NAME = "智慧營運管理系統";
-    private static final DateTimeFormatter TIME_FORMAT =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.of("Asia/Taipei"));
+    //時區由注入的 Clock 決定，格式化時再套上
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final JavaMailSender mailSender;
     private final AccountProperties accountProperties;
     private final UserDirectoryService userDirectoryService;
+    private final Clock clock;
 
     /**
      * 送審後通知有該類型核准權限的啟用中使用者，排除建立者與本輪送審者
@@ -150,7 +151,7 @@ public class ApprovalMailService {
     }
 
     private String format(Instant instant) {
-        return TIME_FORMAT.format(instant);
+        return TIME_FORMAT.withZone(clock.getZone()).format(instant);
     }
 
     private String htmlOf(

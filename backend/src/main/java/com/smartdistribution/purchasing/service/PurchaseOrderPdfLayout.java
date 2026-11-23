@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.text.DecimalFormat;
-import java.time.ZoneId;
+import java.time.Clock;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
@@ -27,11 +27,12 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PurchaseOrderPdfLayout {
 
-    private static final DateTimeFormatter DATE_FORMAT =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneId.of("Asia/Taipei"));
+    //時區由注入的 Clock 決定，格式化時再套上
+    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     private final PdfRenderer pdfRenderer;
     private final PurchaseOrderMasterData purchaseOrderMasterData;
+    private final Clock clock;
 
     public byte[] render(PurchaseOrder purchaseOrder, Supplier supplier, List<PurchaseOrderLine> lines) {
         Font title = pdfRenderer.boldFont(18);
@@ -45,7 +46,7 @@ public class PurchaseOrderPdfLayout {
 
             document.add(pdfRenderer.paragraph(
                     "採購單號：" + purchaseOrder.getPoNumber()
-                            + "　　核准日期：" + DATE_FORMAT.format(purchaseOrder.getApprovedAt()),
+                            + "　　核准日期：" + DATE_FORMAT.withZone(clock.getZone()).format(purchaseOrder.getApprovedAt()),
                     text
             ));
             document.add(pdfRenderer.paragraph(

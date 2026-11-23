@@ -12,7 +12,6 @@ import com.smartdistribution.masterdata.companyitem.entity.CompanyItem;
 import com.smartdistribution.masterdata.companyitem.entity.ItemUnitConversion;
 import com.smartdistribution.masterdata.companyitem.repository.CompanyItemRepository;
 import com.smartdistribution.masterdata.companyitem.repository.ItemUnitConversionRepository;
-import com.smartdistribution.pricing.service.PricePeriods;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,6 +27,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
@@ -54,6 +54,10 @@ class StandardPriceApiIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    //和正式程式用同一個時鐘取「今天」
+    @Autowired
+    private Clock clock;
 
     @Autowired
     private AppUserRepository userRepository;
@@ -154,7 +158,7 @@ class StandardPriceApiIntegrationTest {
         String sales = login(createUser("replace-sales", "SALES"));
         String salesManager = login(createUser("replace-manager", "SALES_MANAGER"));
         CompanyItem item = createActiveItem();
-        LocalDate today = PricePeriods.today();
+        LocalDate today = LocalDate.now(clock);
 
         Long firstId = createPrice(sales, item.getId(), "PCS", "100.00");
         approve(salesManager, findPendingApprovalId(firstId)).andExpect(status().isOk());
@@ -195,7 +199,7 @@ class StandardPriceApiIntegrationTest {
         String sales = login(createUser("period-sales", "SALES"));
         String salesManager = login(createUser("period-manager", "SALES_MANAGER"));
         CompanyItem item = createActiveItem();
-        LocalDate today = PricePeriods.today();
+        LocalDate today = LocalDate.now(clock);
 
         performCreate(sales, item.getId(), "PCS", "100.00", today.minusDays(1))
                 .andExpect(status().isBadRequest())

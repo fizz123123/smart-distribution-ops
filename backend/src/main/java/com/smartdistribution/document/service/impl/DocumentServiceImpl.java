@@ -15,9 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.HexFormat;
 
 @Slf4j
@@ -26,10 +26,9 @@ import java.util.HexFormat;
 @Transactional(readOnly = true)
 public class DocumentServiceImpl implements DocumentService {
 
-    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
-
     private final DocumentFileRepository documentFileRepository;
     private final DocumentStorage documentStorage;
+    private final Clock clock;
 
     @Override
     @Transactional
@@ -46,7 +45,7 @@ public class DocumentServiceImpl implements DocumentService {
 
         //例：purchase-orders/2026/PO-000001.pdf
         String storageKey = documentType.getDirectory()
-                + "/" + LocalDate.now(TAIPEI).getYear()
+                + "/" + LocalDate.now(clock).getYear()
                 + "/" + documentNumber + ".pdf";
 
         //先登記再寫檔：登記違反唯一約束時不會留下檔案；寫檔失敗時登記隨交易回滾

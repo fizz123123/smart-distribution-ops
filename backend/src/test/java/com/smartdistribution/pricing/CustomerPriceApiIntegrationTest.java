@@ -20,7 +20,6 @@ import com.smartdistribution.pricing.entity.StandardPrice;
 import com.smartdistribution.pricing.repository.StandardPriceRepository;
 import com.smartdistribution.pricing.service.PriceLookupService;
 import com.smartdistribution.pricing.service.PriceLookupService.ApplicablePrice;
-import com.smartdistribution.pricing.service.PricePeriods;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +35,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -66,6 +66,10 @@ class CustomerPriceApiIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    //和正式程式用同一個時鐘取「今天」
+    @Autowired
+    private Clock clock;
 
     @Autowired
     private AppUserRepository userRepository;
@@ -288,7 +292,7 @@ class CustomerPriceApiIntegrationTest {
         String sales = login(createUser("schedule-sales", "SALES"));
         String manager = login(createUser("schedule-manager", "SALES_MANAGER"));
         CustomerItemMapping mapping = createActiveMapping();
-        LocalDate today = PricePeriods.today();
+        LocalDate today = LocalDate.now(clock);
 
         Long currentId = createPrice(sales, mapping.getId(), "PCS", "120.00");
         approve(manager, findPendingApprovalId(currentId)).andExpect(status().isOk());
@@ -329,7 +333,7 @@ class CustomerPriceApiIntegrationTest {
         String sales = login(createUser("period-sales", "SALES"));
         String manager = login(createUser("period-manager", "SALES_MANAGER"));
         CustomerItemMapping mapping = createActiveMapping();
-        LocalDate today = PricePeriods.today();
+        LocalDate today = LocalDate.now(clock);
 
         //不溯及既往、截止日不能早於生效日
         performCreate(sales, mapping.getId(), "PCS", "120.00", today.minusDays(1), null)
@@ -356,7 +360,7 @@ class CustomerPriceApiIntegrationTest {
         String sales = login(createUser("expired-sales", "SALES"));
         String manager = login(createUser("expired-manager", "SALES_MANAGER"));
         CustomerItemMapping mapping = createActiveMapping();
-        LocalDate today = PricePeriods.today();
+        LocalDate today = LocalDate.now(clock);
 
         Long priceId = createPrice(sales, mapping.getId(), "PCS", "120.00");
         approve(manager, findPendingApprovalId(priceId)).andExpect(status().isOk());
@@ -387,7 +391,7 @@ class CustomerPriceApiIntegrationTest {
         StandardPrice standardPrice = new StandardPrice(
                 mapping.getCompanyItem(), UnitOfMeasure.PCS, new BigDecimal("130.00"), null, null, 1L
         );
-        standardPrice.approve(1L, Instant.now(), PricePeriods.today());
+        standardPrice.approve(1L, Instant.now(), LocalDate.now(clock));
         standardPriceRepository.saveAndFlush(standardPrice);
 
         Long priceId = createPrice(sales, mapping.getId(), "PCS", "125.00");

@@ -43,9 +43,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -57,8 +57,6 @@ import java.util.Set;
 @Transactional(readOnly = true)
 public class SalesOrderServiceImpl implements SalesOrderService {
 
-    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
-
     private final SalesOrderRepository salesOrderRepository;
     private final SalesOrderLineRepository salesOrderLineRepository;
     private final SalesOrderMasterData salesOrderMasterData;
@@ -69,6 +67,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
     private final ApprovalService approvalService;
     private final UserDirectoryService userDirectoryService;
     private final CurrentUserProvider currentUserProvider;
+    private final Clock clock;
 
     @Override
     @PreAuthorize("hasAuthority('SO_VIEW')")
@@ -316,7 +315,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
 
     //訂單日期沒填就是今天；不能是未來日期，往前不限，由主管核准時判斷
     private LocalDate resolveOrderDate(LocalDate orderDate) {
-        LocalDate today = LocalDate.now(TAIPEI);
+        LocalDate today = LocalDate.now(clock);
 
         if (orderDate == null) {
             return today;

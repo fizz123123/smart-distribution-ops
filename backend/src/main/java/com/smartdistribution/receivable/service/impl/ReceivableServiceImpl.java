@@ -30,9 +30,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -46,8 +46,6 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class ReceivableServiceImpl implements ReceivableService {
 
-    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
-
     //台灣統一發票號碼：2 個英文字母加 8 位數字
     private static final Pattern INVOICE_NUMBER = Pattern.compile("[A-Z]{2}\\d{8}");
 
@@ -57,6 +55,7 @@ public class ReceivableServiceImpl implements ReceivableService {
     private final SalesOrderBillingService salesOrderBillingService;
     private final AuditService auditService;
     private final CurrentUserProvider currentUserProvider;
+    private final Clock clock;
 
     @Override
     @PreAuthorize("hasAuthority('RECEIVABLE_VIEW')")
@@ -70,7 +69,7 @@ public class ReceivableServiceImpl implements ReceivableService {
         String normalizedKeyword = keyword == null || keyword.isBlank() ? null : keyword.strip();
 
         //依到期狀態篩選時，只看還沒收清的
-        LocalDate today = LocalDate.now(TAIPEI);
+        LocalDate today = LocalDate.now(clock);
         LocalDate dueFrom = dueStatus == null ? null : dueStatus.from(today);
         LocalDate dueTo = dueStatus == null ? null : dueStatus.to(today);
 
@@ -218,7 +217,7 @@ public class ReceivableServiceImpl implements ReceivableService {
         if (!INVOICE_NUMBER.matcher(invoiceNumber).matches()) {
             throw new BusinessException(ErrorCode.RECEIVABLE_INVOICE_INVALID, "發票號碼須為 2 個英文字母加 8 位數字，例如 AB12345678。");
         }
-        if (invoiceDate.isAfter(LocalDate.now(TAIPEI))) {
+        if (invoiceDate.isAfter(LocalDate.now(clock))) {
             throw new BusinessException(ErrorCode.RECEIVABLE_INVOICE_INVALID, "發票日期不能晚於今天。");
         }
         if (receivableRepository.existsByExternalInvoiceNumberAndIdNot(invoiceNumber, receivableId)) {

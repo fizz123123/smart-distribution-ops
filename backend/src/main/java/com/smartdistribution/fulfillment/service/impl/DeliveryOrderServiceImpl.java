@@ -44,9 +44,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -62,8 +62,6 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class DeliveryOrderServiceImpl implements DeliveryOrderService {
 
-    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
-
     private final DeliveryOrderRepository deliveryOrderRepository;
     private final DeliveryOrderLineRepository deliveryOrderLineRepository;
     private final ShipmentQuantityProvider shipmentQuantityProvider;
@@ -75,6 +73,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
     private final ReceivableService receivableService;
     private final DocumentService documentService;
     private final CurrentUserProvider currentUserProvider;
+    private final Clock clock;
 
     @Override
     @PreAuthorize("hasAuthority('DO_VIEW')")
@@ -223,7 +222,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         if (!deliveryOrder.isReady()) {
             throw new BusinessException(ErrorCode.DO_STATUS_CONFLICT);
         }
-        if (request.actualShipmentDate().isAfter(LocalDate.now(TAIPEI))) {
+        if (request.actualShipmentDate().isAfter(LocalDate.now(clock))) {
             throw new BusinessException(ErrorCode.DO_SHIPMENT_DATE_INVALID);
         }
 

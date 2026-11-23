@@ -13,8 +13,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -23,19 +23,18 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class ShortageAnalyticsServiceImpl implements ShortageAnalyticsService {
 
-    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
-
     //平均採購週期與供應商表現看最近幾個月
     private static final int HISTORY_MONTHS = 6;
 
     private final ShortageAnalyticsRepository shortageAnalyticsRepository;
     private final ShortageAnalysisMapper shortageAnalysisMapper;
     private final SalesOrderSupplyService salesOrderSupplyService;
+    private final Clock clock;
 
     @Override
     @PreAuthorize("hasAnyAuthority('DASHBOARD_VIEW_ALL', 'ANALYTICS_SHORTAGE_VIEW')")
     public ShortageAnalysisResponse findShortageAnalysis(Long companyItemId) {
-        LocalDate today = LocalDate.now(TAIPEI);
+        LocalDate today = LocalDate.now(clock);
         LocalDate historyFrom = AnalyticsPeriod.startOfLastMonths(today, HISTORY_MONTHS);
         //尚待規劃用銷售模組的算法，和 SO 詳情、缺料清單一致
         List<ApprovedLineSupply> supplies = salesOrderSupplyService.findApprovedLineSupplies(companyItemId);

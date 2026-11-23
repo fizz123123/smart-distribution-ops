@@ -4,25 +4,14 @@ import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
 
 import java.time.LocalDate;
-import java.time.ZoneId;
 
 /**
  * 價格有效期間的共用規則：價格不溯及既往，生效日最早是核准當天
+ * 今天由呼叫端用注入的 Clock 取得後傳進來，這裡只放規則，不取時間
  */
 public final class PricePeriods {
 
-    private static final ZoneId TAIPEI = ZoneId.of("Asia/Taipei");
-
     private PricePeriods() {
-    }
-
-    /**
-     * 今天（台北時區）；價格的生效、過期都以台北的日期判斷
-     *
-     * @return 今天
-     */
-    public static LocalDate today() {
-        return LocalDate.now(TAIPEI);
     }
 
     /**
@@ -30,24 +19,24 @@ public final class PricePeriods {
      *
      * @param effectiveFrom 申請的生效日，null 代表核准當天
      * @param effectiveTo 截止日，null 代表不限期
+     * @param today 今天（台北時區）
      */
-    public static void validateRequested(LocalDate effectiveFrom, LocalDate effectiveTo) {
-        if (effectiveFrom != null && effectiveFrom.isBefore(today())) {
+    public static void validateRequested(LocalDate effectiveFrom, LocalDate effectiveTo, LocalDate today) {
+        if (effectiveFrom != null && effectiveFrom.isBefore(today)) {
             throw new BusinessException(ErrorCode.PRICE_PERIOD_INVALID);
         }
 
-        ensureNotEnded(resolveEffectiveFrom(effectiveFrom), effectiveTo);
+        ensureNotEnded(resolveEffectiveFrom(effectiveFrom, today), effectiveTo);
     }
 
     /**
      * 實際生效日：沒填，或核准時已經過了申請的生效日，都改成今天
      *
      * @param requestedFrom 申請的生效日
+     * @param today 今天（台北時區）
      * @return 實際生效日
      */
-    public static LocalDate resolveEffectiveFrom(LocalDate requestedFrom) {
-        LocalDate today = today();
-
+    public static LocalDate resolveEffectiveFrom(LocalDate requestedFrom, LocalDate today) {
         return requestedFrom == null || requestedFrom.isBefore(today) ? today : requestedFrom;
     }
 
