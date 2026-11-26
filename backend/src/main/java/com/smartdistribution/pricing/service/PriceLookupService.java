@@ -60,7 +60,12 @@ public interface PriceLookupService {
             LocalDate effectiveTo
     ) {
 
-        //同一個來源的同一筆價格；比較單價不夠，兩個版本可能剛好同價
+        /**
+         * 是否為同一個來源的同一筆價格；只比單價不夠，兩個版本可能剛好同價
+         *
+         * @param other 另一個取價結果，可以是 null
+         * @return 來源與價格 ID 都相同時為 true
+         */
         public boolean isSamePrice(ApplicablePrice other) {
             return other != null && source == other.source && priceId.equals(other.priceId);
         }

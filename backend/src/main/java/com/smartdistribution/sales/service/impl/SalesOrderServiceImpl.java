@@ -54,6 +54,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -156,19 +157,20 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         Customer customer = findActiveCustomer(request.customerId());
         Long responsibleSalesUserId = resolveResponsibleSales(request.responsibleSalesUserId(), currentUserId);
         validateDraftLines(customer, request.lines(), request.requestedDeliveryDate());
+        LocalDate orderDate = resolveOrderDate(request.orderDate());
 
         SalesOrder salesOrder = new SalesOrder(
                 customer.getId(),
                 responsibleSalesUserId,
                 currentUserId,
                 SalesOrderChannel.WEB,
-                request.toDraftFields(resolveOrderDate(request.orderDate()))
+                request.toDraftFields(orderDate)
         );
 
         //SO 編號依 ID 產生，所以要先 insert 取得 id 再回填
         salesOrderRepository.saveAndFlush(salesOrder);
         salesOrder.assignNumber();
-        saveLines(salesOrder, request.lines());
+        saveLines(salesOrder, request.lines(), orderDate);
         salesOrderRepository.flush();
 
         return salesOrderAssembler.toDetail(salesOrder);
@@ -191,14 +193,15 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 currentUserProvider.getCurrentUserId()
         );
         validateDraftLines(customer, request.lines(), request.requestedDeliveryDate());
+        LocalDate orderDate = resolveOrderDate(request.orderDate());
 
         //明細整批取代：先刪除舊明細再寫入，行號才不會和舊資料的唯一約束衝突
         salesOrderLineRepository.deleteAllBySalesOrderId(salesOrderId);
-        saveLines(salesOrder, request.lines());
+        saveLines(salesOrder, request.lines(), orderDate);
         salesOrder.updateDraft(
                 customer.getId(),
                 responsibleSalesUserId,
-                request.toDraftFields(resolveOrderDate(request.orderDate())),
+                request.toDraftFields(orderDate),
                 Instant.now()
         );
         salesOrderRepository.flush();
@@ -408,7 +411,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
         }
     }
 
-    private void saveLines(SalesOrder salesOrder, List<SalesOrderLineRequest> lines) {
+    private void saveLines(SalesOrder salesOrder, List<SalesOrderLineRequest> lines, LocalDate orderDate) {
         for (int index = 0; index < lines.size(); index++) {
             SalesOrderLineRequest line = lines.get(index);
             salesOrderLineRepository.save(new SalesOrderLine(
@@ -417,10 +420,29 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                     line.customerItemMappingId(),
                     line.quantity(),
                     line.unit(),
-                    line.requestedUnitPrice(),
+                    requestedUnitPriceOrBlank(line, orderDate),
                     line.requestedDeliveryDate()
             ));
         }
+    }
+
+    //填的單價等於訂單日期的底價，就當作沒填：前端預填後原樣送回時，送審前底價變了才會跟著新底價走，
+    //不會把舊價格當成業務自己填的價格
+    private BigDecimal requestedUnitPriceOrBlank(SalesOrderLineRequest line, LocalDate orderDate) {
+        BigDecimal requested = line.requestedUnitPrice();
+        if (requested == null) {
+            return null;
+        }
+
+        Optional<ApplicablePrice> listPrice = priceLookupService.findApplicablePrice(
+                line.customerItemMappingId(),
+                line.unit(),
+                orderDate
+        );
+        boolean sameAsListPrice = listPrice.isPresent()
+                && listPrice.get().unitPriceExcludingTax().compareTo(requested) == 0;
+
+        return sameAsListPrice ? null : requested;
     }
 
     //未指定時是建立者；負責業務必須是啟用中、且有建立 SO 權限的使用者

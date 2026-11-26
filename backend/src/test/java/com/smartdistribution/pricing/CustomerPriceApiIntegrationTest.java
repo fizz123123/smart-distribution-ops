@@ -388,7 +388,9 @@ class CustomerPriceApiIntegrationTest {
                         .header("Authorization", bearer(manager)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.warnings", hasItem(containsString("核准後改為今天 " + today))))
-                .andExpect(jsonPath("$.warnings", hasItem(containsString("無法核准"))));
+                .andExpect(jsonPath("$.warnings", hasItem(containsString("無法核准"))))
+                //只能退回時不再顯示取代、價差等提示
+                .andExpect(jsonPath("$.warnings.length()").value(2));
 
         approve(manager, approvalId)
                 .andExpect(status().isBadRequest())

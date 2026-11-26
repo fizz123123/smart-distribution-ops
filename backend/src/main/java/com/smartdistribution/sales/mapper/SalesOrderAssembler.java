@@ -276,7 +276,8 @@ public class SalesOrderAssembler {
                             line.getBaseQty(),
                             line.getPriceSource(),
                             line.getPriceId(),
-                            line.getPriceSource() == null ? null : line.getPriceSource().isUnitPriceEditable(),
+                            //送審後明細已鎖定，不能再改單價
+                            null,
                             line.getRequestedUnitPrice(),
                             line.getListUnitPrice(),
                             line.getUnitPriceExcludingTax(),

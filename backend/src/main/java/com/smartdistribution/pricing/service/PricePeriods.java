@@ -88,11 +88,22 @@ public final class PricePeriods {
         }
 
         LocalDate effectiveFrom = resolveEffectiveFrom(requestedFrom, today);
-        if (effectiveTo != null && effectiveTo.isBefore(effectiveFrom)) {
+        if (endsBeforeStart(effectiveFrom, effectiveTo)) {
             notices.add("核准後的生效日 " + effectiveFrom + " 已晚於申請的截止日 " + effectiveTo + "，無法核准，請退回後重新申請");
         }
 
         return notices;
+    }
+
+    /**
+     * 截止日是否早於生效日；核准時生效日延到今天，就可能出現這種情況
+     *
+     * @param effectiveFrom 生效日
+     * @param effectiveTo 截止日，null 代表不限期
+     * @return 截止日早於生效日時為 true
+     */
+    public static boolean endsBeforeStart(LocalDate effectiveFrom, LocalDate effectiveTo) {
+        return effectiveTo != null && effectiveTo.isBefore(effectiveFrom);
     }
 
     /**
@@ -103,7 +114,7 @@ public final class PricePeriods {
      * @param effectiveTo 申請的截止日，null 代表不限期
      */
     public static void ensureNotEndedOnApproval(LocalDate effectiveFrom, LocalDate effectiveTo) {
-        if (effectiveTo != null && effectiveTo.isBefore(effectiveFrom)) {
+        if (endsBeforeStart(effectiveFrom, effectiveTo)) {
             throw new BusinessException(
                     ErrorCode.PRICE_PERIOD_INVALID,
                     "核准後的生效日 " + effectiveFrom + " 已晚於申請的截止日 " + effectiveTo + "，請退回後重新申請。"
@@ -118,7 +129,7 @@ public final class PricePeriods {
      * @param effectiveTo 截止日，null 代表不限期
      */
     public static void ensureNotEnded(LocalDate effectiveFrom, LocalDate effectiveTo) {
-        if (effectiveTo != null && effectiveTo.isBefore(effectiveFrom)) {
+        if (endsBeforeStart(effectiveFrom, effectiveTo)) {
             throw new BusinessException(ErrorCode.PRICE_PERIOD_INVALID);
         }
     }

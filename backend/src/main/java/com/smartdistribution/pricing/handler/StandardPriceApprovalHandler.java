@@ -47,12 +47,15 @@ public class StandardPriceApprovalHandler implements ApprovalHandler {
             warnings.addAll(PricePeriods.approvalNotices(price.getEffectiveFrom(), price.getEffectiveTo(), today));
 
             LocalDate effectiveFrom = PricePeriods.resolveEffectiveFrom(price.getEffectiveFrom(), today);
-            Optional<StandardPrice> latest = findLatestVersion(price);
 
-            if (latest.isPresent()
-                    && PricePeriods.stillEffectiveOn(latest.get().getEffectiveTo(), effectiveFrom)) {
-                warnings.add("核准後將取代目前價格 " + priceText(latest.get())
-                        + "，原價格於 " + effectiveFrom.minusDays(1) + " 結束");
+            //期間已經結束就只能退回，取代的提示沒有意義
+            if (!PricePeriods.endsBeforeStart(effectiveFrom, price.getEffectiveTo())) {
+                Optional<StandardPrice> latest = findLatestVersion(price);
+                if (latest.isPresent()
+                        && PricePeriods.stillEffectiveOn(latest.get().getEffectiveTo(), effectiveFrom)) {
+                    warnings.add("核准後將取代目前價格 " + priceText(latest.get())
+                            + "，原價格於 " + effectiveFrom.minusDays(1) + " 結束");
+                }
             }
         }
 

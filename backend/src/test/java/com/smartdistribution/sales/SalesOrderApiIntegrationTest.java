@@ -438,6 +438,29 @@ class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
     }
 
     @Test
+    void unitPriceEqualToListPriceIsStoredAsBlank() throws Exception {
+        String sales = login(createUser("prefilled-sales", "SALES"));
+        Customer customer = createActiveCustomer(PaymentTerm.DUE_0);
+        CompanyItem item = createActiveItem(UnitOfMeasure.PCS);
+        CustomerItemMapping mapping = createActiveMapping(customer, item);
+        createActiveStandardPrice(item, UnitOfMeasure.PCS, "200", LocalDate.of(2020, 1, 1));
+
+        //前端把預填的底價原樣送回：和底價相同就當作沒填
+        SalesOrderVersion draft = createDraft(sales, draftBody(customer, line(mapping, "2", UnitOfMeasure.PCS, "200")));
+        getOrder(sales, draft.id())
+                .andExpect(jsonPath("$.lines[0].requestedUnitPrice").doesNotExist())
+                .andExpect(jsonPath("$.lines[0].unitPriceExcludingTax").value(200));
+
+        //送審前客戶價格生效：業務沒改過價格，所以直接改用客戶價格，不會被擋
+        createActivePrice(mapping, UnitOfMeasure.PCS, "190", LocalDate.now(TAIPEI));
+        submit(sales, draft).andExpect(status().isOk());
+        getOrder(sales, draft.id())
+                .andExpect(jsonPath("$.lines[0].priceSource").value("CUSTOMER_PRICE"))
+                .andExpect(jsonPath("$.lines[0].unitPriceExcludingTax").value(190))
+                .andExpect(jsonPath("$.lines[0].unitPriceEditable").doesNotExist());
+    }
+
+    @Test
     void customerPriceStartingAfterDraftBlocksChangedUnitPrice() throws Exception {
         String sales = login(createUser("fixed-later-sales", "SALES"));
         Customer customer = createActiveCustomer(PaymentTerm.DUE_0);
