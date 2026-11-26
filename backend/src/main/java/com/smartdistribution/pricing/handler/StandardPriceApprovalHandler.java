@@ -59,7 +59,7 @@ public class StandardPriceApprovalHandler implements ApprovalHandler {
     }
 
     /**
-     * 核准規則和客戶價格相同：決定生效日、不能早於最後一個版本、最後一個版本截到前一天
+     * 核准規則和客戶價格相同：決定生效日、必須晚於最後一個版本、最後一個版本截到前一天
      */
     @Override
     public void onApproved(Long targetId, Long approverId, Long approvalRequestId) {
@@ -75,7 +75,7 @@ public class StandardPriceApprovalHandler implements ApprovalHandler {
         PricePeriods.ensureNotEnded(effectiveFrom, price.getEffectiveTo());
 
         Optional<StandardPrice> latest = findLatestVersion(price);
-        PricePeriods.ensureNotBefore(latest.map(StandardPrice::getEffectiveFrom).orElse(null), effectiveFrom);
+        PricePeriods.ensureAfterLatest(latest.map(StandardPrice::getEffectiveFrom).orElse(null), effectiveFrom);
         latest.ifPresent(previous -> previous.endBefore(effectiveFrom));
 
         price.approve(approverId, Instant.now(), effectiveFrom);

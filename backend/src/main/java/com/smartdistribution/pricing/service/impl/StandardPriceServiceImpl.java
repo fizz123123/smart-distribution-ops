@@ -74,7 +74,7 @@ public class StandardPriceServiceImpl implements StandardPriceService {
         }
 
         //先擋明顯排不進去的生效日；核准時會依實際生效日再檢查一次
-        PricePeriods.ensureNotBefore(
+        PricePeriods.ensureAfterLatest(
                 standardPriceRules.findLatestVersion(item.getId(), request.pricingUnit())
                         .map(StandardPrice::getEffectiveFrom)
                         .orElse(null),

@@ -133,6 +133,7 @@ public class StandardPrice extends TimestampedEntity {
 
     /**
      * 下一個版本核准時呼叫：本版本最晚只到下一版生效日的前一天，並轉為 REPLACED
+     * 下一版一定晚於本版生效日，所以截短後截止日不會早於生效日
      *
      * @param nextEffectiveFrom 下一個版本的生效日
      */

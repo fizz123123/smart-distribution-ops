@@ -41,17 +41,18 @@ public final class PricePeriods {
     }
 
     /**
-     * 新版本只能排在最後一個版本之後：生效日不能早於最後一個版本的生效日
-     * 同一天也可以，前一版就直接被取代、不會生效
+     * 新版本只能排在最後一個版本之後：生效日必須晚於最後一個版本的生效日，同一天也不行
+     * 同一條版本線每天最多一個價格，前一版被截短後截止日一定不早於自己的生效日
      *
      * @param latestFrom 最後一個版本的生效日，沒有任何版本時為 null
      * @param effectiveFrom 新版本的生效日
      */
-    public static void ensureNotBefore(LocalDate latestFrom, LocalDate effectiveFrom) {
-        if (latestFrom != null && effectiveFrom.isBefore(latestFrom)) {
+    public static void ensureAfterLatest(LocalDate latestFrom, LocalDate effectiveFrom) {
+        if (latestFrom != null && !effectiveFrom.isAfter(latestFrom)) {
             throw new BusinessException(
                     ErrorCode.PRICE_PERIOD_CONFLICT,
-                    "已有 " + latestFrom + " 起生效的價格，新價格的生效日不能早於這一天。"
+                    "已有 " + latestFrom + " 起的價格，新價格的生效日必須晚於這一天；"
+                            + "價格有誤請先撤銷再重新建立，只是調價請把生效日設在之後。"
             );
         }
     }

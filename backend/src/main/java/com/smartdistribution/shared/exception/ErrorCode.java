@@ -181,7 +181,7 @@ public enum ErrorCode {
     ),
     PRICE_PERIOD_CONFLICT(
             HttpStatus.CONFLICT,
-            "生效日不能早於目前最後一個價格版本的生效日。"
+            "生效日必須晚於目前最後一個價格版本的生效日。"
     ),
     COMPANY_ITEM_UNIT_CONVERSIONS_EXIST(
             HttpStatus.CONFLICT,

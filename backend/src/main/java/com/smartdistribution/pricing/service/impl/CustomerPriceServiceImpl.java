@@ -82,7 +82,7 @@ public class CustomerPriceServiceImpl implements CustomerPriceService {
         }
 
         //先擋明顯排不進去的生效日；核准時會依實際生效日再檢查一次
-        PricePeriods.ensureNotBefore(
+        PricePeriods.ensureAfterLatest(
                 customerPriceRules.findLatestVersion(mapping.getId(), request.pricingUnit())
                         .map(CustomerPrice::getEffectiveFrom)
                         .orElse(null),

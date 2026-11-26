@@ -72,7 +72,7 @@ public class CustomerPriceApprovalHandler implements ApprovalHandler {
     /**
      * 核准：
      * 1. 決定生效日：沒填或已經過了就是今天，價格不溯及既往
-     * 2. 生效日不能早於最後一個版本的生效日
+     * 2. 生效日必須晚於最後一個版本的生效日
      * 3. 最後一個版本截到新生效日的前一天，轉 REPLACED
      */
     @Override
@@ -91,7 +91,7 @@ public class CustomerPriceApprovalHandler implements ApprovalHandler {
         PricePeriods.ensureNotEnded(effectiveFrom, price.getEffectiveTo());
 
         Optional<CustomerPrice> latest = findLatestVersion(price);
-        PricePeriods.ensureNotBefore(latest.map(CustomerPrice::getEffectiveFrom).orElse(null), effectiveFrom);
+        PricePeriods.ensureAfterLatest(latest.map(CustomerPrice::getEffectiveFrom).orElse(null), effectiveFrom);
         latest.ifPresent(previous -> previous.endBefore(effectiveFrom));
 
         price.approve(approverId, Instant.now(), effectiveFrom);

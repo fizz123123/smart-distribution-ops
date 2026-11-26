@@ -217,6 +217,7 @@ class CustomerPriceApiIntegrationTest {
         String sales = login(salesUser);
         String manager = login(managerUser);
         CustomerItemMapping mapping = createActiveMapping();
+        LocalDate today = LocalDate.now(clock);
 
         Long firstPriceId = createPrice(sales, mapping.getId(), "PCS", "120.00");
         approve(manager, findPendingApprovalId(firstPriceId)).andExpect(status().isOk());
@@ -227,7 +228,16 @@ class CustomerPriceApiIntegrationTest {
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.reviewedBy").value(managerUser.getId()));
 
-        Long secondPriceId = createPrice(sales, mapping.getId(), "PCS", "125.00");
+        //同一條版本線每天最多一個價格：今天已有生效的價格，空白生效日（核准當天）建立不了
+        performCreate(sales, mapping.getId(), "PCS", "125.00")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PRICE_PERIOD_CONFLICT"))
+                .andExpect(jsonPath("$.message").value(containsString("撤銷")));
+
+        MvcResult created = performCreate(sales, mapping.getId(), "PCS", "125.00", today.plusDays(1), null)
+                .andExpect(status().isCreated())
+                .andReturn();
+        Long secondPriceId = ((Number) JsonPath.read(created.getResponse().getContentAsString(), "$.id")).longValue();
         Long secondApprovalId = findPendingApprovalId(secondPriceId);
 
         // 核准詳情以警示顯示將被取代的現行價格
@@ -240,6 +250,8 @@ class CustomerPriceApiIntegrationTest {
 
         assertThat(priceStatus(firstPriceId)).isEqualTo("REPLACED");
         assertThat(priceStatus(secondPriceId)).isEqualTo("ACTIVE");
+        //前一版截到今天，截止日不會早於自己的生效日
+        assertThat(effectiveTo(firstPriceId)).isEqualTo(today);
     }
 
     @Test
@@ -351,6 +363,11 @@ class CustomerPriceApiIntegrationTest {
         approve(manager, findPendingApprovalId(scheduledId)).andExpect(status().isOk());
 
         performCreate(sales, mapping.getId(), "PCS", "110.00", today.plusDays(5), null)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PRICE_PERIOD_CONFLICT"));
+
+        //和最後一個版本同一天也不行
+        performCreate(sales, mapping.getId(), "PCS", "110.00", today.plusDays(10), null)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("PRICE_PERIOD_CONFLICT"));
     }

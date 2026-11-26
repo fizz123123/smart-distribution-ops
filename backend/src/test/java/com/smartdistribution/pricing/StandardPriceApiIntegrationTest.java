@@ -211,6 +211,11 @@ class StandardPriceApiIntegrationTest {
         performCreate(sales, item.getId(), "PCS", "90.00", today.plusDays(5))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("PRICE_PERIOD_CONFLICT"));
+
+        //和最後一個版本同一天也不行
+        performCreate(sales, item.getId(), "PCS", "90.00", today.plusDays(10))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PRICE_PERIOD_CONFLICT"));
     }
 
     @Test
