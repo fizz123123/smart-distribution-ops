@@ -54,6 +54,12 @@ public class UserDirectoryServiceImpl implements UserDirectoryService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<UserContact> findActiveSalesUsers() {
+        return findActiveUsersWithPermission(SO_CREATE_PERMISSION);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<UserContact> findActiveUsersWithPermission(String permissionCode) {
         return userRepository.findAllWithPermission(permissionCode, AppUserStatus.ACTIVE, Instant.now())
                 .stream()

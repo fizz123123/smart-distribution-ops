@@ -20,6 +20,7 @@ import java.time.LocalDate;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -278,6 +279,33 @@ class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
                                 """.formatted(customer.getId(), warehouseUserId)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("SO_RESPONSIBLE_SALES_INVALID"));
+    }
+
+    @Test
+    void responsibleSalesOptionsListOnlyActiveUsersWhoCanCreateOrders() throws Exception {
+        String sales = login(createUser("options-sales", "SALES"));
+        String warehouse = login(createUser("options-warehouse", "WAREHOUSE"));
+        Long otherSalesId = createUser("options-other", "SALES").getId();
+        Long salesManagerId = createUser("options-manager", "SALES_MANAGER").getId();
+        Long warehouseUserId = createUser("options-no-permission", "WAREHOUSE").getId();
+        AppUser disabledSales = createUser("options-disabled", "SALES");
+        disabledSales.disable();
+        userRepository.saveAndFlush(disabledSales);
+
+        //業務看得到其他業務與業務主管，才能替別人建單；沒有建立 SO 權限或已停用的人不會出現
+        mockMvc.perform(get("/api/v1/sales-orders/responsible-sales-options")
+                        .header("Authorization", bearer(sales)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].id", hasItem(otherSalesId.intValue())))
+                .andExpect(jsonPath("$[*].id", hasItem(salesManagerId.intValue())))
+                .andExpect(jsonPath("$[*].id", not(hasItem(warehouseUserId.intValue()))))
+                .andExpect(jsonPath("$[*].id", not(hasItem(disabledSales.getId().intValue()))))
+                .andExpect(jsonPath("$[*].email").doesNotExist());
+
+        //不能查 SO 的角色拿不到人員清單
+        mockMvc.perform(get("/api/v1/sales-orders/responsible-sales-options")
+                        .header("Authorization", bearer(warehouse)))
+                .andExpect(status().isForbidden());
     }
 
     @Test

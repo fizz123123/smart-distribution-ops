@@ -2,6 +2,7 @@ package com.smartdistribution.sales.service;
 
 import com.smartdistribution.sales.dto.request.CreateSalesOrderRequest;
 import com.smartdistribution.sales.dto.request.UpdateSalesOrderRequest;
+import com.smartdistribution.sales.dto.response.ResponsibleSalesOptionResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderConfirmationFile;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderShortageResponse;
@@ -31,6 +32,14 @@ public interface SalesOrderService {
      * @param preferredSupplierId 偏好供應商篩選，null 代表不篩選
      */
     List<SalesOrderShortageResponse> findShortages(Long companyItemId, Long preferredSupplierId);
+
+    /**
+     * 負責業務的選項：和建立 SO 時檢查負責業務用同一條規則，選得到的人送出時一定會通過
+     * 查 SO 的人也拿得到，讓清單與分析可以依負責業務篩選
+     *
+     * @return 啟用中、可以建立 SO 的使用者，依姓名排序
+     */
+    List<ResponsibleSalesOptionResponse> findResponsibleSalesOptions();
 
     SalesOrderDetailResponse createSalesOrder(CreateSalesOrderRequest request);
 

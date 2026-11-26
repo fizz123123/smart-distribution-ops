@@ -19,6 +19,13 @@ public interface UserDirectoryService {
     boolean isActiveSalesUser(Long userId);
 
     /**
+     * 所有可以擔任 SO 負責業務的人，條件和 isActiveSalesUser 相同；給負責業務的下拉選單用
+     *
+     * @return 啟用中、有效權限包含 SO_CREATE 的使用者
+     */
+    List<UserContact> findActiveSalesUsers();
+
+    /**
      * 啟用中、而且有效權限包含指定權限的使用者，給寄通知信找收件人用
      * 有效權限包含角色的權限與有效期間內的個別授權
      */

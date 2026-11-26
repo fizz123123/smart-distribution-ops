@@ -2,6 +2,7 @@ package com.smartdistribution.sales.controller;
 
 import com.smartdistribution.sales.dto.request.CreateSalesOrderRequest;
 import com.smartdistribution.sales.dto.request.UpdateSalesOrderRequest;
+import com.smartdistribution.sales.dto.response.ResponsibleSalesOptionResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderConfirmationFile;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderShortageResponse;
@@ -68,6 +69,12 @@ public class SalesOrderController {
             @RequestParam(required = false) Long preferredSupplierId
     ) {
         return ResponseEntity.ok(salesOrderService.findShortages(companyItemId, preferredSupplierId));
+    }
+
+    //負責業務的下拉選單；人數不多，不分頁
+    @GetMapping("/responsible-sales-options")
+    public ResponseEntity<List<ResponsibleSalesOptionResponse>> findResponsibleSalesOptions() {
+        return ResponseEntity.ok(salesOrderService.findResponsibleSalesOptions());
     }
 
     @GetMapping("/{salesOrderId}")

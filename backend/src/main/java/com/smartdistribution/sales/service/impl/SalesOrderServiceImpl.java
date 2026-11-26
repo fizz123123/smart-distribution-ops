@@ -12,6 +12,7 @@ import com.smartdistribution.pricing.service.PriceLookupService;
 import com.smartdistribution.sales.dto.request.CreateSalesOrderRequest;
 import com.smartdistribution.sales.dto.request.SalesOrderLineRequest;
 import com.smartdistribution.sales.dto.request.UpdateSalesOrderRequest;
+import com.smartdistribution.sales.dto.response.ResponsibleSalesOptionResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderConfirmationFile;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderShortageResponse;
@@ -43,12 +44,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.text.Collator;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 
@@ -126,6 +130,22 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                 salesOrderLineRepository.findApprovedLines(companyItemId),
                 preferredSupplierId
         );
+    }
+
+    @Override
+    @PreAuthorize("hasAnyAuthority('SO_CREATE', 'SO_VIEW')")
+    public List<ResponsibleSalesOptionResponse> findResponsibleSalesOptions() {
+        //用繁體中文的排序規則排姓名，不用 Unicode 編碼順序
+        Comparator<ResponsibleSalesOptionResponse> byName = Comparator.comparing(
+                ResponsibleSalesOptionResponse::name,
+                Collator.getInstance(Locale.TAIWAN)
+        );
+
+        return userDirectoryService.findActiveSalesUsers()
+                .stream()
+                .map(user -> new ResponsibleSalesOptionResponse(user.id(), user.name()))
+                .sorted(byName)
+                .toList();
     }
 
     @Override
