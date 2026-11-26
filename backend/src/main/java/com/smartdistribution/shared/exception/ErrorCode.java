@@ -253,6 +253,10 @@ public enum ErrorCode {
             HttpStatus.BAD_REQUEST,
             "單價不能低於底價。"
     ),
+    SO_CUSTOMER_PRICE_FIXED(
+            HttpStatus.BAD_REQUEST,
+            "客戶價格不能修改單價。"
+    ),
     SO_PRICE_REVOKED(
             HttpStatus.CONFLICT,
             "引用的價格已撤銷，請退回後依目前價格重新送審。"

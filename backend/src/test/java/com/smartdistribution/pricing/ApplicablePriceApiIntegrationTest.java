@@ -55,9 +55,11 @@ class ApplicablePriceApiIntegrationTest extends SalesOrderTestSupport {
                 .andExpect(jsonPath("$.current.source").value("STANDARD_PRICE"))
                 .andExpect(jsonPath("$.current.priceId").value(standardPrice.getId()))
                 .andExpect(jsonPath("$.current.unitPriceExcludingTax").value(1200))
+                .andExpect(jsonPath("$.current.unitPriceEditable").value(true))
                 .andExpect(jsonPath("$.next.appliesFrom").value(today.plusDays(5).toString()))
                 .andExpect(jsonPath("$.next.price.source").value("CUSTOMER_PRICE"))
-                .andExpect(jsonPath("$.next.price.priceId").value(customerPrice.getId()));
+                .andExpect(jsonPath("$.next.price.priceId").value(customerPrice.getId()))
+                .andExpect(jsonPath("$.next.price.unitPriceEditable").value(false));
     }
 
     @Test

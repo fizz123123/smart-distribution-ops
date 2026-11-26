@@ -22,7 +22,8 @@ public record ApplicablePriceResponse(
             Long priceId,
             BigDecimal unitPriceExcludingTax,
             LocalDate effectiveFrom, //這個價格版本的效期
-            LocalDate effectiveTo
+            LocalDate effectiveTo,
+            boolean unitPriceEditable //標準售價可以調整單價，客戶價格不行；前端依此決定單價欄位要不要鎖
     ) {
     }
 

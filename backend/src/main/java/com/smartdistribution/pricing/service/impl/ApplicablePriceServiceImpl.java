@@ -55,7 +55,8 @@ public class ApplicablePriceServiceImpl implements ApplicablePriceService {
                 price.priceId(),
                 price.unitPriceExcludingTax(),
                 price.effectiveFrom(),
-                price.effectiveTo()
+                price.effectiveTo(),
+                price.source().isUnitPriceEditable()
         );
     }
 }

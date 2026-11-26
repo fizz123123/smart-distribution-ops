@@ -270,7 +270,7 @@ public class SalesOrderServiceImpl implements SalesOrderService {
 
     /**
      * 送審快照：對應、公司料號與客戶必須啟用；單位要是基準單位或已設定換算；
-     * 訂單日期要取得到價格（客戶價格優先，沒有就用標準售價），業務填的單價不能低於它；
+     * 訂單日期要取得到價格（客戶價格優先，沒有就用標準售價）；客戶價格不能改，標準售價只能往上調；
      * 每一行都要有實際交期；錯誤訊息帶行號，業務才知道要修哪一筆
      */
     private SalesOrderLine.Snapshot buildSnapshot(SalesOrderLine line, SalesOrder salesOrder) {
@@ -299,8 +299,14 @@ public class SalesOrderServiceImpl implements SalesOrderService {
                         prefix + "訂單日期 " + orderDate + " 沒有有效的「" + line.getUnit().getDisplayName() + "」價格，請先完成價格建檔與覆核。"
                 ));
 
-        //取到的價格就是底價；業務可以往上調，不能往下
+        //取到的價格就是底價；客戶價格不能改，標準售價可以往上調、不能往下
         BigDecimal listUnitPrice = price.unitPriceExcludingTax();
+        if (line.changesFixedPrice(price.source(), listUnitPrice)) {
+            throw new BusinessException(
+                    ErrorCode.SO_CUSTOMER_PRICE_FIXED,
+                    prefix + "使用客戶價格 " + listUnitPrice.toPlainString() + " 元，不能修改單價，請清除自訂單價。"
+            );
+        }
         if (line.isBelowListPrice(listUnitPrice)) {
             throw new BusinessException(
                     ErrorCode.SO_PRICE_BELOW_LIST_PRICE,

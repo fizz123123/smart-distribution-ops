@@ -370,17 +370,19 @@ class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
     }
 
     @Test
-    void unitPriceCanBeRaisedButNotBelowListPrice() throws Exception {
+    void standardPriceCanBeRaisedButNotBelowListPrice() throws Exception {
         String sales = login(createUser("override-sales", "SALES"));
         String salesManager = login(createUser("override-manager", "SALES_MANAGER"));
         Customer customer = createActiveCustomer(PaymentTerm.DUE_0);
-        CustomerItemMapping mapping = createActiveMapping(customer, createActiveItem(UnitOfMeasure.PCS));
-        createActivePrice(mapping, UnitOfMeasure.PCS, "200");
+        CompanyItem item = createActiveItem(UnitOfMeasure.PCS);
+        CustomerItemMapping mapping = createActiveMapping(customer, item);
+        createActiveStandardPrice(item, UnitOfMeasure.PCS, "200", LocalDate.of(2020, 1, 1));
 
         //低於底價：草稿可以存並提示，送審被擋
         SalesOrderVersion below = createDraft(sales, draftBody(customer, line(mapping, "2", UnitOfMeasure.PCS, "180")));
         getOrder(sales, below.id())
                 .andExpect(jsonPath("$.lines[0].listUnitPrice").value(200))
+                .andExpect(jsonPath("$.lines[0].unitPriceEditable").value(true))
                 .andExpect(jsonPath("$.warnings[0]").value(containsString("低於底價 200")));
         submit(sales, below)
                 .andExpect(status().isBadRequest())
@@ -407,6 +409,51 @@ class SalesOrderApiIntegrationTest extends SalesOrderTestSupport {
 
         assertThat(salesOrderBillingService.findForBilling(raisedId).lines().get(0).unitPriceExcludingTax())
                 .isEqualByComparingTo("230");
+    }
+
+    @Test
+    void customerPriceCannotBeChanged() throws Exception {
+        String sales = login(createUser("fixed-sales", "SALES"));
+        Customer customer = createActiveCustomer(PaymentTerm.DUE_0);
+        CompanyItem item = createActiveItem(UnitOfMeasure.PCS);
+        CustomerItemMapping mapping = createActiveMapping(customer, item);
+        createActivePrice(mapping, UnitOfMeasure.PCS, "200");
+
+        //客戶價格是議定價格：往上改也不行，草稿可以存但會提示，送審被擋
+        SalesOrderVersion raised = createDraft(
+                sales,
+                draftBody(customer, line(mapping, "2", UnitOfMeasure.PCS, "230"))
+        );
+        getOrder(sales, raised.id())
+                .andExpect(jsonPath("$.lines[0].priceSource").value("CUSTOMER_PRICE"))
+                .andExpect(jsonPath("$.lines[0].unitPriceEditable").value(false))
+                .andExpect(jsonPath("$.warnings", hasItem(containsString("不能修改單價"))));
+        submit(sales, raised)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("SO_CUSTOMER_PRICE_FIXED"))
+                .andExpect(jsonPath("$.message").value(containsString("客戶價格 200")));
+
+        //填的和客戶價格相同不算修改
+        createSubmittedOrder(sales, draftBody(customer, line(mapping, "2", UnitOfMeasure.PCS, "200")));
+    }
+
+    @Test
+    void customerPriceStartingAfterDraftBlocksChangedUnitPrice() throws Exception {
+        String sales = login(createUser("fixed-later-sales", "SALES"));
+        Customer customer = createActiveCustomer(PaymentTerm.DUE_0);
+        CompanyItem item = createActiveItem(UnitOfMeasure.PCS);
+        CustomerItemMapping mapping = createActiveMapping(customer, item);
+        createActiveStandardPrice(item, UnitOfMeasure.PCS, "200", LocalDate.of(2020, 1, 1));
+
+        //草稿時是標準售價，業務往上調；送審前客戶價格核准生效，送審時來源變成客戶價格
+        SalesOrderVersion draft = createDraft(sales, draftBody(customer, line(mapping, "2", UnitOfMeasure.PCS, "230")));
+        createActivePrice(mapping, UnitOfMeasure.PCS, "190", LocalDate.now(TAIPEI));
+
+        //不自動改掉業務填的單價，擋下並說明，金額不會在業務不知情時改變
+        submit(sales, draft)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("SO_CUSTOMER_PRICE_FIXED"))
+                .andExpect(jsonPath("$.message").value(containsString("客戶價格 190")));
     }
 
     @Test
