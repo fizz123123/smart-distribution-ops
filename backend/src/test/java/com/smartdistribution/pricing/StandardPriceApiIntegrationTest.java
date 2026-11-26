@@ -179,6 +179,23 @@ class StandardPriceApiIntegrationTest {
                 .andExpect(jsonPath("$.status").value("REPLACED"))
                 .andExpect(jsonPath("$.effectiveTo").value(today.plusDays(6).toString()));
 
+        //效期篩選：舊版今天仍生效，新版還沒生效
+        mockMvc.perform(get("/api/v1/standard-prices")
+                        .header("Authorization", bearer(sales))
+                        .param("companyItemId", item.getId().toString())
+                        .param("effectiveState", "EFFECTIVE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(firstId));
+        mockMvc.perform(get("/api/v1/standard-prices")
+                        .header("Authorization", bearer(sales))
+                        .param("companyItemId", item.getId().toString())
+                        .param("effectiveState", "UPCOMING"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(secondId))
+                .andExpect(jsonPath("$.content[0].effectiveState").value("UPCOMING"));
+
         //業務不能撤銷，業務主管可以
         mockMvc.perform(post("/api/v1/standard-prices/{id}/revoke", secondId)
                         .header("Authorization", bearer(sales))
@@ -209,6 +226,11 @@ class StandardPriceApiIntegrationTest {
         approve(salesManager, findPendingApprovalId(scheduledId)).andExpect(status().isOk());
 
         performCreate(sales, item.getId(), "PCS", "90.00", today.plusDays(5))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PRICE_PERIOD_CONFLICT"));
+
+        //和最後一個版本同一天也不行
+        performCreate(sales, item.getId(), "PCS", "90.00", today.plusDays(10))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("PRICE_PERIOD_CONFLICT"));
     }

@@ -164,6 +164,19 @@ public class SalesOrderLine {
         return requestedUnitPrice != null && requestedUnitPrice.compareTo(listUnitPrice) < 0;
     }
 
+    /**
+     * 業務是否改了不能改的價格：客戶價格是議定價格，單價只能留空或和底價相同
+     *
+     * @param source 取到的價格來源
+     * @param listUnitPrice 底價
+     * @return 改了客戶價格時為 true
+     */
+    public boolean changesFixedPrice(PriceSource source, BigDecimal listUnitPrice) {
+        return !source.isUnitPriceEditable()
+                && requestedUnitPrice != null
+                && requestedUnitPrice.compareTo(listUnitPrice) != 0;
+    }
+
     public void applySnapshot(Snapshot snapshot) {
         this.companyItemId = snapshot.companyItemId();
         this.customerItemCode = snapshot.customerItemCode();

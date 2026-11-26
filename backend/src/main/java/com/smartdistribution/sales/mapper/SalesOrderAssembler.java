@@ -8,6 +8,7 @@ import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemM
 import com.smartdistribution.masterdata.supplier.entity.Supplier;
 import com.smartdistribution.pricing.service.PriceLookupService;
 import com.smartdistribution.pricing.service.PriceLookupService.ApplicablePrice;
+import com.smartdistribution.pricing.service.PriceSource;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse.Line;
 import com.smartdistribution.sales.dto.response.SalesOrderDetailResponse;
 import com.smartdistribution.sales.dto.response.SalesOrderShortageResponse;
@@ -187,7 +188,10 @@ public class SalesOrderAssembler {
         }
 
         BigDecimal listUnitPrice = price.map(ApplicablePrice::unitPriceExcludingTax).orElse(null);
-        if (listUnitPrice != null && line.isBelowListPrice(listUnitPrice)) {
+        PriceSource priceSource = price.map(ApplicablePrice::source).orElse(null);
+        if (priceSource != null && line.changesFixedPrice(priceSource, listUnitPrice)) {
+            warnings.add(prefix + "使用客戶價格 " + listUnitPrice.toPlainString() + " 元，不能修改單價，無法送審");
+        } else if (listUnitPrice != null && line.isBelowListPrice(listUnitPrice)) {
             warnings.add(prefix + "單價 " + line.getRequestedUnitPrice().toPlainString()
                     + " 元低於底價 " + listUnitPrice.toPlainString() + " 元，無法送審");
         }
@@ -206,8 +210,9 @@ public class SalesOrderAssembler {
                 line.getUnit(),
                 factor.orElse(null),
                 factor.map(f -> SalesOrderAmounts.baseQty(line.getQuantity(), f)).orElse(null),
-                price.map(ApplicablePrice::source).orElse(null),
+                priceSource,
                 price.map(ApplicablePrice::priceId).orElse(null),
+                priceSource == null ? null : priceSource.isUnitPriceEditable(),
                 line.getRequestedUnitPrice(),
                 listUnitPrice,
                 unitPrice,
@@ -271,6 +276,8 @@ public class SalesOrderAssembler {
                             line.getBaseQty(),
                             line.getPriceSource(),
                             line.getPriceId(),
+                            //送審後明細已鎖定，不能再改單價
+                            null,
                             line.getRequestedUnitPrice(),
                             line.getListUnitPrice(),
                             line.getUnitPriceExcludingTax(),

@@ -56,16 +56,29 @@ public interface StandardPriceRepository extends JpaRepository<StandardPrice, Lo
     );
 
     //清單要顯示料號，一起載入避免 N+1
+    //效期篩選的規則和 PriceEffectiveState.of 相同；effectiveState 傳列舉名稱，null 代表不篩選
     @EntityGraph(attributePaths = "companyItem")
     @Query("""
             SELECT price
             FROM StandardPrice price
             WHERE (:companyItemId IS NULL OR price.companyItem.id = :companyItemId)
               AND (:status IS NULL OR price.status = :status)
+              AND (:effectiveState IS NULL OR (
+                  price.status IN :approvedStatuses
+                  AND (
+                      (:effectiveState = 'UPCOMING' AND price.effectiveFrom > :today)
+                      OR (:effectiveState = 'EFFECTIVE' AND price.effectiveFrom <= :today
+                          AND (price.effectiveTo IS NULL OR price.effectiveTo >= :today))
+                      OR (:effectiveState = 'EXPIRED' AND price.effectiveTo < :today)
+                  )
+              ))
             """)
-    Page<StandardPrice> searchByItemAndStatus(
+    Page<StandardPrice> searchPrices(
             @Param("companyItemId") Long companyItemId,
             @Param("status") PriceStatus status,
+            @Param("effectiveState") String effectiveState,
+            @Param("approvedStatuses") Collection<PriceStatus> approvedStatuses,
+            @Param("today") LocalDate today,
             Pageable pageable
     );
 }

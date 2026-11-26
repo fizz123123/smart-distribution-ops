@@ -131,7 +131,7 @@ public class CustomerPrice extends TimestampedEntity {
 
     /**
      * 下一個版本核准時呼叫：本版本最晚只到下一版生效日的前一天，並轉為 REPLACED
-     * 本來就更早結束的，截止日不變
+     * 本來就更早結束的，截止日不變；下一版一定晚於本版生效日，所以截短後截止日不會早於生效日
      *
      * @param nextEffectiveFrom 下一個版本的生效日
      */
@@ -145,16 +145,6 @@ public class CustomerPrice extends TimestampedEntity {
             this.effectiveTo = lastDay;
         }
         this.status = PriceStatus.REPLACED;
-    }
-
-    /**
-     * 截止日已經過了；過期只看日期，不改狀態
-     *
-     * @param today 今天
-     * @return 已過期時為 true
-     */
-    public boolean isExpiredOn(LocalDate today) {
-        return effectiveTo != null && effectiveTo.isBefore(today);
     }
 
     //撤銷代表價格有誤；被取代但還沒到期的版本也能撤銷，空出的期間不會自動接回前一版

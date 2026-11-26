@@ -217,6 +217,7 @@ class CustomerPriceApiIntegrationTest {
         String sales = login(salesUser);
         String manager = login(managerUser);
         CustomerItemMapping mapping = createActiveMapping();
+        LocalDate today = LocalDate.now(clock);
 
         Long firstPriceId = createPrice(sales, mapping.getId(), "PCS", "120.00");
         approve(manager, findPendingApprovalId(firstPriceId)).andExpect(status().isOk());
@@ -227,7 +228,16 @@ class CustomerPriceApiIntegrationTest {
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.reviewedBy").value(managerUser.getId()));
 
-        Long secondPriceId = createPrice(sales, mapping.getId(), "PCS", "125.00");
+        //同一條版本線每天最多一個價格：今天已有生效的價格，空白生效日（核准當天）建立不了
+        performCreate(sales, mapping.getId(), "PCS", "125.00")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PRICE_PERIOD_CONFLICT"))
+                .andExpect(jsonPath("$.message").value(containsString("撤銷")));
+
+        MvcResult created = performCreate(sales, mapping.getId(), "PCS", "125.00", today.plusDays(1), null)
+                .andExpect(status().isCreated())
+                .andReturn();
+        Long secondPriceId = ((Number) JsonPath.read(created.getResponse().getContentAsString(), "$.id")).longValue();
         Long secondApprovalId = findPendingApprovalId(secondPriceId);
 
         // 核准詳情以警示顯示將被取代的現行價格
@@ -240,6 +250,8 @@ class CustomerPriceApiIntegrationTest {
 
         assertThat(priceStatus(firstPriceId)).isEqualTo("REPLACED");
         assertThat(priceStatus(secondPriceId)).isEqualTo("ACTIVE");
+        //前一版截到今天，截止日不會早於自己的生效日
+        assertThat(effectiveTo(firstPriceId)).isEqualTo(today);
     }
 
     @Test
@@ -313,6 +325,32 @@ class CustomerPriceApiIntegrationTest {
         assertThat(priceStatus(currentId)).isEqualTo("REPLACED");
         assertThat(effectiveTo(currentId)).isEqualTo(today.plusDays(9));
 
+        //審核狀態和效期狀態分開：被取代的舊版今天仍生效，最新版 ACTIVE 但還沒生效
+        mockMvc.perform(get("/api/v1/customer-prices/{id}", currentId)
+                        .header("Authorization", bearer(sales)))
+                .andExpect(jsonPath("$.status").value("REPLACED"))
+                .andExpect(jsonPath("$.effectiveState").value("EFFECTIVE"));
+        mockMvc.perform(get("/api/v1/customer-prices/{id}", scheduledId)
+                        .header("Authorization", bearer(sales)))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.effectiveState").value("UPCOMING"));
+
+        //清單可以依效期狀態篩選
+        mockMvc.perform(get("/api/v1/customer-prices")
+                        .header("Authorization", bearer(sales))
+                        .param("customerItemMappingId", mapping.getId().toString())
+                        .param("effectiveState", "EFFECTIVE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(currentId));
+        mockMvc.perform(get("/api/v1/customer-prices")
+                        .header("Authorization", bearer(sales))
+                        .param("customerItemMappingId", mapping.getId().toString())
+                        .param("effectiveState", "UPCOMING"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(scheduledId));
+
         //生效日之前仍取用舊價格，生效日當天起取用新價格
         assertThat(applicablePriceId(mapping, today)).contains(currentId);
         assertThat(applicablePriceId(mapping, today.plusDays(9))).contains(currentId);
@@ -326,6 +364,39 @@ class CustomerPriceApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("REVOKED"));
         assertThat(applicablePriceId(mapping, today)).isEmpty();
+    }
+
+    @Test
+    void lateApprovalIsExplainedBeforeApprovingAndRejected() throws Exception {
+        String sales = login(createUser("late-sales", "SALES"));
+        String manager = login(createUser("late-manager", "SALES_MANAGER"));
+        CustomerItemMapping mapping = createActiveMapping();
+        LocalDate today = LocalDate.now(clock);
+
+        //模擬審核拖太久：申請的期間在核准前就已經結束
+        Long priceId = createPrice(sales, mapping.getId(), "PCS", "120.00");
+        jdbcTemplate.update(
+                "UPDATE customer_price SET effective_from = ?, effective_to = ? WHERE id = ?",
+                today.minusDays(9),
+                today.minusDays(5),
+                priceId
+        );
+        Long approvalId = findPendingApprovalId(priceId);
+
+        //核准前就看得到生效日會延後、而且已經超過截止日
+        mockMvc.perform(get("/api/v1/approval-requests/{id}", approvalId)
+                        .header("Authorization", bearer(manager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.warnings", hasItem(containsString("核准後改為今天 " + today))))
+                .andExpect(jsonPath("$.warnings", hasItem(containsString("無法核准"))))
+                //只能退回時不再顯示取代、價差等提示
+                .andExpect(jsonPath("$.warnings.length()").value(2));
+
+        approve(manager, approvalId)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PRICE_PERIOD_INVALID"))
+                .andExpect(jsonPath("$.message").value(containsString("請退回後重新申請")));
+        assertThat(priceStatus(priceId)).isEqualTo("PENDING_REVIEW");
     }
 
     @Test
@@ -353,6 +424,11 @@ class CustomerPriceApiIntegrationTest {
         performCreate(sales, mapping.getId(), "PCS", "110.00", today.plusDays(5), null)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("PRICE_PERIOD_CONFLICT"));
+
+        //和最後一個版本同一天也不行
+        performCreate(sales, mapping.getId(), "PCS", "110.00", today.plusDays(10), null)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PRICE_PERIOD_CONFLICT"));
     }
 
     @Test
@@ -376,7 +452,14 @@ class CustomerPriceApiIntegrationTest {
         mockMvc.perform(get("/api/v1/customer-prices/{id}", priceId)
                         .header("Authorization", bearer(sales)))
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
-                .andExpect(jsonPath("$.expired").value(true));
+                .andExpect(jsonPath("$.effectiveState").value("EXPIRED"));
+
+        mockMvc.perform(get("/api/v1/customer-prices")
+                        .header("Authorization", bearer(sales))
+                        .param("customerItemMappingId", mapping.getId().toString())
+                        .param("effectiveState", "EXPIRED"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(priceId));
 
         assertThat(applicablePriceId(mapping, today.minusDays(1))).contains(priceId);
         assertThat(applicablePriceId(mapping, today)).isEmpty();

@@ -30,6 +30,17 @@ public interface PriceLookupService {
     );
 
     /**
+     * 取價日期之後，適用的價格第一次改變的日期，以及改成哪個價格；規則和 findApplicablePrice 相同
+     * 可能改變的時間點：之後才開始的客戶價格、標準售價版本，以及目前價格到期的隔天
+     *
+     * @param customerItemMappingId 客戶料號對應 ID
+     * @param unit 計價單位，也就是訂購單位
+     * @param priceDate 取價日期
+     * @return 下一次變動；沒有已排定的變動時為空
+     */
+    Optional<PriceChange> findNextChange(Long customerItemMappingId, UnitOfMeasure unit, LocalDate priceDate);
+
+    /**
      * 引用的價格是否已撤銷；撤銷代表價格本身有誤，引用它的單據不應再被核准
      *
      * @param source 價格來源
@@ -44,7 +55,28 @@ public interface PriceLookupService {
     record ApplicablePrice(
             PriceSource source,
             Long priceId,
-            BigDecimal unitPriceExcludingTax
+            BigDecimal unitPriceExcludingTax,
+            LocalDate effectiveFrom,
+            LocalDate effectiveTo
+    ) {
+
+        /**
+         * 是否為同一個來源的同一筆價格；只比單價不夠，兩個版本可能剛好同價
+         *
+         * @param other 另一個取價結果，可以是 null
+         * @return 來源與價格 ID 都相同時為 true
+         */
+        public boolean isSamePrice(ApplicablePrice other) {
+            return other != null && source == other.source && priceId.equals(other.priceId);
+        }
+    }
+
+    /**
+     * 價格變動：從 appliesFrom 起改用 price；price 為 null 代表從那天起沒有價格
+     */
+    record PriceChange(
+            LocalDate appliesFrom,
+            ApplicablePrice price
     ) {
     }
 }

@@ -181,7 +181,7 @@ public enum ErrorCode {
     ),
     PRICE_PERIOD_CONFLICT(
             HttpStatus.CONFLICT,
-            "生效日不能早於目前最後一個價格版本的生效日。"
+            "生效日必須晚於目前最後一個價格版本的生效日。"
     ),
     COMPANY_ITEM_UNIT_CONVERSIONS_EXIST(
             HttpStatus.CONFLICT,
@@ -252,6 +252,10 @@ public enum ErrorCode {
     SO_PRICE_BELOW_LIST_PRICE(
             HttpStatus.BAD_REQUEST,
             "單價不能低於底價。"
+    ),
+    SO_CUSTOMER_PRICE_FIXED(
+            HttpStatus.BAD_REQUEST,
+            "客戶價格不能修改單價。"
     ),
     SO_PRICE_REVOKED(
             HttpStatus.CONFLICT,
