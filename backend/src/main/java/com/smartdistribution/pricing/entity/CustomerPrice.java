@@ -147,16 +147,6 @@ public class CustomerPrice extends TimestampedEntity {
         this.status = PriceStatus.REPLACED;
     }
 
-    /**
-     * 截止日已經過了；過期只看日期，不改狀態
-     *
-     * @param today 今天
-     * @return 已過期時為 true
-     */
-    public boolean isExpiredOn(LocalDate today) {
-        return effectiveTo != null && effectiveTo.isBefore(today);
-    }
-
     //撤銷代表價格有誤；被取代但還沒到期的版本也能撤銷，空出的期間不會自動接回前一版
     public void revoke(Long revokerId, String reason, Instant revokedAt) {
         if (!PriceStatus.APPROVED_VERSIONS.contains(status)) {

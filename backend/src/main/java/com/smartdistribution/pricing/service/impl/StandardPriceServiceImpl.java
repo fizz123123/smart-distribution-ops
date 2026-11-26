@@ -10,6 +10,7 @@ import com.smartdistribution.pricing.entity.PriceStatus;
 import com.smartdistribution.pricing.entity.StandardPrice;
 import com.smartdistribution.pricing.mapper.StandardPriceMapper;
 import com.smartdistribution.pricing.repository.StandardPriceRepository;
+import com.smartdistribution.pricing.service.PriceEffectiveState;
 import com.smartdistribution.pricing.service.PricePeriods;
 import com.smartdistribution.pricing.service.StandardPriceRules;
 import com.smartdistribution.pricing.service.StandardPriceService;
@@ -42,9 +43,21 @@ public class StandardPriceServiceImpl implements StandardPriceService {
 
     @Override
     @PreAuthorize("hasAuthority('STANDARD_PRICE_VIEW')")
-    public PageResponse<StandardPriceResponse> findPrices(Long companyItemId, PriceStatus status, Pageable pageable) {
+    public PageResponse<StandardPriceResponse> findPrices(
+            Long companyItemId,
+            PriceStatus status,
+            PriceEffectiveState effectiveState,
+            Pageable pageable
+    ) {
         return PageResponse.from(standardPriceRepository
-                .searchByItemAndStatus(companyItemId, status, pageable)
+                .searchPrices(
+                        companyItemId,
+                        status,
+                        effectiveState == null ? null : effectiveState.name(),
+                        PriceStatus.APPROVED_VERSIONS,
+                        LocalDate.now(clock),
+                        pageable
+                )
                 .map(standardPriceMapper::toResponse));
     }
 

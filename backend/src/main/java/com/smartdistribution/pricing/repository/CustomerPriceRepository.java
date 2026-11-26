@@ -56,6 +56,7 @@ public interface CustomerPriceRepository extends JpaRepository<CustomerPrice, Lo
     );
 
     //價格歷史清單要顯示客戶與料號，一起載入避免 N+1
+    //效期篩選的規則和 PriceEffectiveState.of 相同；effectiveState 傳列舉名稱，null 代表不篩選
     @EntityGraph(attributePaths = {
             "customerItemMapping",
             "customerItemMapping.customer",
@@ -66,10 +67,22 @@ public interface CustomerPriceRepository extends JpaRepository<CustomerPrice, Lo
             FROM CustomerPrice price
             WHERE (:mappingId IS NULL OR price.customerItemMapping.id = :mappingId)
               AND (:status IS NULL OR price.status = :status)
+              AND (:effectiveState IS NULL OR (
+                  price.status IN :approvedStatuses
+                  AND (
+                      (:effectiveState = 'UPCOMING' AND price.effectiveFrom > :today)
+                      OR (:effectiveState = 'EFFECTIVE' AND price.effectiveFrom <= :today
+                          AND (price.effectiveTo IS NULL OR price.effectiveTo >= :today))
+                      OR (:effectiveState = 'EXPIRED' AND price.effectiveTo < :today)
+                  )
+              ))
             """)
-    Page<CustomerPrice> searchByMappingAndStatus(
+    Page<CustomerPrice> searchPrices(
             @Param("mappingId") Long mappingId,
             @Param("status") PriceStatus status,
+            @Param("effectiveState") String effectiveState,
+            @Param("approvedStatuses") Collection<PriceStatus> approvedStatuses,
+            @Param("today") LocalDate today,
             Pageable pageable
     );
 }

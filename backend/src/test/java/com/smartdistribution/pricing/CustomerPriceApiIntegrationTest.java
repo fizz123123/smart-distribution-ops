@@ -325,6 +325,32 @@ class CustomerPriceApiIntegrationTest {
         assertThat(priceStatus(currentId)).isEqualTo("REPLACED");
         assertThat(effectiveTo(currentId)).isEqualTo(today.plusDays(9));
 
+        //審核狀態和效期狀態分開：被取代的舊版今天仍生效，最新版 ACTIVE 但還沒生效
+        mockMvc.perform(get("/api/v1/customer-prices/{id}", currentId)
+                        .header("Authorization", bearer(sales)))
+                .andExpect(jsonPath("$.status").value("REPLACED"))
+                .andExpect(jsonPath("$.effectiveState").value("EFFECTIVE"));
+        mockMvc.perform(get("/api/v1/customer-prices/{id}", scheduledId)
+                        .header("Authorization", bearer(sales)))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.effectiveState").value("UPCOMING"));
+
+        //清單可以依效期狀態篩選
+        mockMvc.perform(get("/api/v1/customer-prices")
+                        .header("Authorization", bearer(sales))
+                        .param("customerItemMappingId", mapping.getId().toString())
+                        .param("effectiveState", "EFFECTIVE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(currentId));
+        mockMvc.perform(get("/api/v1/customer-prices")
+                        .header("Authorization", bearer(sales))
+                        .param("customerItemMappingId", mapping.getId().toString())
+                        .param("effectiveState", "UPCOMING"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(scheduledId));
+
         //生效日之前仍取用舊價格，生效日當天起取用新價格
         assertThat(applicablePriceId(mapping, today)).contains(currentId);
         assertThat(applicablePriceId(mapping, today.plusDays(9))).contains(currentId);
@@ -424,7 +450,14 @@ class CustomerPriceApiIntegrationTest {
         mockMvc.perform(get("/api/v1/customer-prices/{id}", priceId)
                         .header("Authorization", bearer(sales)))
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
-                .andExpect(jsonPath("$.expired").value(true));
+                .andExpect(jsonPath("$.effectiveState").value("EXPIRED"));
+
+        mockMvc.perform(get("/api/v1/customer-prices")
+                        .header("Authorization", bearer(sales))
+                        .param("customerItemMappingId", mapping.getId().toString())
+                        .param("effectiveState", "EXPIRED"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(priceId));
 
         assertThat(applicablePriceId(mapping, today.minusDays(1))).contains(priceId);
         assertThat(applicablePriceId(mapping, today)).isEmpty();

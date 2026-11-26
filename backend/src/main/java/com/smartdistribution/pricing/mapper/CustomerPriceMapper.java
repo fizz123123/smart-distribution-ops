@@ -3,6 +3,7 @@ package com.smartdistribution.pricing.mapper;
 import com.smartdistribution.masterdata.customeritemmapping.entity.CustomerItemMapping;
 import com.smartdistribution.pricing.dto.response.CustomerPriceResponse;
 import com.smartdistribution.pricing.entity.CustomerPrice;
+import com.smartdistribution.pricing.service.PriceEffectiveState;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -28,8 +29,13 @@ public class CustomerPriceMapper {
                 price.getUnitPriceExcludingTax(),
                 price.getEffectiveFrom(),
                 price.getEffectiveTo(),
-                price.isExpiredOn(LocalDate.now(clock)),
                 price.getStatus(),
+                PriceEffectiveState.of(
+                        price.getStatus(),
+                        price.getEffectiveFrom(),
+                        price.getEffectiveTo(),
+                        LocalDate.now(clock)
+                ),
                 price.getCreatedBy(),
                 price.getCreatedAt(),
                 price.getReviewedBy(),

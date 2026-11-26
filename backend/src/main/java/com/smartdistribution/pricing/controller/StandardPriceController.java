@@ -4,6 +4,7 @@ import com.smartdistribution.pricing.dto.request.CreateStandardPriceRequest;
 import com.smartdistribution.pricing.dto.request.RevokePriceRequest;
 import com.smartdistribution.pricing.dto.response.StandardPriceResponse;
 import com.smartdistribution.pricing.entity.PriceStatus;
+import com.smartdistribution.pricing.service.PriceEffectiveState;
 import com.smartdistribution.pricing.service.StandardPriceService;
 import com.smartdistribution.shared.web.response.PageResponse;
 import com.smartdistribution.shared.web.sort.SortWhitelist;
@@ -41,10 +42,15 @@ public class StandardPriceController {
     public ResponseEntity<PageResponse<StandardPriceResponse>> findPrices(
             @RequestParam(required = false) Long companyItemId,
             @RequestParam(required = false) PriceStatus status,
+            @RequestParam(required = false) PriceEffectiveState effectiveState,
             @PageableDefault(size = 20) Pageable pageable
     ) {
-        PageResponse<StandardPriceResponse> pageResponse =
-                standardPriceService.findPrices(companyItemId, status, PRICE_SORTS.apply(pageable));
+        PageResponse<StandardPriceResponse> pageResponse = standardPriceService.findPrices(
+                companyItemId,
+                status,
+                effectiveState,
+                PRICE_SORTS.apply(pageable)
+        );
 
         return ResponseEntity.ok(pageResponse);
     }

@@ -12,6 +12,7 @@ import com.smartdistribution.pricing.mapper.CustomerPriceMapper;
 import com.smartdistribution.pricing.repository.CustomerPriceRepository;
 import com.smartdistribution.pricing.service.CustomerPriceRules;
 import com.smartdistribution.pricing.service.CustomerPriceService;
+import com.smartdistribution.pricing.service.PriceEffectiveState;
 import com.smartdistribution.pricing.service.PricePeriods;
 import com.smartdistribution.shared.exception.BusinessException;
 import com.smartdistribution.shared.exception.ErrorCode;
@@ -46,10 +47,18 @@ public class CustomerPriceServiceImpl implements CustomerPriceService {
     public PageResponse<CustomerPriceResponse> findPrices(
             Long customerItemMappingId,
             PriceStatus status,
+            PriceEffectiveState effectiveState,
             Pageable pageable
     ) {
         Page<CustomerPriceResponse> prices = customerPriceRepository
-                .searchByMappingAndStatus(customerItemMappingId, status, pageable)
+                .searchPrices(
+                        customerItemMappingId,
+                        status,
+                        effectiveState == null ? null : effectiveState.name(),
+                        PriceStatus.APPROVED_VERSIONS,
+                        LocalDate.now(clock),
+                        pageable
+                )
                 .map(customerPriceMapper::toResponse);
 
         return PageResponse.from(prices);
