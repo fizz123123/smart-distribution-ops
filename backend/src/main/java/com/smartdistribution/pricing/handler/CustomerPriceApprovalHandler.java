@@ -39,7 +39,7 @@ public class CustomerPriceApprovalHandler implements ApprovalHandler {
     }
 
     //顯示名稱範例：CUS-000003 A-100 125.00 元／個
-    //待覆核時提示：目前價格會在哪一天結束、和生效日的標準售價差多少
+    //待覆核時提示：核准後從哪天生效、是否已超過截止日、目前價格會在哪一天結束、和生效日的標準售價差多少
     @Override
     public ApprovalTarget loadTarget(Long targetId) {
         CustomerPrice price = findPrice(targetId);
@@ -51,10 +51,10 @@ public class CustomerPriceApprovalHandler implements ApprovalHandler {
 
         List<String> warnings = new ArrayList<>();
         if (price.getStatus() == PriceStatus.PENDING_REVIEW) {
-            LocalDate effectiveFrom = PricePeriods.resolveEffectiveFrom(
-                    price.getEffectiveFrom(),
-                    LocalDate.now(clock)
-            );
+            LocalDate today = LocalDate.now(clock);
+            warnings.addAll(PricePeriods.approvalNotices(price.getEffectiveFrom(), price.getEffectiveTo(), today));
+
+            LocalDate effectiveFrom = PricePeriods.resolveEffectiveFrom(price.getEffectiveFrom(), today);
             Optional<CustomerPrice> latest = findLatestVersion(price);
 
             if (latest.isPresent()
@@ -88,7 +88,7 @@ public class CustomerPriceApprovalHandler implements ApprovalHandler {
                 price.getEffectiveFrom(),
                 LocalDate.now(clock)
         );
-        PricePeriods.ensureNotEnded(effectiveFrom, price.getEffectiveTo());
+        PricePeriods.ensureNotEndedOnApproval(effectiveFrom, price.getEffectiveTo());
 
         Optional<CustomerPrice> latest = findLatestVersion(price);
         PricePeriods.ensureAfterLatest(latest.map(CustomerPrice::getEffectiveFrom).orElse(null), effectiveFrom);

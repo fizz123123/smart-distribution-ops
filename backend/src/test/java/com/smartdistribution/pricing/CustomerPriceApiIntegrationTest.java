@@ -341,6 +341,37 @@ class CustomerPriceApiIntegrationTest {
     }
 
     @Test
+    void lateApprovalIsExplainedBeforeApprovingAndRejected() throws Exception {
+        String sales = login(createUser("late-sales", "SALES"));
+        String manager = login(createUser("late-manager", "SALES_MANAGER"));
+        CustomerItemMapping mapping = createActiveMapping();
+        LocalDate today = LocalDate.now(clock);
+
+        //模擬審核拖太久：申請的期間在核准前就已經結束
+        Long priceId = createPrice(sales, mapping.getId(), "PCS", "120.00");
+        jdbcTemplate.update(
+                "UPDATE customer_price SET effective_from = ?, effective_to = ? WHERE id = ?",
+                today.minusDays(9),
+                today.minusDays(5),
+                priceId
+        );
+        Long approvalId = findPendingApprovalId(priceId);
+
+        //核准前就看得到生效日會延後、而且已經超過截止日
+        mockMvc.perform(get("/api/v1/approval-requests/{id}", approvalId)
+                        .header("Authorization", bearer(manager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.warnings", hasItem(containsString("核准後改為今天 " + today))))
+                .andExpect(jsonPath("$.warnings", hasItem(containsString("無法核准"))));
+
+        approve(manager, approvalId)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PRICE_PERIOD_INVALID"))
+                .andExpect(jsonPath("$.message").value(containsString("請退回後重新申請")));
+        assertThat(priceStatus(priceId)).isEqualTo("PENDING_REVIEW");
+    }
+
+    @Test
     void invalidOrOverlappingPeriodIsRejected() throws Exception {
         String sales = login(createUser("period-sales", "SALES"));
         String manager = login(createUser("period-manager", "SALES_MANAGER"));

@@ -34,7 +34,8 @@ public class StandardPriceApprovalHandler implements ApprovalHandler {
         return ApprovalTargetType.STANDARD_PRICE;
     }
 
-    //顯示名稱範例：PE-12 標準售價 100.00 元／支 ；待覆核時提示目前價格會在哪一天結束
+    //顯示名稱範例：PE-12 標準售價 100.00 元／支
+    //待覆核時提示：核准後從哪天生效、是否已超過截止日、目前價格會在哪一天結束
     @Override
     public ApprovalTarget loadTarget(Long targetId) {
         StandardPrice price = findPrice(targetId);
@@ -42,10 +43,10 @@ public class StandardPriceApprovalHandler implements ApprovalHandler {
 
         List<String> warnings = new ArrayList<>();
         if (price.getStatus() == PriceStatus.PENDING_REVIEW) {
-            LocalDate effectiveFrom = PricePeriods.resolveEffectiveFrom(
-                    price.getEffectiveFrom(),
-                    LocalDate.now(clock)
-            );
+            LocalDate today = LocalDate.now(clock);
+            warnings.addAll(PricePeriods.approvalNotices(price.getEffectiveFrom(), price.getEffectiveTo(), today));
+
+            LocalDate effectiveFrom = PricePeriods.resolveEffectiveFrom(price.getEffectiveFrom(), today);
             Optional<StandardPrice> latest = findLatestVersion(price);
 
             if (latest.isPresent()
@@ -72,7 +73,7 @@ public class StandardPriceApprovalHandler implements ApprovalHandler {
                 price.getEffectiveFrom(),
                 LocalDate.now(clock)
         );
-        PricePeriods.ensureNotEnded(effectiveFrom, price.getEffectiveTo());
+        PricePeriods.ensureNotEndedOnApproval(effectiveFrom, price.getEffectiveTo());
 
         Optional<StandardPrice> latest = findLatestVersion(price);
         PricePeriods.ensureAfterLatest(latest.map(StandardPrice::getEffectiveFrom).orElse(null), effectiveFrom);
